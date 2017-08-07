@@ -142,26 +142,26 @@ def main():
                 res_table[cell_barcode]['total_reads']
                 res_table[cell_barcode]['bad_struct']
                 res_table[cell_barcode]['ambiguous']
-                if re.match(TAG_structure, y):#check structure of the TAG
-                    if BC_UMI_TAG in UMI_reduce:#check if UMI + TAG already in the set
-                        continue#go to next y read
-                    else:
-                        res_table[cell_barcode]['total_reads'] += 1 #increment read count
-                        UMI_reduce.add(BC_UMI_TAG) # Add to set
-                    temp_res = defaultdict()
-                    for key, value in ab_map.items():
-                        temp_res[value] = distance.hamming(TAG_seq, key) #Get distance from all barcodes
-                    best = list(temp_res.keys())[list(temp_res.values()).index(min(temp_res.values()))]#Get smallest value and get respective tag_name
-                    if(not isinstance(min(temp_res.values()),int)):# ambiguous
-                        #print("{0}\t{1}\t{2}\t{3}\t{4}".format(cell_barcode, UMI, x,y,TAG_seq))
-                        res_table[cell_barcode]['ambiguous'] += 1
-                        continue #next entry
-                    if(min(temp_res.values()) >= args.hamming_thresh):#If over threshold
-                        res_table[cell_barcode]['no_match'] += 1
-                        continue #next entry
-                    res_table[cell_barcode][best] += 1
+            if re.match(TAG_structure, y):#check structure of the TAG
+                if BC_UMI_TAG in UMI_reduce:#check if UMI + TAG already in the set
+                    continue#go to next y read
                 else:
-                    res_table[cell_barcode]['bad_struct'] += 1 #Increment bad structure
+                    res_table[cell_barcode]['total_reads'] += 1 #increment read count
+                    UMI_reduce.add(BC_UMI_TAG) # Add to set
+                temp_res = defaultdict()
+                for key, value in ab_map.items():
+                    temp_res[value] = distance.hamming(TAG_seq, key) #Get distance from all barcodes
+                best = list(temp_res.keys())[list(temp_res.values()).index(min(temp_res.values()))]#Get smallest value and get respective tag_name
+                if(not isinstance(min(temp_res.values()),int)):# ambiguous
+                    print("{0}\t{1}\t{2}\t{3}\t{4}".format(cell_barcode, UMI, x,y,TAG_seq))
+                    res_table[cell_barcode]['ambiguous'] += 1
+                    continue #next entry
+                if(min(temp_res.values()) >= args.hamming_thresh):#If over threshold
+                    res_table[cell_barcode]['no_match'] += 1
+                    continue #next entry
+                res_table[cell_barcode][best] += 1
+            else:
+                res_table[cell_barcode]['bad_struct'] += 1 #Increment bad structure
     # Create header
     out_str = "{}\t{}\t{}\t{}\t{}\t{}\n".format('cell', "\t".join([x for x in ab_map.values()]), 'no_match', 'ambiguous','total_reads','bad_struct')
     # fill up result string
