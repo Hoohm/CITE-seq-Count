@@ -153,7 +153,7 @@ def main():
                     temp_res[value] = distance.hamming(TAG_seq, key) #Get distance from all barcodes
                 best = list(temp_res.keys())[list(temp_res.values()).index(min(temp_res.values()))]#Get smallest value and get respective tag_name
                 if(not isinstance(min(temp_res.values()),int)):# ambiguous
-                    print("{0}\t{1}\t{2}\t{3}\t{4}".format(cell_barcode, UMI, x,y,TAG_seq))
+                    #print("{0}\t{1}\t{2}\t{3}\t{4}".format(cell_barcode, UMI, x,y,TAG_seq))
                     res_table[cell_barcode]['ambiguous'] += 1
                     continue #next entry
                 if(min(temp_res.values()) >= args.hamming_thresh):#If over threshold
