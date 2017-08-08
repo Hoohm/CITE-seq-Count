@@ -155,7 +155,7 @@ def main():
             BC_UMI = cell_barcode + UMI
             TAG_seq = line[len(BC_UMI):]
             BC_UMI_TAG = cell_barcode + UMI + TAG_seq
-            print("{0}\t{1}\t{2}\t{3}".format(line, cell_barcode, UMI,TAG_seq))
+            #print("{0}\t{1}\t{2}\t{3}".format(line, cell_barcode, UMI,TAG_seq))
             if BC_UMI_TAG not in UMI_reduce:#check if UMI + TAG already in the set
                 if re.match(TAG_structure, TAG_seq):#check structure of the TAG
                     TAG_seq = TAG_seq[0:tag_length]
