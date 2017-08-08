@@ -1,5 +1,5 @@
 
-#! /usr/binp/ython3
+#! /usr/bin/python3
 import sys
 import gzip
 import csv
@@ -7,7 +7,9 @@ from collections import defaultdict
 from collections import OrderedDict
 from itertools import islice
 from itertools import combinations
-
+import time
+from itertools import takewhile
+from itertools import repeat
 import distance
 import re
 import argparse
@@ -15,7 +17,7 @@ from argparse import RawTextHelpFormatter
 
 def get_args():
     """Get args."""
-    parser = argparse.ArgumentParser(prog='count_tags',
+    parser = argparse.ArgumentParser(prog='CITE Seq Count',
         description="""This script counts matching tags from two fastq files.""", formatter_class=RawTextHelpFormatter)
     inputs = parser.add_argument_group('Inputs')
     inputs.add_argument('-R1', '--read1',
@@ -62,7 +64,7 @@ Barcodes from 1 to 16 and UMI from 17 to 26, then this is the input you need:
                         type=int)
     filters = parser.add_argument_group('filters', description="""Filtering for structure of TAGS as well as maximum hamming distance.""")
     filters.add_argument('-tr', '--TAG_regex',
-                        help="""The regex that will be sued to validate a tag structure. Must be given in regex syntax.
+                        help="""The regex that will be used to validate a tag structure. Must be given in regex syntax.
 example:
 \"^[ATGC]{6}[TGC][A]{6,}\"""",
                         dest='tag_regex',
@@ -80,7 +82,7 @@ example:
                         dest='first_n',
                         default=None)
     parser.add_argument('-o','--output',
-                        required=False,
+                        required=True,
                         help='write to file instead of stdout',
                         type=str,
                         dest='outfile')
@@ -92,7 +94,8 @@ def parse_csv(filename):
     csvReader = csv.reader(file)
     odict = OrderedDict()
     for row in csvReader:
-        odict[row[0].encode('utf-8')] = row[1]
+        #odict[row[0].encode('utf-8')] = row[1]
+        odict[row[0]] = row[1]
     return odict
 
 
@@ -106,6 +109,8 @@ def check_tags(ab_map, maximum_dist):
     #Return length of TAGS. Since all are the same lenght, return the length of last a
     return(len(a))
 
+
+
 def main():
     parser = get_args()
     if not sys.argv[1:]:
@@ -117,66 +122,85 @@ def main():
     #Chekck hamming threshold
     tag_length = check_tags(ab_map, args.hamming_thresh)
     #Create TAG structure filter
-    TAG_structure = re.compile(args.tag_regex.encode('utf-8'))
+    #TAG_structure = re.compile(args.tag_regex.encode('utf-8'))
+    TAG_structure = re.compile(args.tag_regex)
     #Create a set for UMI reduction. Fast way to check if it already exists
     UMI_reduce = set()
     #Create result table
     res_table = defaultdict(lambda : defaultdict(int))
-    with gzip.open(args.read1_path, 'r') as textfile1, gzip.open(args.read2_path, 'r') as textfile2: 
+    # set counter
+    n = 0
+    unique_lines = set()
+    with gzip.open(args.read1_path, 'rt') as textfile1, gzip.open(args.read2_path, 'rt') as textfile2: 
         #Read all 2nd lines from 4 line chunks
         secondlines = islice(zip(textfile1, textfile2), 1, args.first_n, 4)
-        for (x, y) in secondlines:
+        print('loading and trimming lines')
+        t = time.time()
+        for x, y in secondlines:
+            #print(x,y)
             x = x.strip()
-            y = y.strip()
-            cell_barcode = x[(args.cb_first-1):args.cb_last]
-            UMI = x[(args.umi_first-1):args.umi_last]
+            y = y.strip().rstrip('N').rstrip('A')
+            line = x[(args.cb_first-1):args.umi_last] + y
+            unique_lines.add(line)
+            n+=1
+            if(n%1000000 == 0):
+                print('Loaded {} lines, running for {}'.format(n, time.time()-t))
+                t = time.time()
+        print('{} lines processed'.format(n))
+        print('Done loading. We have {} uniques lines'.format(len(unique_lines)))
+        n=0
+        for line in unique_lines:
+            cell_barcode = line[0:args.cb_last-args.cb_first+1]
+            UMI = line[len(cell_barcode):len(cell_barcode)+args.umi_last-args.umi_first+1]
             BC_UMI = cell_barcode + UMI
-            BC_UMI_TAG = BC_UMI + y[0:tag_length]
-            TAG_seq = y[0:tag_length]
-            #print("{0}\t{1}\t{2}\t{3}\t{4}".format(cell_barcode, UMI, x,y,TAG_seq))
+            TAG_seq = line[len(BC_UMI):args.umi_last+tag_length-1]
+            BC_UMI_TAG = cell_barcode + UMI + TAG_seq
+            #print("{0}\t{1}\t{2}\t{3}".format(line, cell_barcode, UMI,TAG_seq))
             #Check if cell barcode has been found before. If not, create result structure
-            if BC_UMI_TAG in UMI_reduce:#check if UMI + TAG already in the set
-                continue#go to next y read
-            if cell_barcode not in res_table:
-                for TAG_name in ab_map.values():
-                    res_table[cell_barcode][TAG_name]
-                res_table[cell_barcode]['no_match']
-                res_table[cell_barcode]['total_reads']
-                res_table[cell_barcode]['bad_struct']
-                res_table[cell_barcode]['ambiguous']
-            if re.match(TAG_structure, y):#check structure of the TAG
-                res_table[cell_barcode]['total_reads'] += 1 #increment read count
-                temp_res = defaultdict()
-                for key, value in ab_map.items():
-                    temp_res[value] = distance.hamming(TAG_seq, key) #Get distance from all barcodes
-                best = list(temp_res.keys())[list(temp_res.values()).index(min(temp_res.values()))]#Get smallest value and get respective tag_name
-                if(not isinstance(min(temp_res.values()),int)):# ambiguous
-                    #print("{0}\t{1}\t{2}\t{3}\t{4}".format(cell_barcode, UMI, x,y,TAG_seq))
-                    res_table[cell_barcode]['ambiguous'] += 1
-                    continue #next entry
-                if(min(temp_res.values()) >= args.hamming_thresh):#If over threshold
-                    res_table[cell_barcode]['no_match'] += 1
-                    continue #next entry
-                res_table[cell_barcode][best] += 1
-            else:
-                res_table[cell_barcode]['bad_struct'] += 1 #Increment bad structure
-            UMI_reduce.add(BC_UMI_TAG) # Add BC_UMI_TAG to set
+            if BC_UMI_TAG not in UMI_reduce:#check if UMI + TAG already in the set
+            # if cell_barcode not in res_table:
+            #     for TAG_name in ab_map.values():
+            #         res_table[cell_barcode][TAG_name]=set()
+            #     res_table[cell_barcode]['no_match']
+            #     res_table[cell_barcode]['total_reads']
+            #     res_table[cell_barcode]['bad_struct']
+            #     res_table[cell_barcode]['ambiguous']
+                if len(TAG_seq) == tag_length:#check structure of the TAG
+                    res_table[cell_barcode]['total_reads'] += 1 #increment read count
+                    temp_res = defaultdict()
+                    for key, value in ab_map.items():
+                        temp_res[value] = distance.hamming(TAG_seq, key) #Get distance from all barcodes
+                    best = list(temp_res.keys())[list(temp_res.values()).index(min(temp_res.values()))]#Get smallest value and get respective tag_name
+                    if(not isinstance(min(temp_res.values()),int)):# ambiguous
+                        #print("{0}\t{1}\t{2}\t{3}\t{4}".format(cell_barcode, UMI, x,y,TAG_seq))
+                        res_table[cell_barcode]['ambiguous'] += 1
+                        continue #next entry
+                    if(min(temp_res.values()) >= args.hamming_thresh):#If over threshold
+                        res_table[cell_barcode]['no_match'] += 1
+                        continue #next entry
+                    res_table[cell_barcode][best]+=1
+                else:
+                    res_table[cell_barcode]['bad_struct'] += 1 #Increment bad structure
+                UMI_reduce.add(BC_UMI_TAG) # Add BC_UMI_TAG to set    
+            n+=1
+            if(n%1000000 == 0):
+                print("Processed 1'000'000 lines in {}. Total lines processed: {}".format(time.time()-t, n))
+                t = time.time()
+    print('Done counting')
     # Create header
-    out_str = "{}\t{}\t{}\t{}\t{}\t{}\n".format('cell', "\t".join([x for x in ab_map.values()]), 'no_match', 'ambiguous','total_reads','bad_struct')
+    out_str = "{},{},{},{},{},{}\n".format('cell', ",".join([x for x in ab_map.values()]), 'no_match', 'ambiguous','total_reads','bad_struct')
     # fill up result string
     for cell_barcode in res_table:
-      out_str+=("{}\t{}\t{}\t{}\t{}\t{}\n".format(
-        cell_barcode.decode("utf-8"),
-        "\t".join([str(res_table[cell_barcode][x]) for x in ab_map.values()]),
-        res_table[cell_barcode]['no_match'],
-        res_table[cell_barcode]['ambiguous'],
-        res_table[cell_barcode]['total_reads'],
-        res_table[cell_barcode]['bad_struct']))
-    if(args.outfile):
-        with open(args.outfile, 'w') as h:
-            h.write(out_str)
-    else:
-        sys.stdout.write(out_str)
+        out_str+=("{},{},{},{},{},{}\n".format(
+            #cell_barcode.decode("utf-8"),
+            cell_barcode,
+            ",".join([str(res_table[cell_barcode][x]) for x in ab_map.values()]),
+            res_table[cell_barcode]['no_match'],
+            res_table[cell_barcode]['ambiguous'],
+            res_table[cell_barcode]['total_reads'],
+            res_table[cell_barcode]['bad_struct']))
+    with open(args.outfile, 'w') as h:
+        h.write(out_str)
 
 if __name__ == '__main__':
     main()
