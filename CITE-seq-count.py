@@ -8,8 +8,7 @@ from collections import OrderedDict
 from itertools import islice
 from itertools import combinations
 import time
-from itertools import takewhile
-from itertools import repeat
+import locale
 import distance
 import re
 import argparse
@@ -30,7 +29,7 @@ def get_args():
                         dest='read2_path',
                         required=True)
     inputs.add_argument('-t', '--tags',
-                        help="""The path to the csv file containing the TAGS\narcodes as well as their respective names.
+                        help="""The path to the csv file containing the TAGS\nbarcodes as well as their respective names.
 
 Example of TAG file structure:
 
@@ -134,38 +133,32 @@ def main():
     with gzip.open(args.read1_path, 'rt') as textfile1, gzip.open(args.read2_path, 'rt') as textfile2: 
         #Read all 2nd lines from 4 line chunks
         secondlines = islice(zip(textfile1, textfile2), 1, args.first_n, 4)
-        print('loading and trimming lines')
+        print('loading')
         t = time.time()
         for x, y in secondlines:
             #print(x,y)
             x = x.strip()
-            y = y.strip().rstrip('N').rstrip('A')
-            line = x[(args.cb_first-1):args.umi_last] + y
+            y = y.strip()
+            print(x,y)
+            line = x[(args.cb_first-1):args.cb_last] +x[args.umi_first-1: args.umi_last] + y
             unique_lines.add(line)
             n+=1
             if(n%1000000 == 0):
-                print('Loaded {} lines, running for {}'.format(n, time.time()-t))
+                print("Loaded last 1,000,000 lines in {:.3} seconds. Total lines loaded {:,} ".format(time.time()-t, n))
                 t = time.time()
-        print('{} lines processed'.format(n))
-        print('Done loading. We have {} uniques lines'.format(len(unique_lines)))
+        print('{} lines loaded'.format(n))
+        print('{:,} uniques lines loaded'.format(len(unique_lines)))
         n=0
         for line in unique_lines:
             cell_barcode = line[0:args.cb_last-args.cb_first+1]
             UMI = line[len(cell_barcode):len(cell_barcode)+args.umi_last-args.umi_first+1]
             BC_UMI = cell_barcode + UMI
-            TAG_seq = line[len(BC_UMI):args.umi_last+tag_length-1]
+            TAG_seq = line[len(BC_UMI):]
             BC_UMI_TAG = cell_barcode + UMI + TAG_seq
-            #print("{0}\t{1}\t{2}\t{3}".format(line, cell_barcode, UMI,TAG_seq))
-            #Check if cell barcode has been found before. If not, create result structure
+            print("{0}\t{1}\t{2}\t{3}".format(line, cell_barcode, UMI,TAG_seq))
             if BC_UMI_TAG not in UMI_reduce:#check if UMI + TAG already in the set
-            # if cell_barcode not in res_table:
-            #     for TAG_name in ab_map.values():
-            #         res_table[cell_barcode][TAG_name]=set()
-            #     res_table[cell_barcode]['no_match']
-            #     res_table[cell_barcode]['total_reads']
-            #     res_table[cell_barcode]['bad_struct']
-            #     res_table[cell_barcode]['ambiguous']
-                if len(TAG_seq) == tag_length:#check structure of the TAG
+                if re.match(TAG_structure, TAG_seq):#check structure of the TAG
+                    TAG_seq = TAG_seq[0:tag_length]
                     res_table[cell_barcode]['total_reads'] += 1 #increment read count
                     temp_res = defaultdict()
                     for key, value in ab_map.items():
@@ -184,7 +177,7 @@ def main():
                 UMI_reduce.add(BC_UMI_TAG) # Add BC_UMI_TAG to set    
             n+=1
             if(n%1000000 == 0):
-                print("Processed 1'000'000 lines in {}. Total lines processed: {}".format(time.time()-t, n))
+                print("Processed 1,000,000 lines in {:.4} secondes. Total lines processed: {:,}".format(time.time()-t, n))
                 t = time.time()
     print('Done counting')
     # Create header
