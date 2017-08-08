@@ -139,7 +139,7 @@ def main():
             #print(x,y)
             x = x.strip()
             y = y.strip()
-            print(x,y)
+            #print(x,y)
             line = x[(args.cb_first-1):args.cb_last] +x[args.umi_first-1: args.umi_last] + y
             unique_lines.add(line)
             n+=1
