@@ -1,6 +1,6 @@
 
 #! /usr/bin/python3
-#Authors: 
+#Authors: Christoph Hafemeister, Patrick Roelli
 import sys
 import gzip
 import csv
