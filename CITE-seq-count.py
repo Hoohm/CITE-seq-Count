@@ -1,5 +1,6 @@
 
 #! /usr/bin/python3
+#Authors: 
 import sys
 import gzip
 import csv
@@ -7,6 +8,7 @@ from collections import defaultdict
 from collections import OrderedDict
 from itertools import islice
 from itertools import combinations
+import pandas as pd
 import time
 import locale
 import distance
@@ -180,20 +182,12 @@ def main():
                 print("Processed 1,000,000 lines in {:.4} secondes. Total lines processed: {:,}".format(time.time()-t, n))
                 t = time.time()
     print('Done counting')
-    # Create header
-    out_str = "{},{},{},{},{},{}\n".format('cell', ",".join([x for x in ab_map.values()]), 'no_match', 'ambiguous','total_reads','bad_struct')
-    # fill up result string
-    for cell_barcode in res_table:
-        out_str+=("{},{},{},{},{},{}\n".format(
-            #cell_barcode.decode("utf-8"),
-            cell_barcode,
-            ",".join([str(res_table[cell_barcode][x]) for x in ab_map.values()]),
-            res_table[cell_barcode]['no_match'],
-            res_table[cell_barcode]['ambiguous'],
-            res_table[cell_barcode]['total_reads'],
-            res_table[cell_barcode]['bad_struct']))
-    with open(args.outfile, 'w') as h:
-        h.write(out_str)
-
+    
+    res_matrice = pd.DataFrame(res_table)
+    res_matrice.fillna(0, inplace=True)
+    most_reads_ordered = res_matrice.sort_values(by='total_reads', ascending=False, axis=1).axes[1]
+    for cell_barcode in most_reads_ordered:
+        continue
+    res_matrice.to_csv(args.outfile, float_format='%.f')
 if __name__ == '__main__':
     main()
