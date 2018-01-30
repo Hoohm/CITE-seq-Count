@@ -191,14 +191,9 @@ def main():
     
     res_matrix = pd.DataFrame(res_table)
     res_matrix.fillna(0, inplace=True)
-    res_matrix.rename(columns={'': 'Tags'}, inplace=True)
-    print(res_matrix.columns)
-
     most_reads_ordered = res_matrix.sort_values(by='total_reads', ascending=False, axis=1).axes[1]
     n_top_cells = int(args.cells + args.cells/100 * 30)
     top_Cells = most_reads_ordered[0:(n_top_cells)]
-    
-    print(top_Cells)
     res_matrix.loc[:,(res_matrix.columns.isin(top_Cells))].to_csv(args.outfile, float_format='%.f')
 if __name__ == '__main__':
     main()
