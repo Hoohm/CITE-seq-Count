@@ -63,6 +63,12 @@ Barcodes from 1 to 16 and UMI from 17 to 26, then this is the input you need:
                         dest='umi_last',
                         required=True, 
                         type=int)
+    barcodes.add_argument('-cells', '--expected_cells',
+                        help='Number of expected cells from your run',
+                        dest='cells',
+                        required=False, 
+                        type=int)
+    
     filters = parser.add_argument_group('filters', description="""Filtering for structure of TAGS as well as maximum hamming distance.""")
     filters.add_argument('-tr', '--TAG_regex',
                         help="""The regex that will be used to validate a tag structure. Must be given in regex syntax.
@@ -183,11 +189,16 @@ def main():
                 t = time.time()
     print('Done counting')
     
-    res_matrice = pd.DataFrame(res_table)
-    res_matrice.fillna(0, inplace=True)
-    most_reads_ordered = res_matrice.sort_values(by='total_reads', ascending=False, axis=1).axes[1]
-    for cell_barcode in most_reads_ordered:
-        continue
-    res_matrice.to_csv(args.outfile, float_format='%.f')
+    res_matrix = pd.DataFrame(res_table)
+    res_matrix.fillna(0, inplace=True)
+    res_matrix.rename(columns={'': 'Tags'}, inplace=True)
+    print(res_matrix.columns)
+
+    most_reads_ordered = res_matrix.sort_values(by='total_reads', ascending=False, axis=1).axes[1]
+    n_top_cells = int(args.cells + args.cells/100 * 30)
+    top_Cells = most_reads_ordered[0:(n_top_cells)]
+    
+    print(top_Cells)
+    res_matrix.loc[:,(res_matrix.columns.isin(top_Cells))].to_csv(args.outfile, float_format='%.f')
 if __name__ == '__main__':
     main()
