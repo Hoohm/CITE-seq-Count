@@ -63,11 +63,24 @@ Barcodes from 1 to 16 and UMI from 17 to 26, then this is the input you need:
                         dest='umi_last',
                         required=True, 
                         type=int)
-    barcodes.add_argument('-cells', '--expected_cells',
+    barcodes_filtering = parser.add_mutually_exclusive_group(required=True)
+    barcodes_filtering.add_argument('-cells', '--expected_cells',
                         help='Number of expected cells from your run',
                         dest='cells',
                         required=False, 
                         type=int)
+    barcodes_filtering.add_argument('-wl', '--whitelist',
+                        help="""A csv file containning a whitelist of barcodes
+
+Example:
+ATGCTAGTGCTA
+GCTAGTCAGGAT
+CGACTGCTAACG
+""",
+                        dest='whitelist',
+                        required=False, 
+                        type=str)
+    
     
     filters = parser.add_argument_group('filters', description="""Filtering for structure of TAGS as well as maximum hamming distance.""")
     filters.add_argument('-tr', '--TAG_regex',
@@ -96,7 +109,14 @@ example:
     return parser
 
 
-def parse_csv(filename):
+def parse_whitelist_csv(args):
+    file = open(args.whitelist, mode='r')
+    csvReader = csv.reader(file)
+    length_barcodes = args.cb_last - args.cb_first + 1
+    whitelist = [row[0].strip() for row in csvReader if (len(row[0].strip()) == length_barcodes)]
+    return(set(whitelist))
+
+def parse_tags_csv(filename):
     file = open(filename, mode='r')
     csvReader = csv.reader(file)
     odict = OrderedDict()
@@ -124,8 +144,9 @@ def main():
         sys.exit(parser.print_help())
     #Load args
     args = parser.parse_args()
+    whitelist = parse_whitelist_csv(args)
     #Load TAGS barcodes
-    ab_map = parse_csv(args.tags)
+    ab_map = parse_tags_csv(args.tags)
     #Chekck hamming threshold
     tag_length = check_tags(ab_map, args.hamming_thresh)
     #Create TAG structure filter
@@ -159,6 +180,9 @@ def main():
         n=0
         for line in unique_lines:
             cell_barcode = line[0:args.cb_last-args.cb_first+1]
+            if(args.whitelist):
+                if(cell_barcode not in whitelist):
+                    continue
             UMI = line[len(cell_barcode):len(cell_barcode)+args.umi_last-args.umi_first+1]
             BC_UMI = cell_barcode + UMI
             TAG_seq = line[len(BC_UMI):]
@@ -191,9 +215,11 @@ def main():
     
     res_matrix = pd.DataFrame(res_table)
     res_matrix.fillna(0, inplace=True)
-    most_reads_ordered = res_matrix.sort_values(by='total_reads', ascending=False, axis=1).axes[1]
-    n_top_cells = int(args.cells + args.cells/100 * 30)
-    top_Cells = most_reads_ordered[0:(n_top_cells)]
-    res_matrix.loc[:,(res_matrix.columns.isin(top_Cells))].to_csv(args.outfile, float_format='%.f')
+    if(args.cells):
+        most_reads_ordered = res_matrix.sort_values(by='total_reads', ascending=False, axis=1).axes[1]
+        n_top_cells = int(args.cells + args.cells/100 * 30)
+        top_Cells = most_reads_ordered[0:(n_top_cells)]
+        res_matrix = res_matrix.loc[:,(res_matrix.columns.isin(top_Cells))]    
+    res_matrix.to_csv(args.outfile, float_format='%.f')
 if __name__ == '__main__':
     main()
