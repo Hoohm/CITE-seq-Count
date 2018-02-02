@@ -1,6 +1,6 @@
 # CITE-seq-Count
-Small script that allows to count TAGS from a CITE-seq experiment
+A small script that allows to count antibody barcodes from a CITE-seq experiment
 
-# Dependencies
+[Installation](https://github.com/Hoohm/CITE-seq-Count/wiki/Installation	)
 
-Two packages are necessary: Distance and pandas
+[How to run it](https://github.com/Hoohm/CITE-seq-Count/wiki/Running-the-script)
