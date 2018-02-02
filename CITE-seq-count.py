@@ -11,7 +11,8 @@ from itertools import combinations
 import pandas as pd
 import time
 import locale
-import distance
+#import distance
+import Levenshtein
 import re
 import argparse
 from argparse import RawTextHelpFormatter
@@ -131,7 +132,7 @@ def check_tags(ab_map, maximum_dist):
     for a,b in combinations(ab_barcodes,2):
         if(len(a)!=len(b)):
             sys.exit('Lenght of {} is different than length of {}. Can only run with all TAGS having the same length; exiting'.format(ab_map[a], ab_map[b]))
-        if(distance.hamming(a,b)<= maximum_dist):
+        if(Levenshtein.hamming(a,b)<= maximum_dist):
             sys.exit('Minimum hamming distance of TAGS barcode is less than given threshold\nPlease use a smaller distance; exiting')
     #Return length of TAGS. Since all are the same lenght, return the length of last a
     return(len(a))
@@ -161,7 +162,7 @@ def main():
     unique_lines = set()
     with gzip.open(args.read1_path, 'rt') as textfile1, gzip.open(args.read2_path, 'rt') as textfile2: 
         #Read all 2nd lines from 4 line chunks
-        secondlines = islice(zip(textfile1, textfile2), 1, args.first_n, 4)
+        secondlines = islice(zip(textfile1, textfile2), 1, args.first_n*4, 4)
         print('loading')
         t = time.time()
         for x, y in secondlines:
@@ -194,7 +195,7 @@ def main():
                     res_table[cell_barcode]['total_reads'] += 1 #increment read count
                     temp_res = defaultdict()
                     for key, value in ab_map.items():
-                        temp_res[value] = distance.hamming(TAG_seq, key) #Get distance from all barcodes
+                        temp_res[value] = Levenshtein.hamming(TAG_seq, key) #Get distance from all barcodes
                     best = list(temp_res.keys())[list(temp_res.values()).index(min(temp_res.values()))]#Get smallest value and get respective tag_name
                     if(not isinstance(min(temp_res.values()),int)):# ambiguous
                         #print("{0}\t{1}\t{2}\t{3}\t{4}".format(cell_barcode, UMI, x,y,TAG_seq))
