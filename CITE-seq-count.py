@@ -1,4 +1,3 @@
-
 #! /usr/bin/python3
 #Authors: Christoph Hafemeister, Patrick Roelli
 import sys
@@ -11,7 +10,6 @@ from itertools import combinations
 import pandas as pd
 import time
 import locale
-#import distance
 import Levenshtein
 import re
 import argparse
@@ -20,7 +18,7 @@ from argparse import RawTextHelpFormatter
 def get_args():
     """Get args."""
     parser = argparse.ArgumentParser(prog='CITE Seq Count',
-        description="""This script counts matching tags from two fastq files.""", formatter_class=RawTextHelpFormatter)
+        description="""This script counts matching antobody tags from two fastq files.""", formatter_class=RawTextHelpFormatter)
     inputs = parser.add_argument_group('Inputs')
     inputs.add_argument('-R1', '--read1',
                         action='store',
@@ -32,9 +30,9 @@ def get_args():
                         dest='read2_path',
                         required=True)
     inputs.add_argument('-t', '--tags',
-                        help="""The path to the csv file containing the TAGS\nbarcodes as well as their respective names.
+                        help="""The path to the csv file containing the antibody \nbarcodes as well as their respective names.
 
-Example of TAG file structure:
+Example of an antibody barcode file structure:
 
 ATGCGA,First_tag_name
 GTCATG,Second_tag_name""",
@@ -83,28 +81,28 @@ CGACTGCTAACG
                         type=str)
     
     
-    filters = parser.add_argument_group('filters', description="""Filtering for structure of TAGS as well as maximum hamming distance.""")
+    filters = parser.add_argument_group('filters', description="""Filtering for structure of antobody barcodes as well as maximum hamming distance.""")
     filters.add_argument('-tr', '--TAG_regex',
-                        help="""The regex that will be used to validate a tag structure. Must be given in regex syntax.
+                        help="""The regex that will be used to validate an antibody barcode structure. Must be given in regex syntax.
 example:
 \"^[ATGC]{6}[TGC][A]{6,}\"""",
                         dest='tag_regex',
                         required=True, 
                         type=str)
     filters.add_argument('-hd', '--hamming-distance',
-                        help='Maximum hamming distance allowed',
+                        help='Maximum hamming distance allowed for antibody barcode',
                         dest='hamming_thresh',
                         required=True, 
                         type=int)
     parser.add_argument('-n','--first_n',
                         required=False,
-                        help='Select n lines to run on instead of all.\nIf you want the first 10 reads, use -n 40',
+                        help='Select n reads to run on instead of all',
                         type=int,
                         dest='first_n',
                         default=None)
     parser.add_argument('-o','--output',
                         required=True,
-                        help='write to file instead of stdout',
+                        help='write result to file',
                         type=str,
                         dest='outfile')
     return parser
@@ -159,10 +157,13 @@ def main():
     res_table = defaultdict(lambda : defaultdict(int))
     # set counter
     n = 0
+    top_n = None
+    if(args.first_n):
+        top_n = args.first_n * 4
     unique_lines = set()
     with gzip.open(args.read1_path, 'rt') as textfile1, gzip.open(args.read2_path, 'rt') as textfile2: 
         #Read all 2nd lines from 4 line chunks
-        secondlines = islice(zip(textfile1, textfile2), 1, args.first_n*4, 4)
+        secondlines = islice(zip(textfile1, textfile2), 1, top_n, 4)
         print('loading')
         t = time.time()
         for x, y in secondlines:
