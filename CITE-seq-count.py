@@ -143,7 +143,8 @@ def main():
         sys.exit(parser.print_help())
     #Load args
     args = parser.parse_args()
-    whitelist = parse_whitelist_csv(args)
+    if(args.whitelist):
+        whitelist = parse_whitelist_csv(args)
     #Load TAGS barcodes
     ab_map = parse_tags_csv(args.tags)
     #Chekck hamming threshold
