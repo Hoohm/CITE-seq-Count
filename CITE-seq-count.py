@@ -69,7 +69,7 @@ Barcodes from 1 to 16 and UMI from 17 to 26, then this is the input you need:
                         required=False, 
                         type=int)
     barcodes_filtering.add_argument('-wl', '--whitelist',
-                        help="""A csv file containning a whitelist of barcodes
+                        help="""A csv file containning a whitelist of barcodes produced by the mRNA data
 
 Example:
 ATGCTAGTGCTA
