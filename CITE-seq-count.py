@@ -83,8 +83,8 @@ def get_args():
                          required=True, type=str,
                          help=("The regex that will be used to validate an "
                                "antibody barcode structure. Must be given in "
-                               "regex syntax.\n\nExample:\n\t"
-                               "\"^[ATGC]{6}[TGC][A]{6,}\""))
+                               "regex syntax *with a single capture group.\n\n"
+                               "Example:\n\t\"^([ATGC]{6}[TGC])[A]{6,}\""))
     filters.add_argument('-hd', '--hamming-distance', dest='hamming_thresh',
                          required=True, type=int,
                          help=("Maximum hamming distance allowed for antibody "
@@ -169,7 +169,7 @@ def main():
     barcode_length = args.cb_last - args.cb_first + 1
     umi_length = args.umi_last - args.umi_first + 1
     barcode_umi_length = barcode_length + umi_length
-    barcode_slice = slice(args.cb_frst - 1, args.cb_last)
+    barcode_slice = slice(args.cb_first - 1, args.cb_last)
     umi_slice = slice(args.umi_first - 1, args.umi_last)
 
     unique_lines = set()
@@ -212,8 +212,9 @@ def main():
             # Check if UMI + TAG already in the set
             if BC_UMI_TAG not in UMI_reduce:
                 # Check structure of the TAG
-                if re.match(TAG_structure, TAG_seq):
-                    TAG_seq = TAG_seq[0:tag_length]
+                match = re.search(TAG_structure, TAG_seq)
+                if match:
+                    TAG_seq = match.group(0)[0:tag_length]
 
                     # Increment read count
                     res_table[cell_barcode]['total_reads'] += 1
