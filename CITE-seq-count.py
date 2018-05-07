@@ -153,6 +153,9 @@ def main():
     # Create TAG structure filter
     # TAG_structure = re.compile(args.tag_regex.encode('utf-8'))
     TAG_structure = re.compile(args.tag_regex)
+    if TAG_structure.groups != 1:
+        raise Exception("Tag regex must have at least one match group (..). "
+                        "Provided regex has {}".format(TAG_structure.groups))
 
     # Create a set for UMI reduction. Fast way to check if it already exists
     UMI_reduce = set()
