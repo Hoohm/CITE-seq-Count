@@ -217,9 +217,13 @@ def main():
     print('Done counting')
     
     res_matrix = pd.DataFrame(res_table)
+    #Add potential missing cells if whitelist is used
+    if(args.whitelist):
+        res_matrix = res_matrix.reindex(whitelist, axis=1,fill_value=0)
     res_matrix.fillna(0, inplace=True)
     if(args.cells):
         most_reads_ordered = res_matrix.sort_values(by='total_reads', ascending=False, axis=1).axes[1]
+        #Being a bit more generous giving out 30% more cells than expected
         n_top_cells = int(args.cells + args.cells/100 * 30)
         top_Cells = most_reads_ordered[0:(n_top_cells)]
         res_matrix = res_matrix.loc[:,(res_matrix.columns.isin(top_Cells))]    
