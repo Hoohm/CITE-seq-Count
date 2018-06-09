@@ -16,6 +16,7 @@ import Levenshtein
 import re
 import argparse
 from argparse import RawTextHelpFormatter
+import pprint
 
 
 def get_args():
@@ -79,12 +80,6 @@ def get_args():
                     "maximum hamming distance.")
     filters = parser.add_argument_group('filters', description=filters_desc)
 
-    filters.add_argument('-tr', '--TAG_regex', dest='tag_regex',
-                         required=True, type=str,
-                         help=("The regex that will be used to validate an "
-                               "antibody barcode structure. Must be given in "
-                               "regex syntax *with a single capture group.\n\n"
-                               "Example:\n\t\"^([ATGC]{6}[TGC])[A]{6,}\""))
     filters.add_argument('-hd', '--hamming-distance', dest='hamming_thresh',
                          required=True, type=int,
                          help=("Maximum hamming distance allowed for antibody "
@@ -134,6 +129,29 @@ def check_tags(ab_map, maximum_dist):
     return len(a)
 
 
+def generate_regex(ab_map, read2_first_base, num_polyA):
+    """Generate regex based ont he provided TAGS"""
+    TAGS = ab_map.keys()
+    lengths = OrderedDict()
+    for TAG in TAGS:
+        if (len(TAG) in lengths.keys()):
+            lengths[len(TAG)]['mapping'][TAG]=ab_map[TAG]
+        else:
+            lengths[len(TAG)]=OrderedDict()
+            lengths[len(TAG)]['mapping'] = OrderedDict()
+            lengths[len(TAG)]['mapping'][TAG] = ab_map[TAG]
+            
+    for length in lengths.keys():
+        pattern = [''] * length
+        for TAG in lengths[length]['mapping'].keys():
+            for position in range(0,length):
+                if (TAG[position] in pattern[position]):
+                    continue
+                else:
+                    pattern[position] += TAG[position]
+        lengths[length]['regex'] = '^([{}][GTC])[A]{{6}}.*'.format(']['.join(pattern))
+    return(lengths)
+
 def main():
     parser = get_args()
     if not sys.argv[1:]:
@@ -147,16 +165,11 @@ def main():
 
     # Load TAGS barcodes
     ab_map = parse_tags_csv(args.tags)
+    #Generate regex patterns auto
+    regex_patterns = generate_regex(ab_map, read2_first_base=0, num_polyA=6)
     # Check hamming threshold
-    tag_length = check_tags(ab_map, args.hamming_thresh)
-
-    # Create TAG structure filter
-    # TAG_structure = re.compile(args.tag_regex.encode('utf-8'))
-    TAG_structure = re.compile(args.tag_regex)
-    if TAG_structure.groups != 1:
-        raise Exception("Tag regex must have at least one match group (..). "
-                        "Provided regex has {}".format(TAG_structure.groups))
-
+    #tag_length = check_tags(ab_map, args.hamming_thresh)
+    
     # Create a set for UMI reduction. Fast way to check if it already exists
     UMI_reduce = set()
     # Create result table
@@ -215,42 +228,44 @@ def main():
             # Check if UMI + TAG already in the set
             if BC_UMI_TAG not in UMI_reduce:
                 # Check structure of the TAG
-                match = re.search(TAG_structure, TAG_seq)
-                if match:
-                    TAG_seq = match.group(0)[0:tag_length]
+                for length in regex_patterns.keys():
+                    match = re.search(regex_patterns[length]['regex'], TAG_seq)
 
-                    # Increment read count
-                    res_table[cell_barcode]['total_reads'] += 1
+                    if match:
+                        TAG_seq = match.group(0)[0:length]
 
-                    # Get distance from all barcodes
-                    temp_res = defaultdict()
-                    for key, value in ab_map.items():
-                        temp_res[value] = Levenshtein.hamming(TAG_seq, key)
+                        # Increment read count
+                        res_table[cell_barcode]['total_reads'] += 1
 
-                    # Get smallest value and get respective tag_name
-                    min_value = min(temp_res.values())
-                    min_index = list(temp_res.values()).index(min_value)
-                    best = list(temp_res.keys())[min_index]
+                        # Get distance from all barcodes
+                        temp_res = defaultdict()
+                        for key, value in regex_patterns[length]['mapping'].items():
+                            temp_res[value] = Levenshtein.hamming(TAG_seq, key)
 
-                    # ambiguous
-                    if not isinstance(min_value, int):
-                        if args.debug:
-                            print("{0}\t{1}\t{2}\t{3}\t{4}".format(
-                                  cell_barcode, UMI, x, y, TAG_seq))
+                        # Get smallest value and get respective tag_name
+                        min_value = min(temp_res.values())
+                        min_index = list(temp_res.values()).index(min_value)
+                        best = list(temp_res.keys())[min_index]
 
-                        res_table[cell_barcode]['ambiguous'] += 1
-                        continue
+                        # ambiguous
+                        if not isinstance(min_value, int):
+                            if args.debug:
+                                print("{0}\t{1}\t{2}\t{3}\t{4}".format(
+                                      cell_barcode, UMI, x, y, TAG_seq))
 
-                    # If over threshold
-                    if min_value >= args.hamming_thresh:
-                        res_table[cell_barcode]['no_match'] += 1
-                        continue
+                            res_table[cell_barcode]['ambiguous'] += 1
+                            continue
 
-                    res_table[cell_barcode][best] += 1
+                        # If over threshold
+                        if min_value >= args.hamming_thresh:
+                            res_table[cell_barcode]['no_match'] += 1
+                            continue
 
-                # Increment bad structure
-                else:
-                    res_table[cell_barcode]['bad_struct'] += 1
+                        res_table[cell_barcode][best] += 1
+
+                    # Increment bad structure
+                    else:
+                        res_table[cell_barcode]['bad_struct'] += 1
 
                 # Add BC_UMI_TAG to set
                 UMI_reduce.add(BC_UMI_TAG)
