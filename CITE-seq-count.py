@@ -152,6 +152,8 @@ def generate_regex(ab_map, read2_first_base, num_polyA):
         lengths[length]['regex'] = '^([{}][GTC])[A]{{6}}.*'.format(']['.join(pattern))
     return(lengths)
 
+
+
 def main():
     parser = get_args()
     if not sys.argv[1:]:
@@ -228,10 +230,12 @@ def main():
             # Check if UMI + TAG already in the set
             if BC_UMI_TAG not in UMI_reduce:
                 # Check structure of the TAG
+                no_structure_match=True
                 for length in regex_patterns.keys():
                     match = re.search(regex_patterns[length]['regex'], TAG_seq)
 
                     if match:
+                        no_structure_match=False
                         TAG_seq = match.group(0)[0:length]
 
                         # Increment read count
@@ -263,9 +267,9 @@ def main():
 
                         res_table[cell_barcode][best] += 1
 
-                    # Increment bad structure
-                    else:
-                        res_table[cell_barcode]['bad_struct'] += 1
+                        # Increment bad structure
+                if(no_structure_match):
+                    res_table[cell_barcode]['bad_struct'] += 1
 
                 # Add BC_UMI_TAG to set
                 UMI_reduce.add(BC_UMI_TAG)
@@ -279,8 +283,10 @@ def main():
     print("Done counting")
 
     res_matrix = pd.DataFrame(res_table)
+    #Add potential missing cells if whitelist is used
+    if(args.whitelist):
+        res_matrix = res_matrix.reindex(whitelist, axis=1,fill_value=0)
     res_matrix.fillna(0, inplace=True)
-
     if args.cells:
         most_reads_ordered = res_matrix.sort_values(by='total_reads',
                                                     ascending=False,
