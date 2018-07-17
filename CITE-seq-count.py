@@ -13,10 +13,9 @@ import pandas as pd
 import time
 import locale
 import Levenshtein
-import re
+import regex
 import argparse
 from argparse import RawTextHelpFormatter
-import pprint
 
 
 def get_args():
@@ -86,7 +85,7 @@ def get_args():
                         "example:"
                         "\"^[ATGC]{6}[TGC][A]{6,}\"",
                         dest='tag_regex',
-                        required=False, 
+                        required=False,
                         type=str)
     filters.add_argument('-hd', '--hamming-distance', dest='hamming_thresh',
                          required=True, type=int,
@@ -120,6 +119,11 @@ def parse_tags_csv(filename):
         odict[row[0]] = row[1]
     return odict
 
+def check_tags(ab_map, maximum_dist):
+    ab_barcodes = ab_map.keys()
+    for a,b in combinations(ab_barcodes,2):
+        if(Levenshtein.hamming(a,b)<= maximum_dist):
+            sys.exit('Minimum hamming distance of TAGS barcode is less than given threshold\nPlease use a smaller distance; exiting')
 
 
 def generate_regex(ab_map, args, num_polyA):
@@ -134,12 +138,12 @@ def generate_regex(ab_map, args, num_polyA):
             lengths[len(TAG)]['mapping'] = OrderedDict()
             lengths[len(TAG)]['mapping'][TAG] = ab_map[TAG]
     #If there is only one length and the user provides a regex, us the users regex
-    if (len(lengths)==1 & (args.tag_regex is not None)):
+    if ((len(lengths)==1) & (args.tag_regex is not None)):
         for length in lengths.keys():
             lengths[length]['regex'] = args.tag_regex
         return(lengths)
-    elif(len(lengths) != 1 & (args.tag_regex is not None)):
-        exit('You cannot use your own regex with tags of different lengths')
+    if((len(lengths) != 1) & (args.tag_regex is not None)):
+        exit('You cannot use your own regex with tag barcodes of different lengths')
     for length in lengths.keys():
         pattern = [''] * length
         for TAG in lengths[length]['mapping'].keys():
@@ -148,7 +152,7 @@ def generate_regex(ab_map, args, num_polyA):
                     continue
                 else:
                     pattern[position] += TAG[position]
-        lengths[length]['regex'] = '^([{}][GTC])[A]{{6}}.*'.format(']['.join(pattern))
+        lengths[length]['regex'] = '^([{}])[A]{{{},}}'.format(']['.join(pattern), num_polyA)
     return(lengths)
 
 
@@ -166,6 +170,7 @@ def main():
 
     # Load TAGS barcodes
     ab_map = parse_tags_csv(args.tags)
+    check_tags(ab_map, args.hamming_thresh)
     #Generate regex patterns auto
     regex_patterns = generate_regex(ab_map, args, num_polyA=6)
 
@@ -230,10 +235,10 @@ def main():
                 # Check structure of the TAG
                 no_structure_match=True
                 for length in regex_patterns.keys():
-                    match = re.search(regex_patterns[length]['regex'], TAG_seq)
+                    match = regex.search(r'(?:({})){{i<={}}}'.format(regex_patterns[length]['regex'],args.hamming_thresh), TAG_seq)
                     if args.debug:
                         print("{0}\t{1}".format(regex_patterns[length]['regex'], TAG_seq))
-
+                        print(match)
 
                     if match:
                         no_structure_match=False
@@ -282,8 +287,9 @@ def main():
                 t = time.time()
 
     print("Done counting")
-
     res_matrix = pd.DataFrame(res_table)
+    if ('total_reads' not in res_matrix.index):
+        exit('No match found. Please check your regex or tags file')
     #Add potential missing cells if whitelist is used
     if(args.whitelist):
         res_matrix = res_matrix.reindex(whitelist, axis=1,fill_value=0)
