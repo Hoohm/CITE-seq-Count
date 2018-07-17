@@ -79,7 +79,15 @@ def get_args():
     filters_desc = ("Filtering for structure of antibody barcodes as well as "
                     "maximum hamming distance.")
     filters = parser.add_argument_group('filters', description=filters_desc)
-
+    filters.add_argument('-tr', '--TAG_regex',
+                        help="Only use if you know what you are doing."
+                        "The regex that will be used to validate\n"
+                        "an antibody barcode structure. Must be given in regex syntax."
+                        "example:"
+                        "\"^[ATGC]{6}[TGC][A]{6,}\"",
+                        dest='tag_regex',
+                        required=False, 
+                        type=str)
     filters.add_argument('-hd', '--hamming-distance', dest='hamming_thresh',
                          required=True, type=int,
                          help=("Maximum hamming distance allowed for antibody "
@@ -113,23 +121,8 @@ def parse_tags_csv(filename):
     return odict
 
 
-def check_tags(ab_map, maximum_dist):
-    ab_barcodes = ab_map.keys()
-    for a, b in combinations(ab_barcodes, 2):
-        if len(a) != len(b):
-            sys.exit(("Length of {} is different than length of {}.\nCan only "
-                      "run with all TAGS having the same length.\n"
-                      "Exiting").format(ab_map[a], ab_map[b]))
-        if Levenshtein.hamming(a, b) <= maximum_dist:
-            sys.exit(("Minimum hamming distance of TAGS barcode is less than "
-                      "given threshold\nPlease use a smaller distance.\n"
-                      "Exiting."))
-    # Return length of TAGS. Since all are the same length, return the length
-    # of last a
-    return len(a)
 
-
-def generate_regex(ab_map, read2_first_base, num_polyA):
+def generate_regex(ab_map, args, num_polyA):
     """Generate regex based ont he provided TAGS"""
     TAGS = ab_map.keys()
     lengths = OrderedDict()
@@ -140,7 +133,13 @@ def generate_regex(ab_map, read2_first_base, num_polyA):
             lengths[len(TAG)]=OrderedDict()
             lengths[len(TAG)]['mapping'] = OrderedDict()
             lengths[len(TAG)]['mapping'][TAG] = ab_map[TAG]
-            
+    #If there is only one length and the user provides a regex, us the users regex
+    if (len(lengths)==1 & (args.tag_regex is not None)):
+        for length in lengths.keys():
+            lengths[length]['regex'] = args.tag_regex
+        return(lengths)
+    elif(len(lengths) != 1 & (args.tag_regex is not None)):
+        exit('You cannot use your own regex with tags of different lengths')
     for length in lengths.keys():
         pattern = [''] * length
         for TAG in lengths[length]['mapping'].keys():
@@ -168,9 +167,8 @@ def main():
     # Load TAGS barcodes
     ab_map = parse_tags_csv(args.tags)
     #Generate regex patterns auto
-    regex_patterns = generate_regex(ab_map, read2_first_base=0, num_polyA=6)
-    # Check hamming threshold
-    #tag_length = check_tags(ab_map, args.hamming_thresh)
+    regex_patterns = generate_regex(ab_map, args, num_polyA=6)
+
     
     # Create a set for UMI reduction. Fast way to check if it already exists
     UMI_reduce = set()
@@ -233,6 +231,9 @@ def main():
                 no_structure_match=True
                 for length in regex_patterns.keys():
                     match = re.search(regex_patterns[length]['regex'], TAG_seq)
+                    if args.debug:
+                        print("{0}\t{1}".format(regex_patterns[length]['regex'], TAG_seq))
+
 
                     if match:
                         no_structure_match=False
