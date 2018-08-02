@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 
+## [1.1] - 2018-08-02
+### Changed
+- Cite-seq-Count is now a python package!
+
 ## [0.2] - 2018-07-17
 ### Added
 - Compatibility with tags of different lengths

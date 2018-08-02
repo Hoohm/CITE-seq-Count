@@ -121,8 +121,9 @@ def parse_tags_csv(filename):
 
 def check_tags(ab_map, maximum_dist):
     ab_barcodes = ab_map.keys()
+    print(ab_barcodes)
     for a,b in combinations(ab_barcodes,2):
-        if(Levenshtein.hamming(a,b)<= maximum_dist):
+        if(Levenshtein.distance(a,b)<= maximum_dist):
             sys.exit('Minimum hamming distance of TAGS barcode is less than given threshold\nPlease use a smaller distance; exiting')
 
 
