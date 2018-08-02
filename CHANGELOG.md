@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 
+## [1.1a] - 2018-08-02
+### Added
+- pandas dependcy
+
+
 ## [1.1] - 2018-08-02
 ### Changed
 - Cite-seq-Count is now a python package!
