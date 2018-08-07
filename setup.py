@@ -25,5 +25,6 @@ setuptools.setup(
           'regex>=2018.07.11',
           'python-levenshtein>=0.12.0',
           'pandas>=0.23.3'
-      ]
+      ],
+      python_requires='>3'
 )

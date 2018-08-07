@@ -1,7 +1,0 @@
-channels:
-  - anaconda
-  - conda-forge
-dependencies:
-  - pandas
-  - python-levenshtein
-  - regex
