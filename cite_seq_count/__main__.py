@@ -98,7 +98,9 @@ def get_args():
                         dest='outfile', help="Write result to file.")
     parser.add_argument('--debug', action='store_true',
                         help="Print extra information for debugging.")
-
+    filters.add_argument('-l', '--legacy', required=False, type=bool,
+                        dest='legacy', default=False,
+                        help='Use this option if you used earlier versions of the kit that adds a T C or G at the end and you expect polyA tails in the data.')
     return parser
 
 
@@ -121,7 +123,8 @@ def parse_tags_csv(filename):
 
 def check_tags(ab_map, maximum_dist):
     ab_barcodes = ab_map.keys()
-    print(ab_barcodes)
+    if(len(ab_barcodes) == 1):
+        return()
     for a,b in combinations(ab_barcodes,2):
         if(Levenshtein.distance(a,b)<= maximum_dist):
             sys.exit('Minimum hamming distance of TAGS barcode is less than given threshold\nPlease use a smaller distance; exiting')
@@ -153,7 +156,9 @@ def generate_regex(ab_map, args, num_polyA):
                     continue
                 else:
                     pattern[position] += TAG[position]
-        lengths[length]['regex'] = '^([{}])[A]{{{},}}'.format(']['.join(pattern), num_polyA)
+        if(args.legacy):
+            lengths[length]['regex'] = '^([{}])[TGC][A]{{{},}}'.format(']['.join(pattern), num_polyA)  
+        lengths[length]['regex'] = '^([{}]){{{},}}'.format(']['.join(pattern))
     return(lengths)
 
 
