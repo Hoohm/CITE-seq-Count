@@ -163,7 +163,8 @@ def generate_regex(ab_map, args, R2_length, max_polyA):
                     pattern[position] += TAG[position]
         if(args.legacy):
             lengths[length]['regex'] = '^([{}])[TGC][A]{{{},}}'.format(']['.join(pattern), min(max_polyA,(R2_length-length-1)))
-        lengths[length]['regex'] = '^([{}])'.format(']['.join(pattern))
+        else:
+            lengths[length]['regex'] = '^([{}])'.format(']['.join(pattern))
     return(lengths)
 
 def get_read_length(file_path):
@@ -232,8 +233,8 @@ def main():
                       "lines loaded {:,} ".format(time.time()-t, n))
                 t = time.time()
 
-        print('{} lines loaded'.format(n))
-        print('{:,} uniques lines loaded'.format(len(unique_lines)))
+        print('{:,} reads loaded'.format(n))
+        print('{:,} uniques reads loaded'.format(len(unique_lines)))
 
         n = 0
         for line in unique_lines:
@@ -243,7 +244,7 @@ def main():
                     continue
 
             UMI = line[barcode_length:barcode_umi_length]
-            TAG_seq = line[barcode_umi_length:]
+            TAG_seq = line[barcode_umi_length-1:]
             BC_UMI_TAG = cell_barcode + UMI + TAG_seq
             if args.debug:
                 print("{0}\t{1}\t{2}\t{3}".format(line, cell_barcode,
@@ -270,7 +271,6 @@ def main():
                         temp_res = defaultdict()
                         for key, value in regex_patterns[length]['mapping'].items():
                             temp_res[value] = Levenshtein.hamming(TAG_seq, key)
-
                         # Get smallest value and get respective tag_name
                         min_value = min(temp_res.values())
                         min_index = list(temp_res.values()).index(min_value)
