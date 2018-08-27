@@ -88,7 +88,7 @@ def get_args():
                         required=False,
                         type=str)
     filters.add_argument('-hd', '--hamming-distance', dest='hamming_thresh',
-                         required=True, type=int,
+                         required=False, type=int, default=2,
                          help=("Maximum hamming distance allowed for antibody "
                                "barcode."))
     parser.add_argument('-n', '--first_n', required=False, type=int,
@@ -120,23 +120,26 @@ def parse_tags_csv(filename):
     csvReader = csv.reader(file)
     odict = OrderedDict()
     for row in csvReader:
-        odict[row[0]] = row[1]
+        odict[row[0].strip()] = row[1].strip()
     return odict
 
 def check_tags(ab_map, maximum_dist):
-    ab_barcodes = ab_map.keys()
-    if(len(ab_barcodes) == 1):
-        return()
-    for a,b in combinations(ab_barcodes,2):
+    # Adding the barcode to the name of the TAG
+    # This means we don't need to share the mapping of the antibody and the barcode.
+    new_ab_map = {}
+    for TAG in ab_map:
+        new_ab_map[TAG] = ab_map[TAG]  + '-' + TAG
+    if(len(ab_map) == 1):
+        return(new_ab_map)
+    for a,b in combinations(new_ab_map.keys(),2):
         if(Levenshtein.distance(a,b)<= maximum_dist):
             sys.exit('Minimum hamming distance of TAGS barcode is less than given threshold\nPlease use a smaller distance; exiting')
+    return(new_ab_map)
 
-
-def generate_regex(ab_map, args, R2_length):
+def generate_regex(ab_map, args, R2_length, max_polyA):
     """Generate regex based ont he provided TAGS"""
-    TAGS = ab_map.keys()
     lengths = OrderedDict()
-    for TAG in TAGS:
+    for TAG in ab_map:
         if (len(TAG) in lengths.keys()):
             lengths[len(TAG)]['mapping'][TAG]=ab_map[TAG]
         else:
@@ -159,13 +162,13 @@ def generate_regex(ab_map, args, R2_length):
                 else:
                     pattern[position] += TAG[position]
         if(args.legacy):
-            lengths[length]['regex'] = '^([{}])[TGC][A]{{{},}}'.format(']['.join(pattern), (R2_length-length-1))
+            lengths[length]['regex'] = '^([{}])[TGC][A]{{{},}}'.format(']['.join(pattern), min(max_polyA,(R2_length-length-1)))
         lengths[length]['regex'] = '^([{}])'.format(']['.join(pattern))
     return(lengths)
 
 def get_read_length(file_path):
     with gzip.open(file_path, 'r') as fastq_file:
-        secondlines = islice(fastq_file, 1,1000, 4)
+        secondlines = islice(fastq_file, 1, 1000, 4)
         temp_length = len(next(secondlines).rstrip())
         for sequence in secondlines:
             read_length = len(sequence.rstrip())
@@ -188,10 +191,11 @@ def main():
 
     # Load TAGS barcodes
     ab_map = parse_tags_csv(args.tags)
-    check_tags(ab_map, args.hamming_thresh)
-    #Generate regex patterns auto
+    ab_map = check_tags(ab_map, args.hamming_thresh)
+    
+    #Generate regex patterns automatically
     R2_length = get_read_length(args.read2_path)
-    regex_patterns = generate_regex(ab_map=ab_map, args=args, R2_length=R2_length)
+    regex_patterns = generate_regex(ab_map=ab_map, args=args, R2_length=R2_length, max_polyA=6)
 
     
     # Create a set for UMI reduction. Fast way to check if it already exists
@@ -201,10 +205,6 @@ def main():
 
     # Set counter
     n = 0
-    top_n = None
-    if args.first_n:
-        top_n = args.first_n * 4
-
     # Define slices
     barcode_length = args.cb_last - args.cb_first + 1
     umi_length = args.umi_last - args.umi_first + 1
@@ -215,8 +215,8 @@ def main():
     unique_lines = set()
     with gzip.open(args.read1_path, 'rt') as textfile1, \
             gzip.open(args.read2_path, 'rt') as textfile2:
-        # Read all 2nd lines from 4 line chunks
-        secondlines = islice(zip(textfile1, textfile2), 1, top_n, 4)
+        # Read all 2nd lines from 4 line chunks. If first_n not None read only 4 times the given amount.
+        secondlines = islice(zip(textfile1, textfile2), 1, (args.first_n * 4 if args.first_n is not None else args.first_n), 4)
         print('loading')
 
         t = time.time()
@@ -310,7 +310,7 @@ def main():
     if ('total_reads' not in res_matrix.index):
         exit('No match found. Please check your regex or tags file')
     #Add potential missing cells if whitelist is used
-    if(args.whitelist):
+    if args.whitelist:
         res_matrix = res_matrix.reindex(whitelist, axis=1,fill_value=0)
     res_matrix.fillna(0, inplace=True)
     if args.cells:
