@@ -98,9 +98,11 @@ def get_args():
                         dest='outfile', help="Write result to file.")
     parser.add_argument('--debug', action='store_true',
                         help="Print extra information for debugging.")
-    filters.add_argument('-l', '--legacy', required=False, type=bool,
-                        dest='legacy', default=False,
-                        help='Use this option if you used earlier versions of the kit that adds a T C or G at the end and you expect polyA tails in the data.')
+    filters.add_argument('-l', '--legacy', required=False,
+                        dest='legacy', default=False, action='store_true',
+                        help="Use this option if you used an earlier versions"
+                        " of the kit that adds a T C or G at the end and you"
+                        " expect polyA tails in the data.")
     return parser
 
 
@@ -130,7 +132,7 @@ def check_tags(ab_map, maximum_dist):
             sys.exit('Minimum hamming distance of TAGS barcode is less than given threshold\nPlease use a smaller distance; exiting')
 
 
-def generate_regex(ab_map, args, num_polyA):
+def generate_regex(ab_map, args, R2_length):
     """Generate regex based ont he provided TAGS"""
     TAGS = ab_map.keys()
     lengths = OrderedDict()
@@ -157,10 +159,20 @@ def generate_regex(ab_map, args, num_polyA):
                 else:
                     pattern[position] += TAG[position]
         if(args.legacy):
-            lengths[length]['regex'] = '^([{}])[TGC][A]{{{},}}'.format(']['.join(pattern), num_polyA)  
-        lengths[length]['regex'] = '^([{}]){{{},}}'.format(']['.join(pattern))
+            lengths[length]['regex'] = '^([{}])[TGC][A]{{{},}}'.format(']['.join(pattern), (R2_length-length-1))
+        lengths[length]['regex'] = '^([{}])'.format(']['.join(pattern))
     return(lengths)
 
+def get_read_length(file_path):
+    with gzip.open(file_path, 'r') as fastq_file:
+        secondlines = islice(fastq_file, 1,1000, 4)
+        temp_length = len(next(secondlines).rstrip())
+        for sequence in secondlines:
+            read_length = len(sequence.rstrip())
+            if(temp_length != read_length):
+                sys.exit('Read2 length is not consistent, please trim all Read2 reads at the same length')
+            temp_length = read_length
+    return(read_length)
 
 
 def main():
@@ -178,7 +190,8 @@ def main():
     ab_map = parse_tags_csv(args.tags)
     check_tags(ab_map, args.hamming_thresh)
     #Generate regex patterns auto
-    regex_patterns = generate_regex(ab_map, args, num_polyA=6)
+    R2_length = get_read_length(args.read2_path)
+    regex_patterns = generate_regex(ab_map=ab_map, args=args, R2_length=R2_length)
 
     
     # Create a set for UMI reduction. Fast way to check if it already exists
@@ -198,7 +211,7 @@ def main():
     barcode_umi_length = barcode_length + umi_length
     barcode_slice = slice(args.cb_first - 1, args.cb_last)
     umi_slice = slice(args.umi_first - 1, args.umi_last)
-
+    
     unique_lines = set()
     with gzip.open(args.read1_path, 'rt') as textfile1, \
             gzip.open(args.read2_path, 'rt') as textfile2:
