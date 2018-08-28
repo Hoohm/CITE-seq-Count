@@ -244,11 +244,11 @@ def main():
                     continue
 
             UMI = line[barcode_length:barcode_umi_length]
-            TAG_seq = line[barcode_umi_length-1:]
+            TAG_seq = line[barcode_umi_length:]
             BC_UMI_TAG = cell_barcode + UMI + TAG_seq
             if args.debug:
-                print("{0}\t{1}\t{2}\t{3}".format(line, cell_barcode,
-                                                  UMI, TAG_seq))
+                print("\nline:{0}\ncell_barcode:{1}\tUMI:{2}\tTAG_seq:{3}\nline length:{4}\tcell barcode length:{5}\tUMI length:{6}\tTAG sequence length:{7}".format(line, cell_barcode,
+                                                  UMI, TAG_seq, len(line), len(cell_barcode), len(UMI), len(TAG_seq)))
 
             # Check if UMI + TAG already in the set
             if BC_UMI_TAG not in UMI_reduce:
