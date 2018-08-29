@@ -78,15 +78,6 @@ def get_args():
     filters_desc = ("Filtering for structure of antibody barcodes as well as "
                     "maximum hamming distance.")
     filters = parser.add_argument_group('filters', description=filters_desc)
-    filters.add_argument('-tr', '--TAG_regex',
-                        help="Only use if you know what you are doing."
-                        "The regex that will be used to validate\n"
-                        "an antibody barcode structure. Must be given in regex syntax."
-                        "example:"
-                        "\"^[ATGC]{6}[TGC][A]{6,}\"",
-                        dest='tag_regex',
-                        required=False,
-                        type=str)
     filters.add_argument('-hd', '--hamming-distance', dest='hamming_thresh',
                          required=False, type=int, default=2,
                          help=("Maximum hamming distance allowed for antibody "
@@ -98,7 +89,17 @@ def get_args():
                         dest='outfile', help="Write result to file.")
     parser.add_argument('--debug', action='store_true',
                         help="Print extra information for debugging.")
-    filters.add_argument('-l', '--legacy', required=False,
+    regex_pattern = parser.add_mutually_exclusive_group(required=False)
+    regex_pattern.add_argument('-tr', '--TAG_regex',
+                        help="Only use if you know what you are doing."
+                        "The regex that will be used to validate\n"
+                        "an antibody barcode structure. Must be given in regex syntax."
+                        "example:"
+                        "\"^[ATGC]{6}[TGC][A]{6,}\"",
+                        dest='tag_regex',
+                        required=False,
+                        type=str)
+    regex_pattern.add_argument('-l', '--legacy', required=False,
                         dest='legacy', default=False, action='store_true',
                         help="Use this option if you used an earlier versions"
                         " of the kit that adds a T C or G at the end and you"
@@ -236,12 +237,19 @@ def main():
         print('{:,} reads loaded'.format(n))
         print('{:,} uniques reads loaded'.format(len(unique_lines)))
 
-        n = 0
+        n = 1
         for line in unique_lines:
+            if n % 1000000 == 0:
+                print("Processed 1,000,000 lines in {:.4} secondes. Total "
+                      "lines processed: {:,}".format(time.time()-t, n))
+                t = time.time()
+
             cell_barcode = line[0:barcode_length]
             if args.whitelist:
                 if cell_barcode not in whitelist:
+                    n += 1
                     continue
+
 
             UMI = line[barcode_length:barcode_umi_length]
             TAG_seq = line[barcode_umi_length:]
@@ -300,11 +308,7 @@ def main():
                 UMI_reduce.add(BC_UMI_TAG)
 
             n += 1
-            if n % 1000000 == 0:
-                print("Processed 1,000,000 lines in {:.4} secondes. Total "
-                      "lines processed: {:,}".format(time.time()-t, n))
-                t = time.time()
-
+            
     print("Done counting")
     res_matrix = pd.DataFrame(res_table)
     if ('total_reads' not in res_matrix.index):
