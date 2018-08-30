@@ -5,6 +5,7 @@ Authors: Christoph Hafemeister, Patrick Roelli
 import sys
 import gzip
 import csv
+import warnings
 from collections import defaultdict
 from collections import OrderedDict
 from itertools import islice
@@ -180,6 +181,19 @@ def get_read_length(file_path):
     return(read_length)
 
 
+def check_read_lengths(R1_length, R2_length, args):
+    barcode_length = args.cb_last - args.cb_first + 1
+    umi_length = args.umi_last - args.umi_first + 1
+    barcode_umi_length = barcode_length + umi_length
+    barcode_slice = slice(args.cb_first - 1, args.cb_last)
+    umi_slice = slice(args.umi_first - 1, args.umi_last)
+
+    if(barcode_umi_length) > R1_length:
+        sys.exit('Read 1 length is shorter than the option you are using for cell and UMI barcodes length. Please check your options and rerun.')
+    elif(barcode_umi_length) < R1_length:
+        print('**WARNING**\nRead 1 length is {}bp but you are using {}bp for cell and UMI barcodes combined.\nThis might lead to wrong cell attribution and skewed umi counts.\n'.format(R1_length, barcode_umi_length))
+    return(barcode_slice, umi_slice, barcode_umi_length)
+
 def main():
     parser = get_args()
     if not sys.argv[1:]:
@@ -195,10 +209,14 @@ def main():
     ab_map = parse_tags_csv(args.tags)
     ab_map = check_tags(ab_map, args.hamming_thresh)
     
-    #Generate regex patterns automatically
+    #Get read lengths
+    R1_length = get_read_length(args.read1_path)
     R2_length = get_read_length(args.read2_path)
-    regex_patterns = generate_regex(ab_map=ab_map, args=args, R2_length=R2_length, max_polyA=6)
 
+    #Generate regex patterns automatically
+    regex_patterns = generate_regex(ab_map=ab_map, args=args, R2_length=R2_length, max_polyA=6)
+    if(args.debug):
+        print(regex_patterns)
     
     # Create a set for UMI reduction. Fast way to check if it already exists
     UMI_reduce = set()
@@ -207,12 +225,9 @@ def main():
 
     # Set counter
     n = 0
-    # Define slices
-    barcode_length = args.cb_last - args.cb_first + 1
-    umi_length = args.umi_last - args.umi_first + 1
-    barcode_umi_length = barcode_length + umi_length
-    barcode_slice = slice(args.cb_first - 1, args.cb_last)
-    umi_slice = slice(args.umi_first - 1, args.umi_last)
+        
+    # Check that read 1 and options match and define slices
+    (barcode_slice, umi_slice, barcode_umi_length) = check_read_lengths(R1_length, R2_length, args)
     
     unique_lines = set()
     with gzip.open(args.read1_path, 'rt') as textfile1, \
@@ -244,14 +259,14 @@ def main():
                       "lines processed: {:,}".format(time.time()-t, n))
                 t = time.time()
 
-            cell_barcode = line[0:barcode_length]
+            cell_barcode = line[barcode_slice]
             if args.whitelist:
                 if cell_barcode not in whitelist:
                     n += 1
                     continue
 
 
-            UMI = line[barcode_length:barcode_umi_length]
+            UMI = line[umi_slice]
             TAG_seq = line[barcode_umi_length:]
             BC_UMI_TAG = cell_barcode + UMI + TAG_seq
             if args.debug:
