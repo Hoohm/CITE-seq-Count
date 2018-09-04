@@ -4,7 +4,7 @@ python:
 branches:
   only:
     - master
-    - travis
+    - feature/travis
 install:
   - sudo apt-get update
   - sudo apt-get install pip3
