@@ -4,10 +4,9 @@ python:
 branches:
   only:
     - master
-    - feature/travis
 install:
   - sudo apt-get update
-  - sudo apt-get install pip3
+  - sudo apt-get install python3-pip
   - pip3 install CITE-seq-Count
 script:
   - CITE-seq-Count
