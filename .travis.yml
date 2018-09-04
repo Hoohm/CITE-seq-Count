@@ -1,0 +1,20 @@
+language: python
+python:
+  - '3.6'
+branches:
+  only:
+    - master
+    - feature/travis
+install:
+  - sudo apt-get update
+  - sudo apt-get install pip3
+  - pip3 install CITE-seq-Count
+script:
+  - CITE-seq-Count
+deploy:
+  provider: pypi
+  user: Hoohm
+  password:
+    secure: IijL2g8WRERbfmZJLWQqAb7tDGgWXm+uM01wPdlUYUmyuca3b46mD7IGUT3n/2NdlVN9pFtTdvG7Q53cGFD8qxYQbFQLiVqO54kpZ4wonj/grhvNY6oIaRBQI7kuwxFymR71gQ/qr+A0BX6QxzUsBNkfHUZgUF44rP4TN3Z4O0+/psPT3AOWwcPDoFMjW7Q68Ofw+iM6OleXaPfLQcZHZ5vRy5htR6SEwHZISsJz70t30XFsm2KT427J6bHIPguv5PLYXjFBAGLFBL18Tm35T96jqHr1RiUhbtQXpZkPQWnTMGn7j71spEh5XmmCaqlYevNQ0mkj954w8lB11bXKzJse6MZPhfMwUhhapMT8VrDmsy08Ged8RURtXda5ZM3BSTT/KYiu6SML7s8VdhCaHasFfkGyMoRBF/2jNBZLy5qEb2+DQTtrcNgIIATNYAVfe7ZqSvCU70R2TSLjEA1fAw2lzUFVEcOqd89yXjnP02eTP0psUuANyLWaq1ghxEa2R/CDwUSyCSjqqtN69QLqLOgbHDikG7lLzG1xioP72/fLGbwaq5FHlB8CmftY8YnUPBLVNnJCyZBelwPOcpoyejr99H9nHYYaI4iPYVAQw7GJML7JbBzp4ig3SgoAKV/Hz2hwuP/tdx+j6kaMULkYQn6fKs54pkXv2MH1uVvP8UY=
+  on:
+    tags: true
