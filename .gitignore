@@ -1,3 +1,5 @@
-dist*
-build*
-CITE_seq_Count*
+dist/
+build/
+CITE_seq_Count.egg-info/
+__pycache__
+*.pyc

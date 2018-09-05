@@ -5,6 +5,7 @@ Authors: Christoph Hafemeister, Patrick Roelli
 import sys
 import gzip
 import csv
+import warnings
 from collections import defaultdict
 from collections import OrderedDict
 from itertools import islice
@@ -78,17 +79,8 @@ def get_args():
     filters_desc = ("Filtering for structure of antibody barcodes as well as "
                     "maximum hamming distance.")
     filters = parser.add_argument_group('filters', description=filters_desc)
-    filters.add_argument('-tr', '--TAG_regex',
-                        help="Only use if you know what you are doing."
-                        "The regex that will be used to validate\n"
-                        "an antibody barcode structure. Must be given in regex syntax."
-                        "example:"
-                        "\"^[ATGC]{6}[TGC][A]{6,}\"",
-                        dest='tag_regex',
-                        required=False,
-                        type=str)
     filters.add_argument('-hd', '--hamming-distance', dest='hamming_thresh',
-                         required=True, type=int,
+                         required=False, type=int, default=2,
                          help=("Maximum hamming distance allowed for antibody "
                                "barcode."))
     parser.add_argument('-n', '--first_n', required=False, type=int,
@@ -98,7 +90,21 @@ def get_args():
                         dest='outfile', help="Write result to file.")
     parser.add_argument('--debug', action='store_true',
                         help="Print extra information for debugging.")
-
+    regex_pattern = parser.add_mutually_exclusive_group(required=False)
+    regex_pattern.add_argument('-tr', '--TAG_regex',
+                        help="Only use if you know what you are doing."
+                        "The regex that will be used to validate\n"
+                        "an antibody barcode structure. Must be given in regex syntax."
+                        "example:"
+                        "\"^[ATGC]{6}[TGC][A]{6,}\"",
+                        dest='tag_regex',
+                        required=False,
+                        type=str)
+    regex_pattern.add_argument('-l', '--legacy', required=False,
+                        dest='legacy', default=False, action='store_true',
+                        help="Use this option if you used an earlier versions"
+                        " of the kit that adds a T C or G at the end and you"
+                        " expect polyA tails in the data.")
     return parser
 
 
@@ -116,22 +122,26 @@ def parse_tags_csv(filename):
     csvReader = csv.reader(file)
     odict = OrderedDict()
     for row in csvReader:
-        odict[row[0]] = row[1]
+        odict[row[0].strip()] = row[1].strip()
     return odict
 
 def check_tags(ab_map, maximum_dist):
-    ab_barcodes = ab_map.keys()
-    print(ab_barcodes)
-    for a,b in combinations(ab_barcodes,2):
+    # Adding the barcode to the name of the TAG
+    # This means we don't need to share the mapping of the antibody and the barcode.
+    new_ab_map = {}
+    for TAG in ab_map:
+        new_ab_map[TAG] = ab_map[TAG]  + '-' + TAG
+    if(len(ab_map) == 1):
+        return(new_ab_map)
+    for a,b in combinations(new_ab_map.keys(),2):
         if(Levenshtein.distance(a,b)<= maximum_dist):
             sys.exit('Minimum hamming distance of TAGS barcode is less than given threshold\nPlease use a smaller distance; exiting')
+    return(new_ab_map)
 
-
-def generate_regex(ab_map, args, num_polyA):
+def generate_regex(ab_map, args, R2_length, max_polyA):
     """Generate regex based ont he provided TAGS"""
-    TAGS = ab_map.keys()
     lengths = OrderedDict()
-    for TAG in TAGS:
+    for TAG in ab_map:
         if (len(TAG) in lengths.keys()):
             lengths[len(TAG)]['mapping'][TAG]=ab_map[TAG]
         else:
@@ -153,10 +163,36 @@ def generate_regex(ab_map, args, num_polyA):
                     continue
                 else:
                     pattern[position] += TAG[position]
-        lengths[length]['regex'] = '^([{}])[A]{{{},}}'.format(']['.join(pattern), num_polyA)
+        if(args.legacy):
+            lengths[length]['regex'] = '^([{}])[TGC][A]{{{},}}'.format(']['.join(pattern), min(max_polyA,(R2_length-length-1)))
+        else:
+            lengths[length]['regex'] = '^([{}])'.format(']['.join(pattern))
     return(lengths)
 
+def get_read_length(file_path):
+    with gzip.open(file_path, 'r') as fastq_file:
+        secondlines = islice(fastq_file, 1, 1000, 4)
+        temp_length = len(next(secondlines).rstrip())
+        for sequence in secondlines:
+            read_length = len(sequence.rstrip())
+            if(temp_length != read_length):
+                sys.exit('Read2 length is not consistent, please trim all Read2 reads at the same length')
+            temp_length = read_length
+    return(read_length)
 
+
+def check_read_lengths(R1_length, R2_length, args):
+    barcode_length = args.cb_last - args.cb_first + 1
+    umi_length = args.umi_last - args.umi_first + 1
+    barcode_umi_length = barcode_length + umi_length
+    barcode_slice = slice(args.cb_first - 1, args.cb_last)
+    umi_slice = slice(args.umi_first - 1, args.umi_last)
+
+    if(barcode_umi_length) > R1_length:
+        sys.exit('Read 1 length is shorter than the option you are using for cell and UMI barcodes length. Please check your options and rerun.')
+    elif(barcode_umi_length) < R1_length:
+        print('**WARNING**\nRead 1 length is {}bp but you are using {}bp for cell and UMI barcodes combined.\nThis might lead to wrong cell attribution and skewed umi counts.\n'.format(R1_length, barcode_umi_length))
+    return(barcode_slice, umi_slice, barcode_umi_length)
 
 def main():
     parser = get_args()
@@ -171,10 +207,16 @@ def main():
 
     # Load TAGS barcodes
     ab_map = parse_tags_csv(args.tags)
-    check_tags(ab_map, args.hamming_thresh)
-    #Generate regex patterns auto
-    regex_patterns = generate_regex(ab_map, args, num_polyA=6)
+    ab_map = check_tags(ab_map, args.hamming_thresh)
+    
+    #Get read lengths
+    R1_length = get_read_length(args.read1_path)
+    R2_length = get_read_length(args.read2_path)
 
+    #Generate regex patterns automatically
+    regex_patterns = generate_regex(ab_map=ab_map, args=args, R2_length=R2_length, max_polyA=6)
+    if(args.debug):
+        print(regex_patterns)
     
     # Create a set for UMI reduction. Fast way to check if it already exists
     UMI_reduce = set()
@@ -183,22 +225,15 @@ def main():
 
     # Set counter
     n = 0
-    top_n = None
-    if args.first_n:
-        top_n = args.first_n * 4
-
-    # Define slices
-    barcode_length = args.cb_last - args.cb_first + 1
-    umi_length = args.umi_last - args.umi_first + 1
-    barcode_umi_length = barcode_length + umi_length
-    barcode_slice = slice(args.cb_first - 1, args.cb_last)
-    umi_slice = slice(args.umi_first - 1, args.umi_last)
-
+        
+    # Check that read 1 and options match and define slices
+    (barcode_slice, umi_slice, barcode_umi_length) = check_read_lengths(R1_length, R2_length, args)
+    
     unique_lines = set()
     with gzip.open(args.read1_path, 'rt') as textfile1, \
             gzip.open(args.read2_path, 'rt') as textfile2:
-        # Read all 2nd lines from 4 line chunks
-        secondlines = islice(zip(textfile1, textfile2), 1, top_n, 4)
+        # Read all 2nd lines from 4 line chunks. If first_n not None read only 4 times the given amount.
+        secondlines = islice(zip(textfile1, textfile2), 1, (args.first_n * 4 if args.first_n is not None else args.first_n), 4)
         print('loading')
 
         t = time.time()
@@ -214,22 +249,29 @@ def main():
                       "lines loaded {:,} ".format(time.time()-t, n))
                 t = time.time()
 
-        print('{} lines loaded'.format(n))
-        print('{:,} uniques lines loaded'.format(len(unique_lines)))
+        print('{:,} reads loaded'.format(n))
+        print('{:,} uniques reads loaded'.format(len(unique_lines)))
 
-        n = 0
+        n = 1
         for line in unique_lines:
-            cell_barcode = line[0:barcode_length]
+            if n % 1000000 == 0:
+                print("Processed 1,000,000 lines in {:.4} secondes. Total "
+                      "lines processed: {:,}".format(time.time()-t, n))
+                t = time.time()
+
+            cell_barcode = line[barcode_slice]
             if args.whitelist:
                 if cell_barcode not in whitelist:
+                    n += 1
                     continue
 
-            UMI = line[barcode_length:barcode_umi_length]
+
+            UMI = line[umi_slice]
             TAG_seq = line[barcode_umi_length:]
             BC_UMI_TAG = cell_barcode + UMI + TAG_seq
             if args.debug:
-                print("{0}\t{1}\t{2}\t{3}".format(line, cell_barcode,
-                                                  UMI, TAG_seq))
+                print("\nline:{0}\ncell_barcode:{1}\tUMI:{2}\tTAG_seq:{3}\nline length:{4}\tcell barcode length:{5}\tUMI length:{6}\tTAG sequence length:{7}".format(line, cell_barcode,
+                                                  UMI, TAG_seq, len(line), len(cell_barcode), len(UMI), len(TAG_seq)))
 
             # Check if UMI + TAG already in the set
             if BC_UMI_TAG not in UMI_reduce:
@@ -252,7 +294,6 @@ def main():
                         temp_res = defaultdict()
                         for key, value in regex_patterns[length]['mapping'].items():
                             temp_res[value] = Levenshtein.hamming(TAG_seq, key)
-
                         # Get smallest value and get respective tag_name
                         min_value = min(temp_res.values())
                         min_index = list(temp_res.values()).index(min_value)
@@ -282,17 +323,13 @@ def main():
                 UMI_reduce.add(BC_UMI_TAG)
 
             n += 1
-            if n % 1000000 == 0:
-                print("Processed 1,000,000 lines in {:.4} secondes. Total "
-                      "lines processed: {:,}".format(time.time()-t, n))
-                t = time.time()
-
+            
     print("Done counting")
     res_matrix = pd.DataFrame(res_table)
     if ('total_reads' not in res_matrix.index):
         exit('No match found. Please check your regex or tags file')
     #Add potential missing cells if whitelist is used
-    if(args.whitelist):
+    if args.whitelist:
         res_matrix = res_matrix.reindex(whitelist, axis=1,fill_value=0)
     res_matrix.fillna(0, inplace=True)
     if args.cells:
