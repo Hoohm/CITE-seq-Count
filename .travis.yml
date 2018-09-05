@@ -1,17 +1,17 @@
 language: python
 python:
-  - '3.6'
+- '3.6'
 branches:
   only:
-    - master
+  - master
 install:
-  - sudo apt-get update
+- sudo apt-get update
 script:
-  - python3 setup.py install
+- python3 setup.py install
 deploy:
   provider: pypi
   user: Hoohm
-  password:
-    secure: IijL2g8WRERbfmZJLWQqAb7tDGgWXm+uM01wPdlUYUmyuca3b46mD7IGUT3n/2NdlVN9pFtTdvG7Q53cGFD8qxYQbFQLiVqO54kpZ4wonj/grhvNY6oIaRBQI7kuwxFymR71gQ/qr+A0BX6QxzUsBNkfHUZgUF44rP4TN3Z4O0+/psPT3AOWwcPDoFMjW7Q68Ofw+iM6OleXaPfLQcZHZ5vRy5htR6SEwHZISsJz70t30XFsm2KT427J6bHIPguv5PLYXjFBAGLFBL18Tm35T96jqHr1RiUhbtQXpZkPQWnTMGn7j71spEh5XmmCaqlYevNQ0mkj954w8lB11bXKzJse6MZPhfMwUhhapMT8VrDmsy08Ged8RURtXda5ZM3BSTT/KYiu6SML7s8VdhCaHasFfkGyMoRBF/2jNBZLy5qEb2+DQTtrcNgIIATNYAVfe7ZqSvCU70R2TSLjEA1fAw2lzUFVEcOqd89yXjnP02eTP0psUuANyLWaq1ghxEa2R/CDwUSyCSjqqtN69QLqLOgbHDikG7lLzG1xioP72/fLGbwaq5FHlB8CmftY8YnUPBLVNnJCyZBelwPOcpoyejr99H9nHYYaI4iPYVAQw7GJML7JbBzp4ig3SgoAKV/Hz2hwuP/tdx+j6kaMULkYQn6fKs54pkXv2MH1uVvP8UY=
   on:
     tags: true
+  password:
+    secure: n4xDXvUO5kQFvcnW2yNSbheGNC4p59dx867B+3PehgheKJAgPswsGNDTLJfTFwbxnLwwprj9/dZCtLyQo5jBhxyK5Gmp2/YzFFvZ27cPbZkQOyIpD+o+bMFvDtA9FM5M8sHvtPw54SLfGsR6TdfC9ys9LkUpGLy6tXHsy3HgVRA9nPQz2+gNVPiFfG+cIGpYHG0XWnCUDLy0C+Y+zOjQO1WJMHqCTkATZAAfnhpafAD2HVPx4qrBgn3is778DpIImmrRtn1RlTd//njmkQYw8OYvnOVsq4iaw3oL/48jRP8B7SE7PugduCRtv5Xp/vKw4MIFTg4r6hYsuVPg3Lgl0moe3YmBvxrOaEuNeFOL0g63IhwEyqYq793Aq1HtcKQMZip+cGDTpSPcksYJx+MVTzYEKJCupZ71YGt4ljY03Is22NGGwhDmoAftaC+tl/WykKcaNu/xo/ww/qQAj7Q5cHs2BBRX5SJ7kw1SFBiyGF3MCbYtTtEqxPP1x07tYrrGeegFu3hQw6XiQqU8MkROcBUHNEl1Oal4SPrQqhY4MrSFIo8Ba91ST7QbZ5M26wnXOaYaeUvMSESgvZxX2ZhLm2R33Z3P2ZC+bBOSUKQ28La15GfW9hhhpxTmgw1jzw9cimvQepN16Spza8N0RM1b5WCNAoRFxGHBHt/dXsgo9HY=
