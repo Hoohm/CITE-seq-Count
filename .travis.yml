@@ -6,10 +6,7 @@ branches:
     - master
 install:
   - sudo apt-get update
-  - sudo apt-get install python3-pip
-  - pip3 install CITE-seq-Count
-script:
-  - CITE-seq-Count
+  - python3 setup.py install
 deploy:
   provider: pypi
   user: Hoohm
