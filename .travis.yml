@@ -6,6 +6,7 @@ branches:
     - master
 install:
   - sudo apt-get update
+script:
   - python3 setup.py install
 deploy:
   provider: pypi
