@@ -88,6 +88,8 @@ def get_args():
                         help="Select n reads to run on instead of all.")
     parser.add_argument('-o', '--output', required=True, type=str,
                         dest='outfile', help="Write result to file.")
+    parser.add_argument('-u', '--unknown-tags', required=False, type=str,
+                        dest='unknowns_file', help="Write table of unknown tags to file.")
     parser.add_argument('--debug', action='store_true',
                         help="Print extra information for debugging.")
     regex_pattern = parser.add_mutually_exclusive_group(required=False)
@@ -344,9 +346,11 @@ def main():
 
     res_matrix.to_csv(args.outfile, float_format='%.f')
     
-    print('top unknown tags:')
-    for key, value in sorted(no_match_table.iteritems(), key=lambda (k,v): (v,k)).reverse():
-        print("{0}\t{1}".format(key, value)
+    if args.unknowns_file:
+        no_match_matrix = pd.DataFrame(tag=no_match_table.keys(), counts=no_match_table.values())
+        no_match_matrix = no_match_matrix.sort_values(by='counts', ascending=False)      
+        no_match_matrix.to_csv(args.unknowns_file, float_format='%.f')
+                  
 
 if __name__ == '__main__':
     main()
