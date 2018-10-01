@@ -222,6 +222,7 @@ def main():
     UMI_reduce = set()
     # Create result table
     res_table = defaultdict(lambda: defaultdict(int))
+    no_match_table = defaultdict(lambda: defaultdict(int))
 
     # Set counter
     n = 0
@@ -311,6 +312,7 @@ def main():
                         # If over threshold
                         if min_value >= args.hamming_thresh:
                             res_table[cell_barcode]['no_match'] += 1
+                            no_match_table[best] += 1
                             continue
 
                         res_table[cell_barcode][best] += 1
@@ -341,6 +343,10 @@ def main():
         res_matrix = res_matrix.loc[:, res_matrix.columns.isin(top_Cells)]
 
     res_matrix.to_csv(args.outfile, float_format='%.f')
+    
+    print('top unknown tags:')
+    for key, value in sorted(no_match_table.iteritems(), key=lambda (k,v): (v,k)).reverse():
+        print("{0}\t{1}".format(key, value)
 
 if __name__ == '__main__':
     main()
