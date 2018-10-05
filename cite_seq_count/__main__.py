@@ -88,6 +88,8 @@ def get_args():
                         help="Select n reads to run on instead of all.")
     parser.add_argument('-o', '--output', required=True, type=str,
                         dest='outfile', help="Write result to file.")
+    parser.add_argument('-u', '--unknown-tags', required=False, type=str,
+                        dest='unknowns_file', help="Write table of unknown tags to file.")
     parser.add_argument('--debug', action='store_true',
                         help="Print extra information for debugging.")
     regex_pattern = parser.add_mutually_exclusive_group(required=False)
@@ -222,6 +224,7 @@ def main():
     UMI_reduce = set()
     # Create result table
     res_table = defaultdict(lambda: defaultdict(int))
+    no_match_table = defaultdict(int)
 
     # Set counter
     n = 0
@@ -311,6 +314,7 @@ def main():
                         # If over threshold
                         if min_value >= args.hamming_thresh:
                             res_table[cell_barcode]['no_match'] += 1
+                            no_match_table[TAG_seq] += 1
                             continue
 
                         res_table[cell_barcode][best] += 1
@@ -341,6 +345,12 @@ def main():
         res_matrix = res_matrix.loc[:, res_matrix.columns.isin(top_Cells)]
 
     res_matrix.to_csv(args.outfile, float_format='%.f')
+    
+    if args.unknowns_file:
+        no_match_matrix = pd.DataFrame(no_match_table.items(), columns=['tag', 'total'])
+        no_match_matrix = no_match_matrix.sort_values(by='total', ascending=False)            
+        no_match_matrix.to_csv(args.unknowns_file, float_format='%.f', index=False)
+                  
 
 if __name__ == '__main__':
     main()
