@@ -349,7 +349,9 @@ def main():
     res_matrix.to_csv(args.outfile, float_format='%.f')
     
     if args.unknowns_file:
-        no_match_matrix = pd.DataFrame(no_match_table.items(), columns=['tag', 'total'])
+        keys = list(no_match_table.keys())
+        vals = list(no_match_table.values())
+        no_match_matrix = pd.DataFrame({"tag": keys, "total": vals})
         no_match_matrix = no_match_matrix.sort_values(by='total', ascending=False)            
         no_match_matrix.to_csv(args.unknowns_file, float_format='%.f', index=False)
                   
