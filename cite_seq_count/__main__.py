@@ -17,13 +17,15 @@ import Levenshtein
 import regex
 import argparse
 from argparse import RawTextHelpFormatter
+import pkg_resources
+version = pkg_resources.require("cite_seq_count")[0].version
 
 
 def get_args():
     """
     Get args.
     """
-    desc = "This script counts matching antobody tags from two fastq files."
+    desc = "This script counts matching antobody tags from two fastq files. Version {}".format(version)
     parser = argparse.ArgumentParser(prog='CITE Seq Count', description=desc,
                                      formatter_class=RawTextHelpFormatter)
 
