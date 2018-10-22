@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [1.3.1a] - 2018-10-22
+## [1.3.2] - 2018-10-22
 ### Added
  - Printing version now from the help
  - Added a possibility to store unmatched tags in a file using the option `-u`
