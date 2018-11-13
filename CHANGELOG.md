@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   `barcodes.tsv` file could be directly used.
 - When TAGs are too close based on the maximum Levenshtein distance allowed,
   print the offending pairs with its distance to identify them.
+- When storing unmatched tags, added the possibility to specify a minimum
+  counts cutoff to avoid printing every unmatched possibility (option -uc).
 - Documentation to the functions.
 
 ### Changed

@@ -111,6 +111,9 @@ def get_args():
     parser.add_argument('-u', '--unknown-tags', required=False, type=str,
                         dest='unknowns_file',
                         help="Write table of unknown TAGs to file.")
+    parser.add_argument('-uc', '--unknown-tags-cutoff', required=False,
+                        dest='unknowns_cutoff', type=int, default=10000,
+                        help="Minimum counts to report an unknown TAG.")
     parser.add_argument('--debug', action='store_true',
                         help="Print extra information for debugging.")
     
@@ -583,8 +586,12 @@ def main():
     
     # Save no_match TAGs to `args.unknowns_file` file.
     if args.unknowns_file:
-        keys = list(no_match_table.keys())
-        vals = list(no_match_table.values())
+        # Filter unknown TAGs base on the specified cutoff
+        filtered_tags = {k:v
+                         for k,v in no_match_table.items()
+                         if v >= args.unknowns_cutoff}
+        keys = list(filtered_tags.keys())
+        vals = list(filtered_tags.values())
         no_match_matrix = pd.DataFrame({"tag": keys, "total": vals})
         no_match_matrix = no_match_matrix.sort_values(by='total', ascending=False)            
         no_match_matrix.to_csv(args.unknowns_file, float_format='%.f', index=False)
