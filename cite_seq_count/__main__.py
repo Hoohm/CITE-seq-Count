@@ -180,7 +180,7 @@ def get_read_length(file_path):
         for sequence in secondlines:
             read_length = len(sequence.rstrip())
             if(temp_length != read_length):
-                sys.exit('Read2 length is not consistent, please trim all Read2 reads at the same length')
+                sys.exit('Reads length is not consistent in {}, please trim all reads at the same length before rerunning'.format(file_path))
             temp_length = read_length
     return(read_length)
 
@@ -195,7 +195,7 @@ def check_read_lengths(R1_length, R2_length, args):
     if(barcode_umi_length) > R1_length:
         sys.exit('Read 1 length is shorter than the option you are using for cell and UMI barcodes length. Please check your options and rerun.')
     elif(barcode_umi_length) < R1_length:
-        print('**WARNING**\nRead 1 length is {}bp but you are using {}bp for cell and UMI barcodes combined.\nThis might lead to wrong cell attribution and skewed umi counts.\n'.format(R1_length, barcode_umi_length))
+        print("**WARNING**\nRead 1 length is {}bp but you are using {}bp for cell and UMI barcodes combined.\nPlease be sure you are using the correct positions for the cell barcode and UMI\n".format(R1_length, barcode_umi_length))
     return(barcode_slice, umi_slice, barcode_umi_length)
 
 def main():
