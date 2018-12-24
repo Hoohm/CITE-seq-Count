@@ -356,7 +356,7 @@ def generate_regex(tags, maximum_distance, legacy=False, max_poly_a=6, read2_len
         polya_run = min(max_poly_a, read2_length - longest_ab_tag - 1)
 
         # Read comment below for `e` meaning in the regex.
-        pattern = r'(^(\L<options>)[TGC][A]{{{},}}){{e<={}}}'.format(
+        pattern = r'(^(\L<options>)[TGC][A]{{{},}}){{s<={}}}'.format(
             polya_run, maximum_distance
         )
 
@@ -364,7 +364,7 @@ def generate_regex(tags, maximum_distance, legacy=False, max_poly_a=6, read2_len
         # `e` is part of the `regex` fuzzy logic: it means `error` in general,
         # whether it's a (s)ubstitution, (i)nsertion or (d)eletion. In this 
         # case, it means it allows `maximum_distance` errors to happen.
-        pattern = r'(^\L<options>){{e<={}}}'.format(maximum_distance)
+        pattern = r'(^\L<options>){{s<={}}}'.format(maximum_distance)
 
     # Compiling the regex makes it run faster.
     regex_pattern = regex.compile(pattern, options=tag_keys)
