@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
+## [1.3.4] - 24-12-2018
 ### Added
 - Stripping of numbers and dash (-) to the *whitelist* barcodes so the 10X
   `barcodes.tsv` file could be directly used.
@@ -44,8 +44,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   missing from the the conditional (`if min_value >= args.hamming_thresh`).
 - When applying the regular expression to filter patterns to keep, by using the
   `i` in the fuzzy logic it was only accepting `insertions` as mismatches, not
-  allowing proper mismatches or deletions. The `i` was changed to `e`, which
-  means `error` in general.
+  allowing proper mismatches or deletions. The `i` was changed to `s`, which
+  means `substitution` in general.
 - The `merge` technique for creating the common regex pattern for all the
   requested ABs/TAGs was replaced by a simple `in list` technique; the `merge`
   technique was faulty, matching sequences that are clearly different
