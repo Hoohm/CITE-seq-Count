@@ -761,7 +761,7 @@ def main():
 
     if not whitelist:
         top_cells = sorted(reads_per_cell, key=reads_per_cell.get, reverse=True)[0:args.cells]
-        final_results = {key: final_results[key] for key in final_results if key not in top_cells}
+        final_results = {key: final_results[key] for key in final_results if key in top_cells}
     else:
         #We just need to add the missing cell barcodes.
         for missing_cell in args.whitelist:
