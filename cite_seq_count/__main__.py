@@ -8,6 +8,7 @@ import locale
 import sys
 import time
 import warnings
+import os
 
 from argparse import ArgumentParser
 from argparse import RawTextHelpFormatter
@@ -22,6 +23,7 @@ import pandas as pd
 import pkg_resources
 import regex
 from scipy.sparse import dok_matrix
+from scipy.io import mmwrite
 from numpy import int16
 
 version = pkg_resources.require("cite_seq_count")[0].version
@@ -524,6 +526,8 @@ def classify_reads(tags, unique_lines, barcode_slice, umi_slice,
     
     return(results_matrix, no_match_table)
 
+def info():
+    print('{} reads were processed'.format(1000000))
 
 def classify_reads_multi_process(chunk_id, tags, barcode_slice, umi_slice,
                    barcode_umi_length, regex_pattern, args, first_line, whitelist=None,
@@ -557,6 +561,7 @@ def classify_reads_multi_process(chunk_id, tags, barcode_slice, umi_slice,
             on the length of the longest provided TAG.
 
     """
+    sys.stdout = open(str(os.getpid()) + ".out", "w")
     results_table = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     no_match_table = defaultdict(int)
     # Get the length of the longest TAG.
@@ -627,13 +632,15 @@ def classify_reads_multi_process(chunk_id, tags, barcode_slice, umi_slice,
     # d['no_match{}'.format(chunk_id)] = no_match_table
     #del(results_table)
     #del(no_match_table)
-    print('Processed reads from {} to {}'.format(i,i+1000000))
+    info()
+    #print(Processed reads from {} to {}'.format(i,i+1000000))
     return(results_table, no_match_table)
 
 def merge_results(all_results_dict, ab_map):
     #final_results = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(int))))
     final_results = {}
     final_no_match = {}
+    reads_per_cell = {}
     # chunk_ids = all_results_dict.keys()
     # chunk_res_map = dict()
     # for chunk_id in chunk_ids:
@@ -647,6 +654,7 @@ def merge_results(all_results_dict, ab_map):
                 final_results[cell_barcode] = dict()
                 final_results[cell_barcode]['no_match'] = dict()
                 final_results[cell_barcode]['total_reads'] = dict()
+                reads_per_cell[cell_barcode] = 0
                 for TAG in ab_map.values():
                     final_results[cell_barcode][TAG] = dict()            
             for TAG in mapped[cell_barcode]:
@@ -654,7 +662,8 @@ def merge_results(all_results_dict, ab_map):
                     if UMI not in final_results[cell_barcode][TAG]:
                         final_results[cell_barcode][TAG][UMI]=0
                     final_results[cell_barcode][TAG][UMI] += mapped[cell_barcode][TAG][UMI]
-    return(final_results)
+                    reads_per_cell[cell_barcode] += mapped[cell_barcode][TAG][UMI]
+    return(final_results, reads_per_cell)
 
 
 def main():
@@ -695,8 +704,8 @@ def main():
     regex_pattern = generate_regex(ab_map, args.hamming_thresh, max_poly_a=6)
 
     #Initiate multiprocessing
-    manager = Manager()
-    d = manager.dict()
+    #manager = Manager()
+    #d = manager.dict()
     nThreads = 4
     p = Pool(processes=nThreads)
     def blocks(files, size=65536):
@@ -708,13 +717,14 @@ def main():
     if(args.first_n):
         nEntries = args.first_n
     else:
-        print('Counting number of line')
+        print('Counting number of reads')
         with gzip.open(args.read1_path, "rt",encoding="utf-8",errors='ignore') as f:
             nEntries = int(sum(bl.count("\n") for bl in blocks(f))/4)
     chunks = range(0,nEntries,1000000)
     # Initiate proxy dicts for each chunk
     # for i in range(0,len(chunks)):
     #     d[i]=manager.dict()
+    print('Started mapping')
     parallel_results = []
     for first_line,i in enumerate(range(0,len(chunks))):
         p.apply_async(classify_reads_multi_process,
@@ -722,7 +732,7 @@ def main():
             callback=parallel_results.append)
     p.close()
     p.join()
-
+    print('Mapping done')
     # job = [
     # Process(
     #     target=classify_reads_multi_process,
@@ -746,35 +756,62 @@ def main():
     #         ab_map, unique_lines, barcode_slice, umi_slice, barcode_umi_length,
     #         regex_pattern, whitelist, args.unknowns_file, args.debug)
     print('Merging results')
-    final_results = merge_results(parallel_results, ab_map)
+    (final_results,reads_per_cell) = merge_results(parallel_results, ab_map)
     del(parallel_results)
+
+    if not whitelist:
+        top_cells = sorted(reads_per_cell, key=reads_per_cell.get, reverse=True)[0:args.cells]
+        final_results = {key: final_results[key] for key in final_results if key not in top_cells}
+    else:
+        #We just need to add the missing cell barcodes.
+        for missing_cell in args.whitelist:
+            if missing_cells in final_results:
+                continue
+            else:
+                final_results[missing_cell] = dict()
+                final_results[missing_cell]['no_match'] = dict()
+                final_results[missing_cell]['total_reads'] = dict()
+                reads_per_cell[missing_cell] = 0
+                for TAG in ab_map.values():
+                    final_results[missing_cell][TAG] = dict()            
+
+
     #Create an empty sparse matrix
-    print((len(ab_map) + 2))
     results_matrix = dok_matrix(((len(ab_map) + 2) ,len(final_results.keys())), dtype=int16)
     for i,cell_barcode in enumerate(final_results):
         for j,TAG in enumerate(final_results[cell_barcode]):
             value = len(final_results[cell_barcode][TAG])
             if value !=0:
                 results_matrix[j,i]=value
-    exit()
-    # Add potential missing cells if whitelist is used.
-    if whitelist:
-        results_matrix = results_matrix.reindex(whitelist, axis=1, fill_value=0)
+    # # Add potential missing cells if whitelist is used.
+    # if whitelist:
+    #     results_matrix = results_matrix.reindex(whitelist, axis=1, fill_value=0)
     
-    # Replace any NA/NaN values with 0.
-    results_matrix.fillna(0, inplace=True)
+    # # Replace any NA/NaN values with 0.
+    # results_matrix.fillna(0, inplace=True)
 
-    # Keep only the TOP `args.cells` if provided.
-    if args.cells:
-        most_reads_ordered = results_matrix.sort_values(by='total_reads',
-                                                        ascending=False,
-                                                        axis=1).columns
-        n_top_cells = int(args.cells + args.cells/100*30)
-        top_cells = most_reads_ordered[0:n_top_cells]
-        results_matrix = results_matrix.loc[:, results_matrix.columns.isin(top_cells)]
+    # # Keep only the TOP `args.cells` if provided.
+    # if args.cells:
+    #     most_reads_ordered = results_matrix.sort_values(by='total_reads',
+    #                                                     ascending=False,
+    #                                                     axis=1).columns
+    #     n_top_cells = int(args.cells + args.cells/100*30)
+    #     top_cells = most_reads_ordered[0:n_top_cells]
+    #     results_matrix = results_matrix.loc[:, results_matrix.columns.isin(top_cells)]
     
     # Save results to `args.outfile` file.
-    results_matrix.to_csv(args.outfile, float_format='%.f')
+    #results_matrix.to_csv(args.outfile, float_format='%.f')
+    os.makedirs('mtx', exist_ok=True)
+    mmwrite(os.path.join('mtx',args.outfile),results_matrix)
+    with open(os.path.join('mtx','barcodes.csv'), 'w') as barcode_file:
+        for barcode in final_results:
+            barcode_file.write('{}\n'.format(barcode))
+    with open(os.path.join('mtx','features.csv'), 'w') as feature_file:
+        for barcode in final_results:
+            for TAG in final_results[barcode]:
+                feature_file.write('{}\n'.format(TAG))
+            break
+
     
     # Save no_match TAGs to `args.unknowns_file` file.
     if args.unknowns_file:
