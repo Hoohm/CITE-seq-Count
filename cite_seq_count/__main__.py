@@ -526,10 +526,10 @@ def classify_reads(tags, unique_lines, barcode_slice, umi_slice,
     
     return(results_matrix, no_match_table)
 
-def info():
-    print('{} reads were processed'.format(1000000))
+def info(text):
+    print('{}'.format(text))
 
-def classify_reads_multi_process(chunk_id, tags, barcode_slice, umi_slice,
+def classify_reads_multi_process(chunk_size, tags, barcode_slice, umi_slice,
                    barcode_umi_length, regex_pattern, args, first_line, whitelist=None,
                    include_no_match=True, debug=False):
     """Read through R1/R2 files and generate a set without duplicate sequences.
@@ -570,13 +570,11 @@ def classify_reads_multi_process(chunk_id, tags, barcode_slice, umi_slice,
          gzip.open(args.read2_path, 'rt') as textfile2:
         
         # Read all 2nd lines from 4 line chunks. If first_n not None read only 4 times the given amount.
-        secondlines = islice(zip(textfile1, textfile2), first_line + 1, (args.first_n * 4 if args.first_n is not None else args.first_n), 4)
+        secondlines = islice(zip(textfile1, textfile2), first_line, first_line + chunk_size - 1, 4)
         for read1, read2 in secondlines:
                 read1 = read1.strip()
                 read2 = read2.strip()
                 line = read1[barcode_slice] + read1[umi_slice] + read2
-
-
                 cell_barcode = line[barcode_slice]
                 if whitelist:
                     if cell_barcode not in whitelist:
@@ -585,7 +583,7 @@ def classify_reads_multi_process(chunk_id, tags, barcode_slice, umi_slice,
                 TAG_seq = line[barcode_umi_length:]
                 UMI = line[umi_slice]
                 if debug:
-                    print(
+                    info(
                         "\nline:{0}\n"
                         "cell_barcode:{1}\tUMI:{2}\tTAG_seq:{3}\n"
                         "line length:{4}\tcell barcode length:{5}\tUMI length:{6}\tTAG sequence length:{7}"
@@ -625,14 +623,13 @@ def classify_reads_multi_process(chunk_id, tags, barcode_slice, umi_slice,
     # results_matrix = pd.DataFrame(results_table)
     # if ('total_reads' not in results_matrix.index):
     #     exit('No match found. Please check your regex or tags file')
-    #d[chunk_id]['results'] = results_table
+    #d[chunk_size]['results'] = results_table
     #d[chunk_id]['no_match'] = no_match_table
     
     # d['results{}'.format(chunk_id)] = results_table
     # d['no_match{}'.format(chunk_id)] = no_match_table
     #del(results_table)
     #del(no_match_table)
-    info()
     #print(Processed reads from {} to {}'.format(i,i+1000000))
     return(results_table, no_match_table)
 
@@ -650,7 +647,7 @@ def merge_results(all_results_dict, ab_map):
         mapped = chunk[0]
         unmapped = chunk[1]
         for cell_barcode in mapped:
-            if not cell_barcode in final_results:
+            if cell_barcode not in final_results:
                 final_results[cell_barcode] = dict()
                 final_results[cell_barcode]['no_match'] = dict()
                 final_results[cell_barcode]['total_reads'] = dict()
@@ -713,22 +710,25 @@ def main():
             b = files.read(size)
             if not b: break
             yield b
+    print('Counting number of reads')
+    with gzip.open(args.read1_path, "rt",encoding="utf-8",errors='ignore') as f:
+        nLines = sum(bl.count("\n") for bl in blocks(f))
     
-    if(args.first_n):
-        nEntries = args.first_n
-    else:
-        print('Counting number of reads')
-        with gzip.open(args.read1_path, "rt",encoding="utf-8",errors='ignore') as f:
-            nEntries = int(sum(bl.count("\n") for bl in blocks(f))/4)
-    chunks = range(0,nEntries,1000000)
+    if(args.first_n and args.first_n*4 < nLines):
+        nLines = args.first_n*4
+    chunk_size=4000000
+    chunks = range(1,nLines,chunk_size)
     # Initiate proxy dicts for each chunk
     # for i in range(0,len(chunks)):
     #     d[i]=manager.dict()
     print('Started mapping')
     parallel_results = []
-    for first_line,i in enumerate(range(0,len(chunks))):
+    for first_line,i in enumerate(list(chunks)):
+        print(first_line)
+        print(i)
+    for first_line in list(chunks):
         p.apply_async(classify_reads_multi_process,
-            args=(i,ab_map, barcode_slice, umi_slice, barcode_umi_length, regex_pattern, args, i, whitelist, args.unknowns_file, args.debug),
+            args=(chunk_size,ab_map, barcode_slice, umi_slice, barcode_umi_length, regex_pattern, args, first_line, whitelist, args.unknowns_file, args.debug),
             callback=parallel_results.append)
     p.close()
     p.join()
@@ -758,9 +758,9 @@ def main():
     print('Merging results')
     (final_results,reads_per_cell) = merge_results(parallel_results, ab_map)
     del(parallel_results)
-
+    print('++' in final_results)
     if not whitelist:
-        top_cells = sorted(reads_per_cell, key=reads_per_cell.get, reverse=True)[0:args.cells]
+        top_cells = sorted(reads_per_cell, key=reads_per_cell.get, reverse=True)[0:(args.cells + round(args.cells/100*30))]
         final_results = {key: final_results[key] for key in final_results if key in top_cells}
     else:
         #We just need to add the missing cell barcodes.
@@ -774,7 +774,6 @@ def main():
                 reads_per_cell[missing_cell] = 0
                 for TAG in ab_map.values():
                     final_results[missing_cell][TAG] = dict()            
-
 
     #Create an empty sparse matrix
     results_matrix = dok_matrix(((len(ab_map) + 2) ,len(final_results.keys())), dtype=int16)
