@@ -716,19 +716,30 @@ def main():
     
     if(args.first_n and args.first_n*4 < nLines):
         nLines = args.first_n*4
-    chunk_size=4000000
+    
+    #chunk_size=4000000
+    chunk_size=round((nLines-1)/nThreads)
+    # We need the chunk size to be a multiple of 4 to always start of the right line in the fastq file
+    while chunk_size % 4 != 0:
+        chunk_size +=1
     chunks = range(1,nLines,chunk_size)
-    # Initiate proxy dicts for each chunk
-    # for i in range(0,len(chunks)):
-    #     d[i]=manager.dict()
     print('Started mapping')
     parallel_results = []
-    for first_line,i in enumerate(list(chunks)):
+    for i,first_line in enumerate(list(chunks)):
         print(first_line)
         print(i)
     for first_line in list(chunks):
         p.apply_async(classify_reads_multi_process,
-            args=(chunk_size,ab_map, barcode_slice, umi_slice, barcode_umi_length, regex_pattern, args, first_line, whitelist, args.unknowns_file, args.debug),
+            args=(chunk_size,ab_map,
+                barcode_slice,
+                umi_slice,
+                barcode_umi_length,
+                regex_pattern,
+                args,
+                first_line,
+                whitelist,
+                args.unknowns_file,
+                args.debug),
             callback=parallel_results.append)
     p.close()
     p.join()
@@ -758,7 +769,6 @@ def main():
     print('Merging results')
     (final_results,reads_per_cell) = merge_results(parallel_results, ab_map)
     del(parallel_results)
-    print('++' in final_results)
     if not whitelist:
         top_cells = sorted(reads_per_cell, key=reads_per_cell.get, reverse=True)[0:(args.cells + round(args.cells/100*30))]
         final_results = {key: final_results[key] for key in final_results if key in top_cells}
