@@ -12,12 +12,10 @@ import os
 
 from argparse import ArgumentParser
 from argparse import RawTextHelpFormatter
-from collections import defaultdict
-from collections import OrderedDict
-from itertools import islice
-from itertools import combinations
+from collections import defaultdict, OrderedDict, Counter
+from itertools import islice, combinations
 
-from multiprocess import Process, Manager, Pool
+from multiprocess import Process, cpu_count, Pool
 import Levenshtein
 import pandas as pd
 import pkg_resources
@@ -376,155 +374,155 @@ def generate_regex(tags, maximum_distance, legacy=False, max_poly_a=6, read2_len
     return(regex_pattern)
 
 
-def get_unique_lines(read1_filename, read2_filename, barcode_slice, umi_slice,
-                     barcode_umi_length, first_n=None):
-    """Read through R1/R2 files and generate a set without duplicate sequences.
+# def get_unique_lines(read1_filename, read2_filename, barcode_slice, umi_slice,
+#                      barcode_umi_length, first_n=None):
+#     """Read through R1/R2 files and generate a set without duplicate sequences.
 
-    It reads both Read1 and Read2 files, creating a set based on Barcode + UMI
-    + Read2 sequences. Note this means trimming Read1 after the UMI.
+#     It reads both Read1 and Read2 files, creating a set based on Barcode + UMI
+#     + Read2 sequences. Note this means trimming Read1 after the UMI.
 
-    Args:
-        read1_filename (str): Read1 FASTQ file.
-        read2_filename (str): Read2 FASTQ file.
-        barcode_slice (slice): A slice for extracting the Barcode portion from the
-            sequence.
-        umi_slice (slice): A slice for extracting the UMI portion from the
-            sequence.
-        barcode_umi_length (int): The resulting length of adding the Barcode
-            + UMI lengths.
-        first_n (int, optional): The number of reads to subset from the FastQ
-            files. Defaults to None.
+#     Args:
+#         read1_filename (str): Read1 FASTQ file.
+#         read2_filename (str): Read2 FASTQ file.
+#         barcode_slice (slice): A slice for extracting the Barcode portion from the
+#             sequence.
+#         umi_slice (slice): A slice for extracting the UMI portion from the
+#             sequence.
+#         barcode_umi_length (int): The resulting length of adding the Barcode
+#             + UMI lengths.
+#         first_n (int, optional): The number of reads to subset from the FastQ
+#             files. Defaults to None.
 
-    Returns:
-        set: The unique combination of Barcode + UMI + Read2 sequences.
+#     Returns:
+#         set: The unique combination of Barcode + UMI + Read2 sequences.
 
-    """
-    # Set object for storing unique Barcode+UMI+R2
-    unique_lines = set()
+#     """
+#     # Set object for storing unique Barcode+UMI+R2
+#     unique_lines = set()
 
-    with gzip.open(read1_filename, 'rt') as textfile1, \
-         gzip.open(read2_filename, 'rt') as textfile2:
+#     with gzip.open(read1_filename, 'rt') as textfile1, \
+#          gzip.open(read2_filename, 'rt') as textfile2:
         
-        # Read all 2nd lines from 4 line chunks. If first_n not None read only 4 times the given amount.
-        secondlines = islice(zip(textfile1, textfile2), 1, (first_n * 4 if first_n is not None else first_n), 4)
-        print('loading')
+#         # Read all 2nd lines from 4 line chunks. If first_n not None read only 4 times the given amount.
+#         secondlines = islice(zip(textfile1, textfile2), 1, (first_n * 4 if first_n is not None else first_n), 4)
+#         print('loading')
 
-        n = 0
-        t = time.time()
-        for read1, read2 in secondlines:
-            read1 = read1.strip()
-            read2 = read2.strip()
-            line = read1[barcode_slice] + read1[umi_slice] + read2
-            unique_lines.add(line)
+#         n = 0
+#         t = time.time()
+#         for read1, read2 in secondlines:
+#             read1 = read1.strip()
+#             read2 = read2.strip()
+#             line = read1[barcode_slice] + read1[umi_slice] + read2
+#             unique_lines.add(line)
 
-            n += 1
-            if n % 1000000 == 0:
-                print("Loaded last 1,000,000 lines in {:.3} seconds. Total "
-                      "lines loaded {:,} ".format(time.time()-t, n))
-                t = time.time()
+#             n += 1
+#             if n % 1000000 == 0:
+#                 print("Loaded last 1,000,000 lines in {:.3} seconds. Total "
+#                       "lines loaded {:,} ".format(time.time()-t, n))
+#                 t = time.time()
 
-        print('{:,} reads loaded'.format(n))
-        print('{:,} unique reads loaded'.format(len(unique_lines)))
+#         print('{:,} reads loaded'.format(n))
+#         print('{:,} unique reads loaded'.format(len(unique_lines)))
     
-    # Close R1/R2 files (release file handles)
-    return(unique_lines)
+#     # Close R1/R2 files (release file handles)
+#     return(unique_lines)
 
 
-def classify_reads(tags, unique_lines, barcode_slice, umi_slice,
-                   barcode_umi_length, regex_pattern, whitelist=None,
-                   include_no_match=True, debug=False):
-    """Read through R1/R2 files and generate a set without duplicate sequences.
+# def classify_reads(tags, unique_lines, barcode_slice, umi_slice,
+#                    barcode_umi_length, regex_pattern, whitelist=None,
+#                    include_no_match=True, debug=False):
+#     """Read through R1/R2 files and generate a set without duplicate sequences.
 
-    It reads both Read1 and Read2 files, creating a set based on Barcode + UMI
-    + Read2 sequences. Note this means trimming Read1 after the UMI.
+#     It reads both Read1 and Read2 files, creating a set based on Barcode + UMI
+#     + Read2 sequences. Note this means trimming Read1 after the UMI.
 
-    Args:
-        tags (dict): A dictionary with the TAGs + TAG Names.
-        unique_lines (set): The unique combination of Barcode + UMI + Read2
-            sequences.
-        barcode_slice (slice): A slice for extracting the Barcode portion from the
-            sequence.
-        umi_slice (slice): A slice for extracting the UMI portion from the
-            sequence.
-        barcode_umi_length (int): The resulting length of adding the Barcode
-            + UMI lengths.
-        regex_pattern (regex.Pattern): An object that matches against any of the
-            provided TAGs within the maximum distance provided.
-        whitelist (set): The set of white-listed barcodes.
-        include_no_match (bool, optional): Whether to keep track of the
-            `no_match` tags. Default is True.
-        debug (bool): Print debug messages. Default is False.
+#     Args:
+#         tags (dict): A dictionary with the TAGs + TAG Names.
+#         unique_lines (set): The unique combination of Barcode + UMI + Read2
+#             sequences.
+#         barcode_slice (slice): A slice for extracting the Barcode portion from the
+#             sequence.
+#         umi_slice (slice): A slice for extracting the UMI portion from the
+#             sequence.
+#         barcode_umi_length (int): The resulting length of adding the Barcode
+#             + UMI lengths.
+#         regex_pattern (regex.Pattern): An object that matches against any of the
+#             provided TAGs within the maximum distance provided.
+#         whitelist (set): The set of white-listed barcodes.
+#         include_no_match (bool, optional): Whether to keep track of the
+#             `no_match` tags. Default is True.
+#         debug (bool): Print debug messages. Default is False.
 
-    Returns:
-        pandas.DataFrame: Matrix with the resulting counts.
-        dict(int): A dictionary with the counts for each `no_match` TAG, based
-            on the length of the longest provided TAG.
+#     Returns:
+#         pandas.DataFrame: Matrix with the resulting counts.
+#         dict(int): A dictionary with the counts for each `no_match` TAG, based
+#             on the length of the longest provided TAG.
 
-    """
-    results_table = defaultdict(lambda: defaultdict(int))
-    no_match_table = defaultdict(int)
+#     """
+#     results_table = defaultdict(lambda: defaultdict(int))
+#     no_match_table = defaultdict(int)
 
-    # Get the length of the longest TAG.
-    longest_ab_tag = len(next(iter(tags)))
+#     # Get the length of the longest TAG.
+#     longest_ab_tag = len(next(iter(tags)))
 
-    n = 0
-    t = time.time()
-    for line in unique_lines:
-        n += 1
-        if n % 1000000 == 0:
-            print("Processed 1,000,000 lines in {:.4} secondes. Total "
-                  "lines processed: {:,}".format(time.time()-t, n))
-            t = time.time()
+#     n = 0
+#     t = time.time()
+#     for line in unique_lines:
+#         n += 1
+#         if n % 1000000 == 0:
+#             print("Processed 1,000,000 lines in {:.4} secondes. Total "
+#                   "lines processed: {:,}".format(time.time()-t, n))
+#             t = time.time()
 
-        cell_barcode = line[barcode_slice]
-        if whitelist:
-            if cell_barcode not in whitelist:
-                continue
+#         cell_barcode = line[barcode_slice]
+#         if whitelist:
+#             if cell_barcode not in whitelist:
+#                 continue
 
-        TAG_seq = line[barcode_umi_length:]
-        if debug:
-            UMI = line[umi_slice]
-            print(
-                "\nline:{0}\n"
-                "cell_barcode:{1}\tUMI:{2}\tTAG_seq:{3}\n"
-                "line length:{4}\tcell barcode length:{5}\tUMI length:{6}\tTAG sequence length:{7}"
-                .format(line, cell_barcode, UMI, TAG_seq,
-                        len(line), len(cell_barcode), len(UMI), len(TAG_seq)
-                )
-            )
+#         TAG_seq = line[barcode_umi_length:]
+#         if debug:
+#             UMI = line[umi_slice]
+#             print(
+#                 "\nline:{0}\n"
+#                 "cell_barcode:{1}\tUMI:{2}\tTAG_seq:{3}\n"
+#                 "line length:{4}\tcell barcode length:{5}\tUMI length:{6}\tTAG sequence length:{7}"
+#                 .format(line, cell_barcode, UMI, TAG_seq,
+#                         len(line), len(cell_barcode), len(UMI), len(TAG_seq)
+#                 )
+#             )
 
-        # Apply regex to Read2.
-        match = regex_pattern.search(TAG_seq)
-        if match:
-            # If a match is found, keep only the matching portion.
-            TAG_seq = match.group(0)
-            # Get the distance by adding up the errors found:
-            #   substitutions, insertions and deletions.
-            distance = sum(match.fuzzy_counts)
-            # To get the matching TAG, compare `match` against each TAG.
-            for tag, name in tags.items():
-                # This time, calculate the distance using the faster function
-                # `Levenshtein.distance` (which does the same). Thus, both
-                # determined distances should match.
-                if Levenshtein.distance(tag, TAG_seq) <= distance:
-                    results_table[cell_barcode]['total_reads'] += 1                    
-                    results_table[cell_barcode][name][UMI] += 1
-                    break
+#         # Apply regex to Read2.
+#         match = regex_pattern.search(TAG_seq)
+#         if match:
+#             # If a match is found, keep only the matching portion.
+#             TAG_seq = match.group(0)
+#             # Get the distance by adding up the errors found:
+#             #   substitutions, insertions and deletions.
+#             distance = sum(match.fuzzy_counts)
+#             # To get the matching TAG, compare `match` against each TAG.
+#             for tag, name in tags.items():
+#                 # This time, calculate the distance using the faster function
+#                 # `Levenshtein.distance` (which does the same). Thus, both
+#                 # determined distances should match.
+#                 if Levenshtein.distance(tag, TAG_seq) <= distance:
+#                     results_table[cell_barcode]['total_reads'] += 1                    
+#                     results_table[cell_barcode][name][UMI] += 1
+#                     break
         
-        else:
-            # No match
-            results_table[cell_barcode]['no_match'] += 1
-            if include_no_match:
-                tag = TAG_seq[:longest_ab_tag]
-                no_match_table[tag] += 1
+#         else:
+#             # No match
+#             results_table[cell_barcode]['no_match'] += 1
+#             if include_no_match:
+#                 tag = TAG_seq[:longest_ab_tag]
+#                 no_match_table[tag] += 1
     
-    print("Done counting")
+#     print("Done counting")
     
-    results_matrix = pd.DataFrame(results_table)
-    if ('total_reads' not in results_matrix.index):
-        exit('No match found. Please check your regex or tags file')
+#     results_matrix = pd.DataFrame(results_table)
+#     if ('total_reads' not in results_matrix.index):
+#         exit('No match found. Please check your regex or tags file')
     
-    return(results_matrix, no_match_table)
+#     return(results_matrix, no_match_table)
 
 def info(text):
     print('{}'.format(text))
@@ -561,17 +559,31 @@ def classify_reads_multi_process(chunk_size, tags, barcode_slice, umi_slice,
             on the length of the longest provided TAG.
 
     """
-    sys.stdout = open(str(os.getpid()) + ".out", "w")
-    results_table = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    #sys.stdout = open(str(os.getpid()) + ".out", "w")
+    #sys.err = open(str(os.getpid()) + ".err", "w")
+    #results_table = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
+    results_table = {}
     no_match_table = defaultdict(int)
     # Get the length of the longest TAG.
     longest_ab_tag = len(next(iter(tags)))
+    entry_list = [items[1] for items in tags.items()]
+    entry_list.append('no_match')
+    print(entry_list)
+    sys.stdout.flush()
+    n = 0
+    t=time.time()
     with gzip.open(args.read1_path, 'rt') as textfile1, \
          gzip.open(args.read2_path, 'rt') as textfile2:
         
         # Read all 2nd lines from 4 line chunks. If first_n not None read only 4 times the given amount.
         secondlines = islice(zip(textfile1, textfile2), first_line, first_line + chunk_size - 1, 4)
         for read1, read2 in secondlines:
+                n+=1
+                if n % 1000000 == 0:
+                    print("Processed 1,000,000 lines in {:.4} secondes. Total "
+                        "lines processed: {:,} in child {}".format(time.time()-t, n, os.getpid()))
+                    sys.stdout.flush()
+                    t = time.time()
                 read1 = read1.strip()
                 read2 = read2.strip()
                 line = read1[barcode_slice] + read1[umi_slice] + read2
@@ -579,11 +591,15 @@ def classify_reads_multi_process(chunk_size, tags, barcode_slice, umi_slice,
                 if whitelist:
                     if cell_barcode not in whitelist:
                         continue
+                if cell_barcode not in results_table:
+                    results_table[cell_barcode] = {}
+                    for entry in entry_list:
+                        results_table[cell_barcode][entry]=Counter()
 
                 TAG_seq = line[barcode_umi_length:]
                 UMI = line[umi_slice]
                 if debug:
-                    info(
+                    print(
                         "\nline:{0}\n"
                         "cell_barcode:{1}\tUMI:{2}\tTAG_seq:{3}\n"
                         "line length:{4}\tcell barcode length:{5}\tUMI length:{6}\tTAG sequence length:{7}"
@@ -591,6 +607,7 @@ def classify_reads_multi_process(chunk_size, tags, barcode_slice, umi_slice,
                                 len(line), len(cell_barcode), len(UMI), len(TAG_seq)
                         )
                     )
+                    sys.stdout.flush()
 
                 # Apply regex to Read2.
                 match = regex_pattern.search(TAG_seq)
@@ -606,9 +623,8 @@ def classify_reads_multi_process(chunk_size, tags, barcode_slice, umi_slice,
                         # `Levenshtein.distance` (which does the same). Thus, both
                         # determined distances should match.
                         if Levenshtein.distance(tag, TAG_seq) <= distance:
-                            results_table[cell_barcode]['total_reads'][UMI] += 1
+                            #results_table[cell_barcode]['total_reads'][UMI] += 1
                             results_table[cell_barcode][name][UMI] += 1
-                            
                             break
                 
                 else:
@@ -617,8 +633,8 @@ def classify_reads_multi_process(chunk_size, tags, barcode_slice, umi_slice,
                     if include_no_match:
                         tag = TAG_seq[:longest_ab_tag]
                         no_match_table[tag] += 1
-            
-    # print("Done counting {} lines".format(len(unique_lines)))
+    print("Done counting for process {}".format(os.getpid()))
+    sys.stdout.flush()
     
     # results_matrix = pd.DataFrame(results_table)
     # if ('total_reads' not in results_matrix.index):
@@ -637,29 +653,26 @@ def merge_results(all_results_dict, ab_map):
     #final_results = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(int))))
     final_results = {}
     final_no_match = {}
-    reads_per_cell = {}
+    reads_per_cell = Counter()
     # chunk_ids = all_results_dict.keys()
     # chunk_res_map = dict()
     # for chunk_id in chunk_ids:
     #     chunk_res_map[chunk_id] = all_results_dict[chunk_id]['results'].keys()
     # all_results_dict[chunk_id]['results'].keys()
+    TAGS = list(ab_map.keys())
+    TAGS.append('no_match')
     for chunk in all_results_dict:
         mapped = chunk[0]
         unmapped = chunk[1]
         for cell_barcode in mapped:
             if cell_barcode not in final_results:
                 final_results[cell_barcode] = dict()
-                final_results[cell_barcode]['no_match'] = dict()
-                final_results[cell_barcode]['total_reads'] = dict()
-                reads_per_cell[cell_barcode] = 0
-                for TAG in ab_map.values():
-                    final_results[cell_barcode][TAG] = dict()            
             for TAG in mapped[cell_barcode]:
-                for UMI in mapped[cell_barcode][TAG]:    
-                    if UMI not in final_results[cell_barcode][TAG]:
-                        final_results[cell_barcode][TAG][UMI]=0
-                    final_results[cell_barcode][TAG][UMI] += mapped[cell_barcode][TAG][UMI]
-                    reads_per_cell[cell_barcode] += mapped[cell_barcode][TAG][UMI]
+                for UMI in mapped[cell_barcode][TAG]:
+                    if TAG not in final_results[cell_barcode]:
+                        final_results[cell_barcode][TAG] = Counter()
+                final_results[cell_barcode][TAG][UMI] += mapped[cell_barcode][TAG][UMI]
+                reads_per_cell[cell_barcode] += mapped[cell_barcode][TAG][UMI]
     return(final_results, reads_per_cell)
 
 
@@ -703,7 +716,7 @@ def main():
     #Initiate multiprocessing
     #manager = Manager()
     #d = manager.dict()
-    nThreads = 4
+    nThreads = cpu_count()
     p = Pool(processes=nThreads)
     def blocks(files, size=65536):
         while True:
@@ -769,9 +782,10 @@ def main():
     print('Merging results')
     (final_results,reads_per_cell) = merge_results(parallel_results, ab_map)
     del(parallel_results)
-    if not whitelist:
-        top_cells = sorted(reads_per_cell, key=reads_per_cell.get, reverse=True)[0:(args.cells + round(args.cells/100*30))]
-        final_results = {key: final_results[key] for key in final_results if key in top_cells}
+    if not whitelist:        
+        top_cells_tuple = reads_per_cell.most_common((args.cells + round(args.cells*0.3)))
+        top_cells = [pair[0] for pair in top_cells_tuple]
+        final_results = {key: final_results[key] for key in top_cells}
     else:
         #We just need to add the missing cell barcodes.
         for missing_cell in args.whitelist:
@@ -779,11 +793,11 @@ def main():
                 continue
             else:
                 final_results[missing_cell] = dict()
-                final_results[missing_cell]['no_match'] = dict()
-                final_results[missing_cell]['total_reads'] = dict()
+                final_results[missing_cell]['no_match'] = 0
+                final_results[missing_cell]['total_reads'] = 0
                 reads_per_cell[missing_cell] = 0
                 for TAG in ab_map.values():
-                    final_results[missing_cell][TAG] = dict()            
+                    final_results[missing_cell][TAG] = 0           
 
     #Create an empty sparse matrix
     results_matrix = dok_matrix(((len(ab_map) + 2) ,len(final_results.keys())), dtype=int16)
