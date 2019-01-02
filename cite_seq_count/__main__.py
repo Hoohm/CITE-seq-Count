@@ -568,7 +568,6 @@ def classify_reads_multi_process(chunk_size, tags, barcode_slice, umi_slice,
     longest_ab_tag = len(next(iter(tags)))
     entry_list = [items[1] for items in tags.items()]
     entry_list.append('no_match')
-    print(entry_list)
     sys.stdout.flush()
     n = 0
     t=time.time()
@@ -580,14 +579,14 @@ def classify_reads_multi_process(chunk_size, tags, barcode_slice, umi_slice,
         for read1, read2 in secondlines:
                 n+=1
                 if n % 1000000 == 0:
-                    print("Processed 1,000,000 lines in {:.4} secondes. Total "
-                        "lines processed: {:,} in child {}".format(time.time()-t, n, os.getpid()))
+                    print("Processed 1,000,000 reads in {:.4} secondes. Total "
+                        "lines reads: {:,} in child {}".format(time.time()-t, n, os.getpid()))
                     sys.stdout.flush()
                     t = time.time()
                 read1 = read1.strip()
                 read2 = read2.strip()
-                line = read1[barcode_slice] + read1[umi_slice] + read2
-                cell_barcode = line[barcode_slice]
+                #line = read1[barcode_slice] + read1[umi_slice] + read2
+                cell_barcode = read1[barcode_slice]
                 if whitelist:
                     if cell_barcode not in whitelist:
                         continue
@@ -596,15 +595,15 @@ def classify_reads_multi_process(chunk_size, tags, barcode_slice, umi_slice,
                     for entry in entry_list:
                         results_table[cell_barcode][entry]=Counter()
 
-                TAG_seq = line[barcode_umi_length:]
-                UMI = line[umi_slice]
+                TAG_seq = read2[:longest_ab_tag]
+                UMI = read1[umi_slice]
                 if debug:
                     print(
                         "\nline:{0}\n"
                         "cell_barcode:{1}\tUMI:{2}\tTAG_seq:{3}\n"
                         "line length:{4}\tcell barcode length:{5}\tUMI length:{6}\tTAG sequence length:{7}"
-                        .format(line, cell_barcode, UMI, TAG_seq,
-                                len(line), len(cell_barcode), len(UMI), len(TAG_seq)
+                        .format(read1 + read2, cell_barcode, UMI, TAG_seq,
+                                len(read1 + read2), len(cell_barcode), len(UMI), len(TAG_seq)
                         )
                     )
                     sys.stdout.flush()
@@ -649,9 +648,9 @@ def classify_reads_multi_process(chunk_size, tags, barcode_slice, umi_slice,
     #print(Processed reads from {} to {}'.format(i,i+1000000))
     return(results_table, no_match_table)
 
-def merge_results(all_results_dict, ab_map):
+def merge_results(all_results_dict):
     #final_results = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(int))))
-    final_results = {}
+    merged_results = {}
     final_no_match = {}
     reads_per_cell = Counter()
     # chunk_ids = all_results_dict.keys()
@@ -659,21 +658,21 @@ def merge_results(all_results_dict, ab_map):
     # for chunk_id in chunk_ids:
     #     chunk_res_map[chunk_id] = all_results_dict[chunk_id]['results'].keys()
     # all_results_dict[chunk_id]['results'].keys()
-    TAGS = list(ab_map.keys())
-    TAGS.append('no_match')
     for chunk in all_results_dict:
         mapped = chunk[0]
         unmapped = chunk[1]
         for cell_barcode in mapped:
-            if cell_barcode not in final_results:
-                final_results[cell_barcode] = dict()
+            if cell_barcode not in merged_results:
+                merged_results[cell_barcode] = dict()
             for TAG in mapped[cell_barcode]:
+                if not mapped[cell_barcode][TAG]:
+                    continue
+                if TAG not in merged_results[cell_barcode]:
+                    merged_results[cell_barcode][TAG] = Counter()
                 for UMI in mapped[cell_barcode][TAG]:
-                    if TAG not in final_results[cell_barcode]:
-                        final_results[cell_barcode][TAG] = Counter()
-                final_results[cell_barcode][TAG][UMI] += mapped[cell_barcode][TAG][UMI]
-                reads_per_cell[cell_barcode] += mapped[cell_barcode][TAG][UMI]
-    return(final_results, reads_per_cell)
+                    merged_results[cell_barcode][TAG][UMI] += mapped[cell_barcode][TAG][UMI]
+                    reads_per_cell[cell_barcode] += mapped[cell_barcode][TAG][UMI]
+    return(merged_results, reads_per_cell)
 
 
 def main():
@@ -693,7 +692,6 @@ def main():
     # Load TAGs/ABs.
     ab_map = parse_tags_csv(args.tags)
     ab_map = check_tags(ab_map, args.hamming_thresh)
-    
     # Get reads length. So far, there is no validation for Read2.
     read1_length = get_read_length(args.read1_path)
     #read2_length = get_read_length(args.read2_path)
@@ -716,7 +714,7 @@ def main():
     #Initiate multiprocessing
     #manager = Manager()
     #d = manager.dict()
-    nThreads = cpu_count()
+    nThreads = cpu_count() - 1
     p = Pool(processes=nThreads)
     def blocks(files, size=65536):
         while True:
@@ -757,30 +755,8 @@ def main():
     p.close()
     p.join()
     print('Mapping done')
-    # job = [
-    # Process(
-    #     target=classify_reads_multi_process,
-    #     args=(
-    #         d,
-    #         i,
-    #         ab_map,
-    #         barcode_slice,
-    #         umi_slice,
-    #         barcode_umi_length,
-    #         regex_pattern,
-    #         args,
-    #         first_line,
-    #         whitelist,
-    #         args.unknowns_file,
-    #         args.debug)) for i,first_line in enumerate(chunks)]
-    # _ = [p.start() for p in job]
-    # _ = [p.join() for p in job]
-    # # Perform the reads classification.
-    # (results_matrix, no_match_table) = classify_reads_multi_process(
-    #         ab_map, unique_lines, barcode_slice, umi_slice, barcode_umi_length,
-    #         regex_pattern, whitelist, args.unknowns_file, args.debug)
     print('Merging results')
-    (final_results,reads_per_cell) = merge_results(parallel_results, ab_map)
+    (final_results,reads_per_cell) = merge_results(parallel_results)
     del(parallel_results)
     if not whitelist:        
         top_cells_tuple = reads_per_cell.most_common((args.cells + round(args.cells*0.3)))
@@ -800,12 +776,17 @@ def main():
                     final_results[missing_cell][TAG] = 0           
 
     #Create an empty sparse matrix
-    results_matrix = dok_matrix(((len(ab_map) + 2) ,len(final_results.keys())), dtype=int16)
+    ordered_tags_map = OrderedDict()
+    for i,tag in enumerate(ab_map.values()):
+        ordered_tags_map[tag] = i
+    ordered_tags_map['no_match'] = i + 1
+    print(ordered_tags_map)
+    results_matrix = dok_matrix(((len(ab_map) + 1) ,len(final_results.keys())), dtype=int16)
     for i,cell_barcode in enumerate(final_results):
         for j,TAG in enumerate(final_results[cell_barcode]):
             value = len(final_results[cell_barcode][TAG])
             if value !=0:
-                results_matrix[j,i]=value
+                results_matrix[ordered_tags_map[TAG],i]=value
     # # Add potential missing cells if whitelist is used.
     # if whitelist:
     #     results_matrix = results_matrix.reindex(whitelist, axis=1, fill_value=0)
@@ -830,11 +811,9 @@ def main():
         for barcode in final_results:
             barcode_file.write('{}\n'.format(barcode))
     with open(os.path.join('mtx','features.csv'), 'w') as feature_file:
-        for barcode in final_results:
-            for TAG in final_results[barcode]:
-                feature_file.write('{}\n'.format(TAG))
-            break
-
+        for feature in ab_map.values():
+            feature_file.write('{}\n'.format(feature))
+        feature_file.write('no_match')
     
     # Save no_match TAGs to `args.unknowns_file` file.
     if args.unknowns_file:
