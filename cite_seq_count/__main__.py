@@ -378,8 +378,8 @@ def generate_regex(tags, maximum_distance, legacy=False, max_poly_a=6, read2_len
 
 
 def classify_reads_multi_process(chunk_size, tags, barcode_slice, umi_slice,
-                   barcode_umi_length, regex_pattern, args, first_line, whitelist=None,
-                   include_no_match=True, debug=False):
+                   barcode_umi_length, regex_pattern, args, first_line, whitelist,
+                   include_no_match, debug):
     """Read through R1/R2 files and generate a set without duplicate sequences.
 
     It reads both Read1 and Read2 files, creating a set based on Barcode + UMI
@@ -409,16 +409,10 @@ def classify_reads_multi_process(chunk_size, tags, barcode_slice, umi_slice,
             on the length of the longest provided TAG.
 
     """
-    #sys.stdout = open(str(os.getpid()) + ".out", "w")
-    #sys.err = open(str(os.getpid()) + ".err", "w")
-    #results_table = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     results_table = {}
     no_match_table = Counter()
     # Get the length of the longest TAG.
     longest_ab_tag = len(next(iter(tags)))
-    entry_list = [items[1] for items in tags.items()]
-    entry_list.append('no_match')
-    sys.stdout.flush()
     n = 0
     t=time.time()
     if args.legacy:
@@ -439,15 +433,14 @@ def classify_reads_multi_process(chunk_size, tags, barcode_slice, umi_slice,
                     t = time.time()
                 read1 = read1.strip()
                 read2 = read2.strip()
-                #line = read1[barcode_slice] + read1[umi_slice] + read2
                 cell_barcode = read1[barcode_slice]
-                if whitelist:
+                if whitelist is not None:
                     if cell_barcode not in whitelist:
                         continue
                 if cell_barcode not in results_table:
                     results_table[cell_barcode] = {}
-                    for entry in entry_list:
-                        results_table[cell_barcode][entry]=Counter()
+                    #for entry in entry_list:
+                        #results_table[cell_barcode][entry]=Counter()
                 TAG_seq = read2[:max_tag_length]
                 UMI = read1[umi_slice]
                 if debug:
@@ -460,6 +453,7 @@ def classify_reads_multi_process(chunk_size, tags, barcode_slice, umi_slice,
                         )
                     )
                     sys.stdout.flush()
+                    sys.stderr.flush()
 
                 # Apply regex to Read2.
                 match = regex_pattern.search(TAG_seq)
@@ -476,25 +470,32 @@ def classify_reads_multi_process(chunk_size, tags, barcode_slice, umi_slice,
                         # determined distances should match.
                         if Levenshtein.distance(tag, TAG_seq) <= distance:
                             #results_table[cell_barcode]['total_reads'][UMI] += 1
-                            results_table[cell_barcode][name][UMI] += 1
+                            try:
+                                results_table[cell_barcode][name][UMI] += 1
+                            except:
+                                results_table[cell_barcode][name]=Counter()
+                                results_table[cell_barcode][name][UMI] += 1
                             break
                 
                 else:
                     # No match
-                    results_table[cell_barcode]['no_match'][UMI] += 1
+                    try:
+                        results_table[cell_barcode]['no_match'][UMI] += 1
+                    except:
+                        results_table[cell_barcode]['no_match']=Counter()
+                        results_table[cell_barcode]['no_match'][UMI] += 1
                     if include_no_match:
-                        tag = TAG_seq[:longest_ab_tag]
-                        no_match_table[tag] += 1
-    print("Counting done for process {}\nCounted {} reads{}".format(os.getpid(), n))
+                        no_match_table[TAG_seq] += 1
+    print("Counting done for process {}\nCounted {} reads".format(os.getpid(), n))
     sys.stdout.flush()
     
     return(results_table, no_match_table)
 
 def merge_results(parallel_results):
     merged_results = {}
+    
     merged_no_match = Counter()
-
-    reads_per_cell = Counter()
+    umis_per_cell = Counter()
     
     for chunk in parallel_results:
         mapped = chunk[0]
@@ -509,9 +510,9 @@ def merge_results(parallel_results):
                         merged_results[cell_barcode][TAG] = Counter()
                     for UMI in mapped[cell_barcode][TAG]:
                         merged_results[cell_barcode][TAG][UMI] += mapped[cell_barcode][TAG][UMI]
-                        reads_per_cell[cell_barcode] += mapped[cell_barcode][TAG][UMI]
+                    umis_per_cell[cell_barcode] += len(mapped[cell_barcode][TAG])
         merged_no_match.update(unmapped)
-    return(merged_results, reads_per_cell, merged_no_match)
+    return(merged_results, umis_per_cell, merged_no_match)
 
 def write_to_files(sparse_matrix, final_results, ordered_tags_map, data_type, outfile):
     prefix = data_type + '_count'
@@ -554,6 +555,9 @@ def get_n_lines(file_path, top_n):
         print('The data only contains {} reads. Processing all the reads'.format(n_lines/4))
     return(n_lines)
 
+def create_report():
+    with open('run_report.txt') as report_file:
+        pass
 
 def main():
     parser = get_args()
@@ -594,12 +598,10 @@ def main():
     
     n_lines = get_n_lines(args.read1_path, args.first_n)  
     
-    
     n_reads = n_lines/4
-    n_threads = args.n_threads - 1
+    n_threads = args.n_threads
     #Initiate multiprocessing leaving one thread available.
     p = Pool(processes=n_threads)
-    
     # We need the chunk size to be a multiple of 4 to always start of the right line in the fastq file
     chunk_size=round((n_lines-1)/n_threads)
     while chunk_size % 4 != 0:
@@ -609,7 +611,7 @@ def main():
     print('Started mapping')
     parallel_results = []
     for first_line in list(chunks):
-        p.apply_async(classify_reads_multi_process,
+       p.apply_async(classify_reads_multi_process,
             args=(chunk_size,ab_map,
                 barcode_slice,
                 umi_slice,
