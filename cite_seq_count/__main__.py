@@ -611,14 +611,15 @@ def main():
     #     final_results = {key: final_results[key] for key in top_cells}
 
     #We just need to add the missing cell barcodes.
-    for missing_cell in args.whitelist:
-        if missing_cell in final_results:
-            continue
-        else:
-            final_results[missing_cell] = dict()
-            for TAG in ordered_tags_map:
-                final_results[missing_cell][TAG] = 0
-            top_cells.append(missing_cell)
+    if whitelist:
+        for missing_cell in args.whitelist:
+            if missing_cell in final_results:
+                continue
+            else:
+                final_results[missing_cell] = dict()
+                for TAG in ordered_tags_map:
+                    final_results[missing_cell][TAG] = 0
+                top_cells.append(missing_cell)
 
     (umi_results_matrix, read_results_matrix) = generate_sparse_matrices(final_results, ordered_tags_map, top_cells)
     
