@@ -4,7 +4,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
+## [1.4.0]
+### Added
+- Enabled parallelization using multiprocessing. You can choose how many
+  cores/threads you want to use with the `-T` `--threads` option.
+- The output is now given in mtx format. This is to ensure smooth usage for 
+  new/larger datasets such as data from novaseq sequencers.
+- You get both umi and read counts as output. This can help with overamplfication
+  detection.
+- A small report is now produced as `report.txt` giving some information on the run.
+
+### Changed
+- CITE-seq-Count uses less memory now.
+- Changed how you select the unmapped tags. The option is now `-ut` instead of `-uc`
+  and gives you the top most unmapped tags.
+
+### Removed
+- Dense output matrix is gone and replaced by the sparse equivalent.
+- pandas dependency.
+
+## [1.3.4]
 ### Added
 - Stripping of numbers and dash (-) to the *whitelist* barcodes so the 10X
   `barcodes.tsv` file could be directly used.
