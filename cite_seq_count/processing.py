@@ -130,7 +130,6 @@ def merge_results(parallel_results):
     """
     
     merged_results = {}
-    
     merged_no_match = Counter()
     umis_per_cell = Counter()
     for chunk in parallel_results:
@@ -146,6 +145,7 @@ def merge_results(parallel_results):
                         merged_results[cell_barcode][TAG] = Counter()
                     for UMI in mapped[cell_barcode][TAG]:
                         merged_results[cell_barcode][TAG][UMI] += mapped[cell_barcode][TAG][UMI]
-                    umis_per_cell[cell_barcode] += len(mapped[cell_barcode][TAG])
+                        if TAG != 'no_match':
+                            umis_per_cell[cell_barcode] += len(mapped[cell_barcode][TAG])
         merged_no_match.update(unmapped)
     return(merged_results, umis_per_cell, merged_no_match)

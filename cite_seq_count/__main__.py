@@ -8,6 +8,7 @@ import sys
 import time
 import os
 import datetime
+import shutil
 
 from argparse import ArgumentParser
 from argparse import RawTextHelpFormatter
@@ -394,13 +395,16 @@ def write_to_files(sparse_matrix, final_results, ordered_tags_map, data_type, ou
     prefix = data_type + '_count'
     os.makedirs(prefix, exist_ok=True)
     mmwrite(os.path.join(prefix,outfile),sparse_matrix)
-    with open(os.path.join(prefix,'barcodes.csv'), 'w') as barcode_file:
+    with gzip.open(os.path.join(prefix,'barcodes.tsv.gz'), 'wb') as barcode_file:
         for barcode in final_results:
-            barcode_file.write('{}\n'.format(barcode))
-    with open(os.path.join(prefix,'features.csv'), 'w') as feature_file:
+            barcode_file.write('{}\n'.format(barcode).encode())
+    with gzip.open(os.path.join(prefix,'features.tsv.gz'), 'wb') as feature_file:
         for feature in ordered_tags_map:
-            feature_file.write('{}\n'.format(feature))
-    
+            feature_file.write('{}\n'.format(feature).encode())
+    with open(os.path.join(prefix,outfile),'rb') as mtx_in:
+        with gzip.open(os.path.join(prefix,outfile) + '.gz','wb') as mtx_gz:
+            shutil.copyfileobj(mtx_in, mtx_gz)
+    os.remove(os.path.join(prefix,outfile))
 
 def generate_sparse_matrices(final_results, ordered_tags_map, top_cells):
     """
@@ -469,7 +473,7 @@ def get_n_lines(file_path, top_n):
     return(n_lines)
 
 
-def create_report(n_reads, reads_matrix, no_match, version, start_time, ordered_tags_map, args):
+def create_report(n_reads, reads_per_cell, no_match, version, start_time, ordered_tags_map, args):
     """
     Creates a report with details about the run in a yaml format.
 
@@ -482,10 +486,7 @@ def create_report(n_reads, reads_matrix, no_match, version, start_time, ordered_
         args (arg_parse): Arguments provided by the user.
 
     """
-    ordered_tags_map.pop('no_match')
-    total_mapped = 0
-    for i in range(1,len(ordered_tags_map)):
-        total_mapped += sum(reads_matrix[i,].values())
+    total_mapped = sum(reads_per_cell.values())
     total_unmapped = sum(no_match.values())
     mapped_perc = round((total_mapped/n_reads)*100)
     unmapped_perc = round((total_unmapped/n_reads)*100)
@@ -568,38 +569,54 @@ def main():
     n_reads = n_lines/4
     n_threads = args.n_threads
     #Initiate multiprocessing leaving one thread available.
-    p = Pool(processes=n_threads)
-    # We need the chunk size to be a multiple of 4 to always start of the right line in the fastq file
-    chunk_size=round((n_lines-1)/n_threads)
-    while chunk_size % 4 != 0:
-        chunk_size +=1
-    chunks = range(1,n_lines,chunk_size)
     print('Started mapping')
-    parallel_results = []
-    for first_line in list(chunks):
-       p.apply_async(processing.classify_reads_multi_process,
-            args=(
+    if n_threads <= 1:
+        print('CITE-seq-Count is running with only one core.')
+        (final_results, merged_no_match) = processing.classify_reads_multi_process(
                 args.read1_path,
                 args.read2_path,               
-                chunk_size,
+                n_lines,
                 ab_map,
                 barcode_slice,
                 umi_slice,
                 regex_pattern,
-                first_line,
+                1,
                 whitelist,
                 args.legacy,
-                args.debug),
-            callback=parallel_results.append,
-            error_callback=sys.stderr)
-    p.close()
-    p.join()
+                args.debug)
+        print('Mapping done')
+    else:
+        p = Pool(processes=n_threads)
+        # We need the chunk size to be a multiple of 4 to always start of the right line in the fastq file
+        chunk_size=round((n_lines-1)/n_threads)
+        while chunk_size % 4 != 0:
+            chunk_size +=1
+        chunks = range(1,n_lines,chunk_size)
+        parallel_results = []
+        for first_line in list(chunks):
+           p.apply_async(processing.classify_reads_multi_process,
+                args=(
+                    args.read1_path,
+                    args.read2_path,               
+                    chunk_size,
+                    ab_map,
+                    barcode_slice,
+                    umi_slice,
+                    regex_pattern,
+                    first_line,
+                    whitelist,
+                    args.legacy,
+                    args.debug),
+                callback=parallel_results.append,
+                error_callback=sys.stderr)
+        p.close()
+        p.join()
+        print('Mapping done')
 
-    print('Mapping done')
 
-    print('Merging results')
-    (final_results,reads_per_cell, merged_no_match) = processing.merge_results(parallel_results)
-    del(parallel_results)
+        print('Merging results')
+        (final_results,reads_per_cell, merged_no_match) = processing.merge_results(parallel_results)
+        del(parallel_results)
     
     ordered_tags_map = OrderedDict()
     for i,tag in enumerate(ab_map.values()):
@@ -637,7 +654,7 @@ def main():
                 unknown_file.write('{},{}\n'.format(element[0],element[1]))
     create_report(
         int(n_lines/4),
-        read_results_matrix,
+        reads_per_cell,
         merged_no_match,
         version,
         start_time,
