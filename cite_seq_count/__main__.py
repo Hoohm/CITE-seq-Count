@@ -590,7 +590,8 @@ def main():
                 whitelist,
                 args.legacy,
                 args.debug),
-            callback=parallel_results.append)
+            callback=parallel_results.append,
+            error_callback=sys.stderr)
     p.close()
     p.join()
 

@@ -82,7 +82,6 @@ def classify_reads_multi_process(read1_path, read2_path, chunk_size,
                         )
                     )
                     sys.stdout.flush()
-                    sys.stderr.flush()
 
                 # Apply regex to Read2.
                 match = regex_pattern.search(TAG_seq)
@@ -116,7 +115,6 @@ def classify_reads_multi_process(read1_path, read2_path, chunk_size,
                     no_match_table[TAG_seq] += 1
     print("Counting done for process {}. Processed {:,} reads".format(os.getpid(), n))
     sys.stdout.flush()
-    
     return(results_table, no_match_table)
 
 def merge_results(parallel_results):

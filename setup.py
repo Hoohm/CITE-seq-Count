@@ -23,7 +23,8 @@ setuptools.setup(
     ),
     install_requires=[
           'regex>=2018.07.11',
-          'python-levenshtein>=0.12.0'
+          'python-levenshtein>=0.12.0',
+          'scipy>=1.1.0'
       ],
       python_requires='>3'
 )
