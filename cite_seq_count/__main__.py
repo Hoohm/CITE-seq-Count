@@ -242,8 +242,8 @@ def main():
     regex_pattern = preprocessing.generate_regex(ab_map, args.hamming_thresh, args.error_type, max_poly_a=6)
 
     
-    if top_n:
-        n_lines = top_n*4
+    if args.first_n:
+        n_lines = args.first_n*4
     else:
         n_lines = preprocessing.get_n_lines(args.read1_path, args.first_n)  
     
