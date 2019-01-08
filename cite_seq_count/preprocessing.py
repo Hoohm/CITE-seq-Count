@@ -24,7 +24,7 @@ def parse_whitelist_csv(filename, barcode_length):
         set: The set of white-listed barcodes.
 
     """
-    STRIP_CHARS = '0123456789- \t\n'
+    STRIP_CHARS = '"0123456789- \t\n'
     with open(filename, mode='r') as csv_file:
         csv_reader = csv.reader(csv_file)
         whitelist = [row[0].strip(STRIP_CHARS) for row in csv_reader
@@ -207,10 +207,6 @@ def get_n_lines(file_path, top_n):
         n_lines = sum(bl.count("\n") for bl in blocks(f))
     if n_lines %4 !=0:
         sys.exit('{}\'s number of lines is not a multiple of 4. The file might be corrupted.\n Exiting')
-    if top_n and top_n*4 < n_lines:
-        n_lines = top_n*4
-    elif top_n and top_n*4 > n_lines:
-        print('The data only contains {} reads. Processing all the reads'.format(n_lines/4))
     return(n_lines)
 
 
