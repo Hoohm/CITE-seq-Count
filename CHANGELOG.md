@@ -8,11 +8,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - Enabled parallelization using multiprocessing. You can choose how many
   cores/threads you want to use with the `-T` `--threads` option.
-- The output is now given in mtx format. This is to ensure smooth usage for 
+- The output is now given in a gzipped mtx format. This is to ensure smooth usage for 
   new/larger datasets such as data from novaseq sequencers.
 - You get both umi and read counts as output. This can help with overamplfication
   detection.
-- A small report is now produced as `report.txt` giving some information on the run.
+- A small report is now produced as `report.yaml` giving some information on the run.
 
 ### Changed
 - CITE-seq-Count uses less memory now.
@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Removed
 - Dense output matrix is gone and replaced by the sparse equivalent.
 - pandas dependency.
+
 
 ## [1.3.4]
 ### Added

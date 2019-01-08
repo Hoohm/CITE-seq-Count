@@ -26,5 +26,5 @@ setuptools.setup(
           'python-levenshtein>=0.12.0',
           'scipy>=1.1.0'
       ],
-      python_requires='>3'
+      python_requires='>3.6'
 )

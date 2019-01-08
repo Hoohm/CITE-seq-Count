@@ -5,6 +5,9 @@ import os
 import Levenshtein
 from collections import Counter
 from itertools import islice
+from numpy import int16
+from scipy import sparse
+
 
 def classify_reads_multi_process(read1_path, read2_path, chunk_size,
                     tags, barcode_slice, umi_slice,
@@ -70,7 +73,7 @@ def classify_reads_multi_process(read1_path, read2_path, chunk_size,
                     results_table[cell_barcode] = {}
                     #for entry in entry_list:
                         #results_table[cell_barcode][entry]=Counter()
-                TAG_seq = read2[:max_tag_length]
+                TAG_seq = read2
                 UMI = read1[umi_slice]
                 if debug:
                     print(
@@ -92,6 +95,7 @@ def classify_reads_multi_process(read1_path, read2_path, chunk_size,
                     #   substitutions, insertions and deletions.
                     distance = sum(match.fuzzy_counts)
                     # To get the matching TAG, compare `match` against each TAG.
+                    mapped = False
                     for tag, name in tags.items():
                         # This time, calculate the distance using the faster function
                         # `Levenshtein.distance` (which does the same). Thus, both
@@ -103,15 +107,23 @@ def classify_reads_multi_process(read1_path, read2_path, chunk_size,
                             except:
                                 results_table[cell_barcode][name]=Counter()
                                 results_table[cell_barcode][name][UMI] += 1
+                                mapped = True
                             break
-                
+                    #If nothing is matched we get a no match
+                    if not mapped:
+                        try:
+                            results_table[cell_barcode]['no_match'][UMI] += 1
+                        except:
+                            results_table[cell_barcode]['no_match']=Counter()
+                            results_table[cell_barcode]['no_match'][UMI] += 1
+
                 else:
-                    # No match
+                    # Bad structure
                     try:
-                        results_table[cell_barcode]['no_match'][UMI] += 1
+                        results_table[cell_barcode]['bad_construct'][UMI] += 1
                     except:
-                        results_table[cell_barcode]['no_match']=Counter()
-                        results_table[cell_barcode]['no_match'][UMI] += 1
+                        results_table[cell_barcode]['bad_construct']=Counter()
+                        results_table[cell_barcode]['bad_construct'][UMI] += 1
                     no_match_table[TAG_seq] += 1
     print("Counting done for process {}. Processed {:,} reads".format(os.getpid(), n))
     sys.stdout.flush()
@@ -132,6 +144,7 @@ def merge_results(parallel_results):
     merged_results = {}
     merged_no_match = Counter()
     umis_per_cell = Counter()
+    reads_per_cell = Counter()
     for chunk in parallel_results:
         mapped = chunk[0]
         unmapped = chunk[1]
@@ -140,12 +153,105 @@ def merge_results(parallel_results):
                 merged_results[cell_barcode] = dict()
             for TAG in mapped[cell_barcode]:
                 # Test the counter. If empty, returns false
-                if mapped[cell_barcode][TAG]:             
+                if mapped[cell_barcode][TAG]:
                     if TAG not in merged_results[cell_barcode]:
                         merged_results[cell_barcode][TAG] = Counter()
                     for UMI in mapped[cell_barcode][TAG]:
                         merged_results[cell_barcode][TAG][UMI] += mapped[cell_barcode][TAG][UMI]
-                        if TAG != 'no_match':
+                        if TAG != 'no_match' and TAG != 'bad_construct':
                             umis_per_cell[cell_barcode] += len(mapped[cell_barcode][TAG])
+                            reads_per_cell[cell_barcode] += mapped[cell_barcode][TAG][UMI]
+        merged_no_match.update(unmapped)
+    return(merged_results, umis_per_cell, reads_per_cell, merged_no_match)
+
+
+def merge_results2(parallel_results):
+    """Merge chunked results from parallel processing.
+
+    Args:
+        parallel_results (list): List of dict with mapping results.
+
+    Returns:
+        merged_results (dict): Results combined as a dict of dict of Counters
+        umis_per_cell (Counter): Total umis per cell as a Counter
+        merged_no_match (Counter): Unmapped tags as a Counter
+    """
+    
+    merged_results = {}
+    merged_no_match = Counter()
+    umis_per_cell = Counter()
+    for chunk in parallel_results:
+        mapped = chunk[0]
+        unmapped = chunk[1]
+        for cell_barcode,counts in mapped.items():
+            if cell_barcode not in merged_results:
+                merged_results[cell_barcode] = dict()
+            for TAG,UMIs in counts.items():
+                # Test the counter. If empty, returns false
+                if counts[TAG]:             
+                    if TAG not in merged_results[cell_barcode]:
+                        merged_results[cell_barcode][TAG] = Counter()
+                    for UMI in UMIs:
+                        merged_results[cell_barcode][TAG][UMI] += UMIs[UMI]
+                        if TAG != 'no_match' or TAG != 'bad_construct':
+                            umis_per_cell[cell_barcode] += len(UMIs)
         merged_no_match.update(unmapped)
     return(merged_results, umis_per_cell, merged_no_match)
+
+
+def merge_results3(parallel_results):
+    """Merge chunked results from parallel processing.
+
+    Args:
+        parallel_results (list): List of dict with mapping results.
+
+    Returns:
+        merged_results (dict): Results combined as a dict of dict of Counters
+        umis_per_cell (Counter): Total umis per cell as a Counter
+        merged_no_match (Counter): Unmapped tags as a Counter
+    """
+    
+    merged_results = {}
+    merged_no_match = Counter()
+    umis_per_cell = Counter()
+    for chunk in parallel_results:
+        mapped = chunk[0]
+        unmapped = chunk[1]
+        for cell_barcode, counts in mapped.items():
+            if cell_barcode not in merged_results:
+                merged_results[cell_barcode] = dict()
+            for TAG, UMIs in counts.items():
+                # Test the counter. If empty, returns false
+                if counts[TAG]:             
+                    if TAG not in merged_results[cell_barcode]:
+                        merged_results[cell_barcode][TAG] = Counter()
+                    for UMI in UMIs:
+                        merged_results[cell_barcode][TAG][UMI] += UMIs[UMI]
+                        if TAG != 'no_match' or TAG != 'bad_construct':
+                            umis_per_cell[cell_barcode] += len(UMIs)
+        merged_no_match.update(unmapped)
+    return(merged_results, umis_per_cell, merged_no_match)
+
+def generate_sparse_matrices(final_results, ordered_tags_map, top_cells):
+    """
+    Create two sparse matrices with umi and read counts.
+
+    Args:
+        final_results (dict): Results in a dict of dicts of Counters.
+        ordered_tags_map (dict): Tags in order with indexes as values.
+
+    Returns:
+        umi_results_matrix (scipy.sparse.dok_matrix): UMI counts
+        read_results_matrix (scipy.sparse.dok_matrix): Read counts
+
+    """
+    umi_results_matrix = sparse.dok_matrix((len(ordered_tags_map) ,len(top_cells)), dtype=int16)
+    read_results_matrix = sparse.dok_matrix((len(ordered_tags_map) ,len(top_cells)), dtype=int16)
+    
+    for i,cell_barcode in enumerate(top_cells):
+        for j,TAG in enumerate(final_results[cell_barcode]):
+            if final_results[cell_barcode][TAG]:
+                umi_results_matrix[ordered_tags_map[TAG],i]=len(final_results[cell_barcode][TAG])
+                read_results_matrix[ordered_tags_map[TAG],i]=sum(final_results[cell_barcode][TAG].values())
+    return(umi_results_matrix, read_results_matrix)
+
