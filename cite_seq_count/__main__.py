@@ -170,6 +170,7 @@ def create_report(n_reads, reads_per_cell, no_match, version, start_time, ordere
 
     """
     total_mapped = sum(reads_per_cell.values())
+    print(total_mapped)
     total_unmapped = sum(no_match.values())
     mapped_perc = round((total_mapped/n_reads)*100)
     unmapped_perc = round((total_unmapped/n_reads)*100)
@@ -309,29 +310,30 @@ def main():
     ordered_tags_map = OrderedDict()
     for i,tag in enumerate(ab_map.values()):
         ordered_tags_map[tag] = i
-    ordered_tags_map['no_match'] = i + 1
-    ordered_tags_map['bad_construct'] = i + 2
+    ordered_tags_map['unmapped'] = i + 1
 
 
     # Sort cells by number of mapped umis
-    top_cells_tuple = umis_per_cell.most_common(args.cells)
-    top_cells = [pair[0] for pair in top_cells_tuple]
-    
-    # Add potential missing cell barcodes.
-    if whitelist:
-        for missing_cell in args.whitelist:
+    if not whitelist:
+        top_cells_tuple = umis_per_cell.most_common(args.cells)
+        top_cells = set([pair[0] for pair in top_cells_tuple])
+    else:
+        top_cells = whitelist
+        # Add potential missing cell barcodes.
+        for missing_cell in whitelist:
             if missing_cell in final_results:
                 continue
             else:
                 final_results[missing_cell] = dict()
                 for TAG in ordered_tags_map:
                     final_results[missing_cell][TAG] = 0
-                top_cells.append(missing_cell)
+                top_cells.add(missing_cell)
+    
 
     (umi_results_matrix, read_results_matrix) = processing.generate_sparse_matrices(final_results, ordered_tags_map, top_cells)
     
-    io.write_to_files(umi_results_matrix, final_results, ordered_tags_map, 'umi', args.outfile)
-    io.write_to_files(read_results_matrix, final_results, ordered_tags_map, 'read', args.outfile)
+    io.write_to_files(umi_results_matrix, top_cells, ordered_tags_map, 'umi', args.outfile)
+    io.write_to_files(read_results_matrix, top_cells, ordered_tags_map, 'read', args.outfile)
       
     # Save no_match TAGs to `args.unknowns_file` file.
     if args.unknowns_file:

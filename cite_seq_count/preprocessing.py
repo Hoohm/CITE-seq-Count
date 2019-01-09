@@ -233,6 +233,13 @@ def generate_regex(tags, maximum_distance, error_type, legacy=False, max_poly_a=
     """
     # Get a list of the available TAGs.
     tag_keys = tags.keys()
+    tags_set = set()
+    for tag in tags:
+        tags_set.add(len(tag))
+    if len(tags_set) > 1:
+        sys.exit(
+            'Runnning CITE-seq-Count with tags of different lengths is not supported.\n'\
+            'Please split your tags in different tag files and run them separately.')
 
     # Get the length of the longest TAG.
     longest_ab_tag = len(next(iter(tags)))

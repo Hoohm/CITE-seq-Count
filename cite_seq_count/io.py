@@ -4,7 +4,7 @@ import shutil
 
 from scipy import io
 
-def write_to_files(sparse_matrix, final_results, ordered_tags_map, data_type, outfile):
+def write_to_files(sparse_matrix, top_cells, ordered_tags_map, data_type, outfile):
     """Write the umi and read sparse matrices to file in gzipped mtx format.
 
     Args:
@@ -17,14 +17,14 @@ def write_to_files(sparse_matrix, final_results, ordered_tags_map, data_type, ou
     """
     prefix = data_type + '_count'
     os.makedirs(prefix, exist_ok=True)
-    io.mmwrite(os.path.join(prefix,outfile),sparse_matrix)
+    io.mmwrite(os.path.join(prefix,'matrix.mtx'),sparse_matrix)
     with gzip.open(os.path.join(prefix,'barcodes.tsv.gz'), 'wb') as barcode_file:
-        for barcode in final_results:
+        for barcode in top_cells:
             barcode_file.write('{}\n'.format(barcode).encode())
     with gzip.open(os.path.join(prefix,'features.tsv.gz'), 'wb') as feature_file:
         for feature in ordered_tags_map:
             feature_file.write('{}\n'.format(feature).encode())
-    with open(os.path.join(prefix,outfile),'rb') as mtx_in:
-        with gzip.open(os.path.join(prefix,outfile) + '.gz','wb') as mtx_gz:
+    with open(os.path.join(prefix,'matrix.mtx'),'rb') as mtx_in:
+        with gzip.open(os.path.join(prefix,'matrix.mtx') + '.gz','wb') as mtx_gz:
             shutil.copyfileobj(mtx_in, mtx_gz)
-    os.remove(os.path.join(prefix,outfile))
+    os.remove(os.path.join(prefix,'matrix.mtx'))
