@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - You get both umi and read counts as output. This can help with overamplfication
   detection.
 - A small report is now produced as `report.yaml` giving some information on the run.
+- UMI and cell barcode correction based on umi_tools.
 
 ### Changed
 - CITE-seq-Count uses less memory now.

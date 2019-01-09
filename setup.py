@@ -25,7 +25,8 @@ setuptools.setup(
           'regex>=2018.07.11',
           'python-levenshtein>=0.12.0',
           'scipy>=1.1.0',
-          'multiprocess>=0.70.6.1'
+          'multiprocess>=0.70.6.1',
+          'umi_tools>=0.5.5'
       ],
       python_requires='>3.6'
 )
