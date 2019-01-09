@@ -7,7 +7,7 @@ from collections import Counter
 from itertools import islice
 from numpy import int16
 from scipy import sparse
-
+from umi_tools import network
 
 def classify_reads_multi_process(read1_path, read2_path, chunk_size,
                     tags, barcode_slice, umi_slice,
@@ -51,8 +51,8 @@ def classify_reads_multi_process(read1_path, read2_path, chunk_size,
         max_tag_length = longest_ab_tag + 6
     else:
         max_tag_length = longest_ab_tag
-    with gzip.open(read1_path, 'rt') as textfile1, \
-         gzip.open(read2_path, 'rt') as textfile2:
+    with gzip.open(read1_path, 'rb') as textfile1, \
+         gzip.open(read2_path, 'rb') as textfile2:
         
         # Read all 2nd lines from 4 line chunks. If first_n not None read only 4 times the given amount.
         secondlines = islice(zip(textfile1, textfile2), first_line, first_line + chunk_size - 1, 4)
@@ -115,10 +115,10 @@ def classify_reads_multi_process(read1_path, read2_path, chunk_size,
                     results_table[cell_barcode]['unmapped'] = Counter()
                     results_table[cell_barcode]['unmapped'][UMI] += 1
                 no_match_table[TAG_seq] += 1
-            n+=1
-    print("Counting done for process {}. Processed {:,} reads".format(os.getpid(), n))
+            n += 1
+    print("Counting done for process {}. Processed {:,} reads".format(os.getpid(), n-1))
     sys.stdout.flush()
-    return(results_table, no_match_table, n)
+    return(results_table, no_match_table, n - 1)
 
 def merge_results(parallel_results):
     """Merge chunked results from parallel processing.
@@ -159,7 +159,41 @@ def merge_results(parallel_results):
     return(merged_results, umis_per_cell, reads_per_cell, merged_no_match, total_reads)
 
 
+def correct_umis(final_results):
+    for cell_barcode in final_results:
+        for TAG in final_results[cell_barcode]:
+            if len(final_results[cell_barcode][TAG]) > 1:
+                UMIclusters = umi_clusters(
+                    final_results[cell_barcode][TAG].keys(),
+                    final_results[cell_barcode][TAG],
+                    1)
+                for umi_barcodes in UMIclusters:  # This is a list with the first element the dominant barcode
+                    if len(umi_barcodes) > 2:
+                        major_umi = umi_barcodes[0]
+                        for minor_umi in umi_barcodes[1:]:  # Iterate over all barcodes in a cluster
+                            temp = final_results[cell_barcode][TAG].pop(minor_umi)
+                            final_results[cell_barcode][TAG][major_umi] += temp
+    return(final_results)
 
+def correct_cells(final_results, reads_per_cell, umis_per_cell):
+    cell_clusterer = network.UMIClusterer()
+    CBclusters = cell_clusterer(list(reads_per_cell.keys()), reads_per_cell, 1)
+    for cell_barcodes in CBclusters:  # This is a list with the first element the dominant barcode
+        if(len(cell_barcodes) > 1):
+            major_barcode = cell_barcodes[0]
+            for minor_barcode in cell_barcodes[1:]:  # Iterate over all barcodes in a cluster except first
+                temp = final_results.pop(minor_barcode)
+                for TAG in temp:
+                    try:
+                        final_results[major_barcode][TAG].update(temp[TAG])
+                    except:
+                        final_results[major_barcode][TAG] = {}
+                        final_results[major_barcode][TAG].update(temp[TAG])
+                umis_per_cell[major_barcode] += umis_per_cell[minor_barcode]
+                del(umis_per_cell[minor_barcode])
+                reads_per_cell[major_barcode] += reads_per_cell[minor_barcode]
+                del(reads_per_cell[minor_barcode])
+    return(final_results, umis_per_cell)
 
 def generate_sparse_matrices(final_results, ordered_tags_map, top_cells):
     """

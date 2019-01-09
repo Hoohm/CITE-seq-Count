@@ -20,7 +20,7 @@ def write_to_files(sparse_matrix, top_cells, ordered_tags_map, data_type, outfol
     io.mmwrite(os.path.join(prefix,'matrix.mtx'),sparse_matrix)
     with gzip.open(os.path.join(prefix,'barcodes.tsv.gz'), 'wb') as barcode_file:
         for barcode in top_cells:
-            barcode_file.write('{}\n'.format(barcode).encode())
+            barcode_file.write('{}\n'.format(barcode.decode()).encode())
     with gzip.open(os.path.join(prefix,'features.tsv.gz'), 'wb') as feature_file:
         for feature in ordered_tags_map:
             feature_file.write('{}\n'.format(feature).encode())

@@ -156,7 +156,7 @@ def get_args():
     return parser
 
 
-def create_report(n_reads, reads_per_cell, no_match, version, start_time, ordered_tags_map, args):
+def create_report(n_lines, n_reads, reads_per_cell, no_match, version, start_time, ordered_tags_map, args):
     """
     Creates a report with details about the run in a yaml format.
 
@@ -170,7 +170,7 @@ def create_report(n_reads, reads_per_cell, no_match, version, start_time, ordere
 
     """
     total_mapped = sum(reads_per_cell.values())
-    print(total_mapped)
+    print(n_reads)
     total_unmapped = sum(no_match.values())
     mapped_perc = round((total_mapped/n_reads)*100)
     unmapped_perc = round((total_unmapped/n_reads)*100)
@@ -180,7 +180,8 @@ def create_report(n_reads, reads_per_cell, no_match, version, start_time, ordere
 """Date: {}
 Running time: {}
 CITE-seq-Count Version: {}
-reads processed: {}
+Total reads: {}
+Reads processed: {}
 Percentage mapped: {}
 Percentage unmapped: {}
 Parameters:
@@ -198,6 +199,7 @@ Parameters:
             datetime.datetime.today().strftime('%Y-%m-%d'),
             secondsToText.secondsToText(time.time()-start_time),
             version,
+            int(round(n_lines/4)),
             n_reads,
             mapped_perc,
             unmapped_perc,
@@ -248,7 +250,6 @@ def main():
     else:
         n_lines = preprocessing.get_n_lines(args.read1_path, args.first_n)  
     
-    n_reads = n_lines/4
     n_threads = args.n_threads
     
     print('Started mapping')
@@ -307,6 +308,11 @@ def main():
         (final_results, umis_per_cell, reads_per_cell, merged_no_match, total_reads) = processing.merge_results(parallel_results)                
         del(parallel_results)
     
+    print('Correcting cell barcodes')
+    (final_results, umis_per_cell) = processing.correct_cells(final_results, reads_per_cell, umis_per_cell)
+    print('correcting umis')
+    final_results = processing.correct_umis(final_results)
+
     ordered_tags_map = OrderedDict()
     for i,tag in enumerate(ab_map.values()):
         ordered_tags_map[tag] = i
@@ -344,6 +350,7 @@ def main():
             for element in top_unmapped:
                 unknown_file.write('{},{}\n'.format(element[0],element[1]))
     create_report(
+        n_lines,
         total_reads,
         reads_per_cell,
         merged_no_match,

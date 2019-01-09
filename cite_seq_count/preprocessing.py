@@ -78,8 +78,8 @@ def check_tags(tags, maximum_distance):
     """
     ordered_tags = OrderedDict()
     for tag in sorted(tags, key=len, reverse=True):
-        ordered_tags[tag] = tags[tag] + '-' + tag
-
+        ordered_tags[tag.encode('ascii')] = tags[tag] + '-' + tag
+    
     # If only one TAG is provided, then no distances to compare.
     if (len(tags) == 1):
         return(ordered_tags)
@@ -278,6 +278,6 @@ def generate_regex(tags, maximum_distance, error_type, legacy=False, max_poly_a=
         pattern = r'((?b)^\L<options>){{{}<={}}}'.format(error_type, maximum_distance)
 
     # Compiling the regex makes it run faster.
-    regex_pattern = regex.compile(pattern, options=tag_keys)
+    regex_pattern = regex.compile(bytes(pattern, 'ascii'), options=tag_keys)
     return(regex_pattern)
 
