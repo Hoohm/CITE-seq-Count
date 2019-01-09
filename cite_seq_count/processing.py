@@ -45,7 +45,7 @@ def classify_reads_multi_process(read1_path, read2_path, chunk_size,
     no_match_table = Counter()
     # Get the length of the longest TAG.
     longest_ab_tag = len(next(iter(tags)))
-    n = 0
+    n = 1
     t=time.time()
     if legacy:
         max_tag_length = longest_ab_tag + 6
@@ -57,65 +57,65 @@ def classify_reads_multi_process(read1_path, read2_path, chunk_size,
         # Read all 2nd lines from 4 line chunks. If first_n not None read only 4 times the given amount.
         secondlines = islice(zip(textfile1, textfile2), first_line, first_line + chunk_size - 1, 4)
         for read1, read2 in secondlines:
-                n+=1
-                if n % 1000000 == 0:
-                    print("Processed 1,000,000 reads in {:.4} secondes. Total "
-                        "reads: {:,} in child {}".format(time.time() - t, n, os.getpid()))
-                    sys.stdout.flush()
-                    t = time.time()
-                read1 = read1.strip()
-                read2 = read2.strip()
-                cell_barcode = read1[barcode_slice]
-                if whitelist is not None:
-                    if cell_barcode not in whitelist:
-                        continue
-                if cell_barcode not in results_table:
-                    results_table[cell_barcode] = {}
-                TAG_seq = read2
-                UMI = read1[umi_slice]
+            if n % 1000000 == 0:
+                print("Processed 1,000,000 reads in {:.4} secondes. Total "
+                    "reads: {:,} in child {}".format(time.time() - t, n, os.getpid()))
+                sys.stdout.flush()
+                t = time.time()
+            read1 = read1.strip()
+            read2 = read2.strip()
+            cell_barcode = read1[barcode_slice]
+            if whitelist is not None:
+                if cell_barcode not in whitelist:
+                    continue
+            if cell_barcode not in results_table:
+                results_table[cell_barcode] = {}
+            TAG_seq = read2
+            UMI = read1[umi_slice]
 
-                # Apply regex to Read2.
-                match = regex_pattern.search(TAG_seq)
-                if match:
-                    # If a match is found, keep only the matching portion.
-                    TAG_seq = match.group(0)
-                    if debug:
-                        print(
-                            "\nline:{0}\n"
-                            "cell_barcode:{1}\tUMI:{2}\tTAG_seq:{3}\n"
-                            "line length:{4}\tcell barcode length:{5}\tUMI length:{6}\tTAG sequence length:{7}"
-                            .format(read1 + read2, cell_barcode, UMI, TAG_seq,
-                                    len(read1 + read2), len(cell_barcode), len(UMI), len(TAG_seq)
-                            )
+            # Apply regex to Read2.
+            match = regex_pattern.search(TAG_seq)
+            if match:
+                # If a match is found, keep only the matching portion.
+                TAG_seq = match.group(0)
+                if debug:
+                    print(
+                        "\nline:{0}\n"
+                        "cell_barcode:{1}\tUMI:{2}\tTAG_seq:{3}\n"
+                        "line length:{4}\tcell barcode length:{5}\tUMI length:{6}\tTAG sequence length:{7}"
+                        .format(read1 + read2, cell_barcode, UMI, TAG_seq,
+                                len(read1 + read2), len(cell_barcode), len(UMI), len(TAG_seq)
                         )
-                        sys.stdout.flush()
-                    # Get the distance by adding up the errors found:
-                    #   substitutions, insertions and deletions.
-                    distance = sum(match.fuzzy_counts)
-                    # To get the matching TAG, compare `match` against each TAG.
+                    )
+                    sys.stdout.flush()
+                # Get the distance by adding up the errors found:
+                #   substitutions, insertions and deletions.
+                distance = sum(match.fuzzy_counts)
+                # To get the matching TAG, compare `match` against each TAG.
 
-                    for tag, name in tags.items():
-                        # This time, calculate the distance using the faster function
-                        # `Levenshtein.distance` (which does the same). Thus, both
-                        # determined distances should match.
-                        if Levenshtein.distance(tag, TAG_seq) <= distance:
-                            #results_table[cell_barcode]['total_reads'][UMI] += 1
-                            try:
-                                results_table[cell_barcode][name][UMI] += 1
-                            except:
-                                results_table[cell_barcode][name] = Counter()
-                                results_table[cell_barcode][name][UMI] += 1
-                                #print('{}: mapped {}'.format(n,TAG_seq))
-                            break
-                else:
-                    # Bad structure
-                    #print('{}: bad construct {}'.format(n,TAG_seq))
-                    try:
-                        results_table[cell_barcode]['unmapped'][UMI] += 1
-                    except:
-                        results_table[cell_barcode]['unmapped'] = Counter()
-                        results_table[cell_barcode]['unmapped'][UMI] += 1
-                    no_match_table[TAG_seq] += 1
+                for tag, name in tags.items():
+                    # This time, calculate the distance using the faster function
+                    # `Levenshtein.distance` (which does the same). Thus, both
+                    # determined distances should match.
+                    if Levenshtein.distance(tag, TAG_seq) == distance:
+                        #results_table[cell_barcode]['total_reads'][UMI] += 1
+                        try:
+                            results_table[cell_barcode][name][UMI] += 1
+                        except:
+                            results_table[cell_barcode][name] = Counter()
+                            results_table[cell_barcode][name][UMI] += 1
+                            #print('{}: mapped {}'.format(n,TAG_seq))
+                        break
+            else:
+                # Bad structure
+                #print('{}: bad construct {}'.format(n,TAG_seq))
+                try:
+                    results_table[cell_barcode]['unmapped'][UMI] += 1
+                except:
+                    results_table[cell_barcode]['unmapped'] = Counter()
+                    results_table[cell_barcode]['unmapped'][UMI] += 1
+                no_match_table[TAG_seq] += 1
+            n+=1
     print("Counting done for process {}. Processed {:,} reads".format(os.getpid(), n))
     sys.stdout.flush()
     return(results_table, no_match_table)

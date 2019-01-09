@@ -236,10 +236,10 @@ def generate_regex(tags, maximum_distance, error_type, legacy=False, max_poly_a=
     tags_set = set()
     for tag in tags:
         tags_set.add(len(tag))
-    if len(tags_set) > 1:
-        sys.exit(
-            'Runnning CITE-seq-Count with tags of different lengths is not supported.\n'\
-            'Please split your tags in different tag files and run them separately.')
+    # if len(tags_set) > 1:
+    #     sys.exit(
+    #         'Runnning CITE-seq-Count with tags of different lengths is not supported.\n'\
+    #         'Please split your tags in different tag files and run them separately.')
 
     # Get the length of the longest TAG.
     longest_ab_tag = len(next(iter(tags)))
@@ -275,7 +275,7 @@ def generate_regex(tags, maximum_distance, error_type, legacy=False, max_poly_a=
         # `e` is part of the `regex` fuzzy logic: it means `error` in general,
         # whether it's a (s)ubstitution, (i)nsertion or (d)eletion. In this 
         # case, it means it allows `maximum_distance` errors to happen.
-        pattern = r'(^\L<options>){{{}<={}}}'.format(error_type, maximum_distance)
+        pattern = r'((?b)^\L<options>){{{}<={}}}'.format(error_type, maximum_distance)
 
     # Compiling the regex makes it run faster.
     regex_pattern = regex.compile(pattern, options=tag_keys)
