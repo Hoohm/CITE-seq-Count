@@ -119,7 +119,7 @@ def get_args():
                         dest='first_n', default=None,
                         help="Select N reads to run on instead of all.")
     parser.add_argument('-o', '--output', required=True, type=str,
-                        dest='outfile', help="Write result to file.")
+                        dest='outfolder', help="Results will be written to this folder")
     parser.add_argument('-u', '--unknown-tags', required=False, type=str,
                         dest='unknowns_file',
                         help="Write table of unknown TAGs to file.")
@@ -175,7 +175,7 @@ def create_report(n_reads, reads_per_cell, no_match, version, start_time, ordere
     mapped_perc = round((total_mapped/n_reads)*100)
     unmapped_perc = round((total_unmapped/n_reads)*100)
     
-    with open('run_report.yaml', 'w') as report_file:
+    with open(os.path.join(args.outfolder, 'run_report.yaml'), 'w') as report_file:
         report_file.write(
 """Date: {}
 Running time: {}
@@ -255,7 +255,7 @@ def main():
     #Run with one process
     if n_threads <= 1:
         print('CITE-seq-Count is running with only one core.')
-        (final_results, merged_no_match) = processing.classify_reads_multi_process(
+        (final_results, merged_no_match, total_reads) = processing.classify_reads_multi_process(
                 args.read1_path,
                 args.read2_path,               
                 n_lines,
@@ -304,7 +304,7 @@ def main():
         p.join()
         print('Mapping done')
         print('Merging results')
-        (final_results, umis_per_cell, reads_per_cell, merged_no_match) = processing.merge_results(parallel_results)                
+        (final_results, umis_per_cell, reads_per_cell, merged_no_match, total_reads) = processing.merge_results(parallel_results)                
         del(parallel_results)
     
     ordered_tags_map = OrderedDict()
@@ -332,19 +332,19 @@ def main():
 
     (umi_results_matrix, read_results_matrix) = processing.generate_sparse_matrices(final_results, ordered_tags_map, top_cells)
     
-    io.write_to_files(umi_results_matrix, top_cells, ordered_tags_map, 'umi', args.outfile)
-    io.write_to_files(read_results_matrix, top_cells, ordered_tags_map, 'read', args.outfile)
+    io.write_to_files(umi_results_matrix, top_cells, ordered_tags_map, 'umi', args.outfolder)
+    io.write_to_files(read_results_matrix, top_cells, ordered_tags_map, 'read', args.outfolder)
       
     # Save no_match TAGs to `args.unknowns_file` file.
     if args.unknowns_file:
         # Filter unknown TAGs base on the specified cutoff
         top_unmapped = merged_no_match.most_common(args.unknowns_top)
-        with open(args.unknowns_file,'w') as unknown_file:
+        with open(os.path.join(args.outfolder, args.unknowns_file),'w') as unknown_file:
             unknown_file.write('tag,count\n')
             for element in top_unmapped:
                 unknown_file.write('{},{}\n'.format(element[0],element[1]))
     create_report(
-        int(n_lines/4),
+        total_reads,
         reads_per_cell,
         merged_no_match,
         version,

@@ -118,7 +118,7 @@ def classify_reads_multi_process(read1_path, read2_path, chunk_size,
             n+=1
     print("Counting done for process {}. Processed {:,} reads".format(os.getpid(), n))
     sys.stdout.flush()
-    return(results_table, no_match_table)
+    return(results_table, no_match_table, n)
 
 def merge_results(parallel_results):
     """Merge chunked results from parallel processing.
@@ -136,9 +136,11 @@ def merge_results(parallel_results):
     merged_no_match = Counter()
     umis_per_cell = Counter()
     reads_per_cell = Counter()
+    total_reads = 0
     for chunk in parallel_results:
         mapped = chunk[0]
         unmapped = chunk[1]
+        n_reads = chunk[2]
         for cell_barcode in mapped:
             if cell_barcode not in merged_results:
                 merged_results[cell_barcode] = dict()
@@ -153,7 +155,8 @@ def merge_results(parallel_results):
                             umis_per_cell[cell_barcode] += len(mapped[cell_barcode][TAG])
                             reads_per_cell[cell_barcode] += mapped[cell_barcode][TAG][UMI]
         merged_no_match.update(unmapped)
-    return(merged_results, umis_per_cell, reads_per_cell, merged_no_match)
+        total_reads += n_reads
+    return(merged_results, umis_per_cell, reads_per_cell, merged_no_match, total_reads)
 
 
 

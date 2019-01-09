@@ -4,7 +4,7 @@ import shutil
 
 from scipy import io
 
-def write_to_files(sparse_matrix, top_cells, ordered_tags_map, data_type, outfile):
+def write_to_files(sparse_matrix, top_cells, ordered_tags_map, data_type, outfolder):
     """Write the umi and read sparse matrices to file in gzipped mtx format.
 
     Args:
@@ -15,7 +15,7 @@ def write_to_files(sparse_matrix, top_cells, ordered_tags_map, data_type, outfil
         oufile (string): Path to the mtx file.
     
     """
-    prefix = data_type + '_count'
+    prefix = os.path.join(outfolder,data_type + '_count')
     os.makedirs(prefix, exist_ok=True)
     io.mmwrite(os.path.join(prefix,'matrix.mtx'),sparse_matrix)
     with gzip.open(os.path.join(prefix,'barcodes.tsv.gz'), 'wb') as barcode_file:
