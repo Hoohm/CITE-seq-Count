@@ -26,9 +26,15 @@ def parse_whitelist_csv(filename, barcode_length):
     """
     STRIP_CHARS = '"0123456789- \t\n'
     with open(filename, mode='rb') as csv_file:
-        csv_reader = csv.reader(csv_file)
-        whitelist = [row[0].strip(STRIP_CHARS) for row in csv_reader
-                     if (len(row[0].strip(STRIP_CHARS)) == barcode_length)]
+        whitelist = set()
+        for line in csv_file:
+            cell_barcode = line.strip(STRIP_CHARS)
+            if len(cell_barcode) == barcode_length:
+                whitelist.add(cell_barcode)
+            else:
+                sys.exit(
+                    'Barcode {} length different' \
+                    'than given input.\nExiting'.format(cell_barcode))
     return set(whitelist)
 
 
