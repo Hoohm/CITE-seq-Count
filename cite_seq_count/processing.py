@@ -3,11 +3,16 @@ import gzip
 import sys
 import os
 import Levenshtein
+
 from collections import Counter
 from itertools import islice
 from numpy import int16
 from scipy import sparse
 from umi_tools import network
+from umi_tools import umi_methods
+
+
+from cite_seq_count import secondsToText
 
 def classify_reads_multi_process(read1_path, read2_path, chunk_size,
                     tags, barcode_slice, umi_slice,
@@ -58,8 +63,12 @@ def classify_reads_multi_process(read1_path, read2_path, chunk_size,
         secondlines = islice(zip(textfile1, textfile2), first_line, first_line + chunk_size - 1, 4)
         for read1, read2 in secondlines:
             if n % 1000000 == 0:
-                print("Processed 1,000,000 reads in {:.4} secondes. Total "
-                    "reads: {:,} in child {}".format(time.time() - t, n, os.getpid()))
+                print("Processed 1,000,000 reads in {}. Total "
+                    "reads: {:,} in child {}".format(
+                        secondsToText.secondsToText(time.time() - t),
+                        n,
+                        os.getpid())
+                    )
                 sys.stdout.flush()
                 t = time.time()
             read1 = read1.strip()
@@ -74,7 +83,7 @@ def classify_reads_multi_process(read1_path, read2_path, chunk_size,
             UMI = read1[umi_slice]
 
             # Apply regex to Read2.
-            match = regex_pattern.search(TAG_seq)
+            match = regex_pattern.search(TAG_seq, concurrent=True)
             if match:
                 # If a match is found, keep only the matching portion.
                 TAG_seq = match.group(0)
@@ -116,7 +125,7 @@ def classify_reads_multi_process(read1_path, read2_path, chunk_size,
                     results_table[cell_barcode]['unmapped'][UMI] += 1
                 no_match_table[TAG_seq] += 1
             n += 1
-    print("Counting done for process {}. Processed {:,} reads".format(os.getpid(), n-1))
+    print("Mapping done for process {}. Processed {:,} reads".format(os.getpid(), n-1))
     sys.stdout.flush()
     return(results_table, no_match_table, n - 1)
 
@@ -160,24 +169,45 @@ def merge_results(parallel_results):
 
 
 def correct_umis(final_results):
+    print('Correcting umis')
     for cell_barcode in final_results:
         for TAG in final_results[cell_barcode]:
             if len(final_results[cell_barcode][TAG]) > 1:
+                umi_clusters = network.UMIClusterer()
                 UMIclusters = umi_clusters(
                     final_results[cell_barcode][TAG].keys(),
                     final_results[cell_barcode][TAG],
                     1)
-                for umi_barcodes in UMIclusters:  # This is a list with the first element the dominant barcode
-                    if len(umi_barcodes) > 2:
-                        major_umi = umi_barcodes[0]
-                        for minor_umi in umi_barcodes[1:]:  # Iterate over all barcodes in a cluster
+                for umi_cluster in UMIclusters:  # This is a list with the first element the dominant barcode
+                    if(len(umi_cluster) > 1):  # This means we got a correction
+                        major_umi = umi_cluster[0]
+                        for minor_umi in umi_cluster[1:]:
                             temp = final_results[cell_barcode][TAG].pop(minor_umi)
                             final_results[cell_barcode][TAG][major_umi] += temp
     return(final_results)
 
-def correct_cells(final_results, reads_per_cell, umis_per_cell):
+def correct_cells_umi_tools(final_results, reads_per_cell, umis_per_cell, top_cells_uncorrected):
+    cell_whitelist, true_to_false_map = umi_methods.getCellWhitelist(
+        reads_per_cell,
+        options.expect_cells,
+        options.cell_number,
+        options.error_correct_threshold,
+        options.plot_prefix)
+
+
+
+def correct_cells(final_results, reads_per_cell, umis_per_cell, top_cells_uncorrected):
+    print('Correcting top {} cell barcodes'.format(len(top_cells_uncorrected)))
+
     cell_clusterer = network.UMIClusterer()
-    CBclusters = cell_clusterer(list(reads_per_cell.keys()), reads_per_cell, 1)
+    cells_to_correct = [key for key in reads_per_cell.keys() if key in top_cells_uncorrected]
+    
+    all_cells = list(reads_per_cell.keys())
+    for cell in all_cells:
+        if cell not in cells_to_correct:
+            reads_per_cell.pop(cell)
+    
+    CBclusters = cell_clusterer(cells_to_correct, reads_per_cell, 1)
     for cell_barcodes in CBclusters:  # This is a list with the first element the dominant barcode
         if(len(cell_barcodes) > 1):
             major_barcode = cell_barcodes[0]

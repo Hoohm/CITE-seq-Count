@@ -308,9 +308,10 @@ def main():
         (final_results, umis_per_cell, reads_per_cell, merged_no_match, total_reads) = processing.merge_results(parallel_results)                
         del(parallel_results)
     
-    print('Correcting cell barcodes')
-    (final_results, umis_per_cell) = processing.correct_cells(final_results, reads_per_cell, umis_per_cell)
-    print('correcting umis')
+    #top_cells_tuple = umis_per_cell.most_common(args.cells * 2)
+    #top_cells_uncorrected = set([pair[0] for pair in top_cells_tuple])
+    
+    #(final_results, umis_per_cell) = processing.correct_cells(final_results, reads_per_cell, umis_per_cell, top_cells_uncorrected)
     final_results = processing.correct_umis(final_results)
 
     ordered_tags_map = OrderedDict()

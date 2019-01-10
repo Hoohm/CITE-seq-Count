@@ -25,7 +25,7 @@ def parse_whitelist_csv(filename, barcode_length):
 
     """
     STRIP_CHARS = '"0123456789- \t\n'
-    with open(filename, mode='r') as csv_file:
+    with open(filename, mode='rb') as csv_file:
         csv_reader = csv.reader(csv_file)
         whitelist = [row[0].strip(STRIP_CHARS) for row in csv_reader
                      if (len(row[0].strip(STRIP_CHARS)) == barcode_length)]
