@@ -85,19 +85,20 @@ def map_reads(read1_path, read2_path, chunk_size,
             #This change in bytes is required by umi_tools for umi correction
             UMI = bytes(read1[umi_slice], 'ascii')
             best_match = 'unmapped'
-            best_score = maximum_distance + 1
+            best_score = maximum_distance
             for tag, name in tags.items():
                 # This time, calculate the distance using the faster function
                 # `Levenshtein.distance` (which does the same). Thus, both
                 # determined distances should match.
                 score = Levenshtein.distance(tag, TAG_seq[:len(tag)])
-                if score < best_score:
+                if score <= best_score:
                     best_score = score
                     best_match = name
+                    break
             results_table[cell_barcode][best_match][UMI] += 1
             if(best_match == 'unmapped'):
                 no_match_table[TAG_seq] += 1 
-            if len(UMI)!=10:
+            if debug:
                 print(
                     "\nline:{0}\n"
                     "cell_barcode:{1}\tUMI:{2}\tTAG_seq:{3}\n"

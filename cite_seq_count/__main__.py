@@ -328,7 +328,6 @@ def main():
         print('Merging results')
         (final_results, umis_per_cell, reads_per_cell, merged_no_match, total_reads) = processing.merge_results(parallel_results)                
         del(parallel_results)
-    
     if args.expected_cells:
         (final_results, umis_per_cell, corrected_barcodes) = processing.correct_cells(final_results, reads_per_cell, umis_per_cell, args.expected_cells, args.bc_threshold)
     else:
