@@ -25,16 +25,14 @@ def parse_whitelist_csv(filename, barcode_length):
 
     """
     STRIP_CHARS = '"0123456789- \t\n'
-    with open(filename, mode='rb') as csv_file:
-        whitelist = set()
-        for line in csv_file:
-            cell_barcode = line.strip(STRIP_CHARS)
-            if len(cell_barcode) == barcode_length:
-                whitelist.add(cell_barcode)
-            else:
-                sys.exit(
-                    'Barcode {} length different' \
-                    'than given input.\nExiting'.format(cell_barcode))
+    with open(filename, mode='r') as csv_file:
+        csv_reader = csv.reader(csv_file)
+        cell_pattern = regex.compile(r'[ATGC]{{{}}}'.format(barcode_length))
+        whitelist = [row[0].strip(STRIP_CHARS) for row in csv_reader
+                     if (len(row[0].strip(STRIP_CHARS)) == barcode_length)]
+        for cell_barcode in whitelist:
+            if not cell_pattern.match(cell_barcode):
+                sys.exit('This barcode {} is not only composed of ATGC bases.'.format(cell_barcode))
     return set(whitelist)
 
 
@@ -84,8 +82,7 @@ def check_tags(tags, maximum_distance):
     """
     ordered_tags = OrderedDict()
     for tag in sorted(tags, key=len, reverse=True):
-        ordered_tags[tag.encode('ascii')] = tags[tag] + '-' + tag
-    
+        ordered_tags[tag] = tags[tag] + '-' + tag
     # If only one TAG is provided, then no distances to compare.
     if (len(tags) == 1):
         return(ordered_tags)
@@ -93,7 +90,7 @@ def check_tags(tags, maximum_distance):
     offending_pairs = []
     for a, b in combinations(ordered_tags.keys(), 2):
         distance = Levenshtein.distance(a, b)
-        if (distance <= maximum_distance):
+        if (distance <= (maximum_distance - 1)):
             offending_pairs.append([a, b, distance])
     
     # If offending pairs are found, print them all.
@@ -110,7 +107,6 @@ def check_tags(tags, maximum_distance):
                 .format(tag1=pair[0], tag2=pair[1], distance=pair[2])
             )
         sys.exit('Exiting the application.\n')
-    
     return(ordered_tags)
 
 
@@ -139,7 +135,7 @@ def get_read_length(filename):
     return(read_length)
 
 
-def check_read_lengths(read1_length, cb_first, cb_last, umi_first, umi_last):
+def check_barcodes_lengths(read1_length, cb_first, cb_last, umi_first, umi_last):
     """Check Read1 length against CELL and UMI barcodes length.
 
     Args:
@@ -195,7 +191,7 @@ def blocks(files, size=65536):
         yield b
 
 
-def get_n_lines(file_path, top_n):
+def get_n_lines(file_path):
     """
     Determines how many lines have to be processed
     depending on options and number of available lines.
@@ -216,74 +212,74 @@ def get_n_lines(file_path, top_n):
     return(n_lines)
 
 
-def generate_regex(tags, maximum_distance, error_type, legacy=False, max_poly_a=6, read2_length=98, user_regex=None):
-    """Generate regex based ont he provided TAGs.
+# def generate_regex(tags, maximum_distance, error_type, legacy=False, max_poly_a=6, read2_length=98, user_regex=None):
+#     """Generate regex based ont he provided TAGs.
 
-    Args:
-        tags (dict): A dictionary with the TAGs + TAG Names.
-        maximum_distance (int): The maximum Levenshtein distance allowed
-            between two TAGs.
-        legacy (bool): `True` if you use an earlier version of the kit that adds
-            a T, C, or G at the end and you expect polyA tails in the data.
-            Default is False.
-        max_poly_a (int): Run length of A's expected for the polyA tail. Default
-            is 6.
-        read2_length (int): Length of Read2. Default is 98.
-        user_regex (str): A regular expression to use for TAG matching. Default
-            is None.
+#     Args:
+#         tags (dict): A dictionary with the TAGs + TAG Names.
+#         maximum_distance (int): The maximum Levenshtein distance allowed
+#             between two TAGs.
+#         legacy (bool): `True` if you use an earlier version of the kit that adds
+#             a T, C, or G at the end and you expect polyA tails in the data.
+#             Default is False.
+#         max_poly_a (int): Run length of A's expected for the polyA tail. Default
+#             is 6.
+#         read2_length (int): Length of Read2. Default is 98.
+#         user_regex (str): A regular expression to use for TAG matching. Default
+#             is None.
 
-    Returns:
-        regex.Pattern: An object that matches against any of the provided TAGs
-            within the maximum distance provided.
+#     Returns:
+#         regex.Pattern: An object that matches against any of the provided TAGs
+#             within the maximum distance provided.
 
-    """
-    # Get a list of the available TAGs.
-    tag_keys = tags.keys()
-    tags_set = set()
-    for tag in tags:
-        tags_set.add(len(tag))
-    # if len(tags_set) > 1:
-    #     sys.exit(
-    #         'Runnning CITE-seq-Count with tags of different lengths is not supported.\n'\
-    #         'Please split your tags in different tag files and run them separately.')
+#     """
+#     # Get a list of the available TAGs.
+#     tag_keys = tags.keys()
+#     tags_set = set()
+#     for tag in tags:
+#         tags_set.add(len(tag))
+#     # if len(tags_set) > 1:
+#     #     sys.exit(
+#     #         'Runnning CITE-seq-Count with tags of different lengths is not supported.\n'\
+#     #         'Please split your tags in different tag files and run them separately.')
 
-    # Get the length of the longest TAG.
-    longest_ab_tag = len(next(iter(tags)))
+#     # Get the length of the longest TAG.
+#     longest_ab_tag = len(next(iter(tags)))
 
-    if user_regex:
-        # If more than one TAG is provided and their length is different, issue a
-        # warning.
-        if len(tag_keys) > 1:
-            for i in range(1, len(tag_keys)):
-                if len(tag_keys[i]) != len(tag_keys[i - 1]):
-                    print(
-                        '[WARNING] Different length TAGs have been provided while '
-                        'you specified a custom Regex. An OR method is recommended '
-                        'for this scenarios. No additional validations will be '
-                        'applied. Use it at your own risk.\n'
-                    )
-                    break
+#     if user_regex:
+#         # If more than one TAG is provided and their length is different, issue a
+#         # warning.
+#         if len(tag_keys) > 1:
+#             for i in range(1, len(tag_keys)):
+#                 if len(tag_keys[i]) != len(tag_keys[i - 1]):
+#                     print(
+#                         '[WARNING] Different length TAGs have been provided while '
+#                         'you specified a custom Regex. An OR method is recommended '
+#                         'for this scenarios. No additional validations will be '
+#                         'applied. Use it at your own risk.\n'
+#                     )
+#                     break
         
-        regex_pattern = regex.compile(user_regex)
-        return(regex_pattern)
+#         regex_pattern = regex.compile(user_regex)
+#         return(regex_pattern)
 
-    elif legacy:
-        # Keep the minimum value between `max_poly_a` provided and the remaining
-        # length of the read after removing the barcode length.
-        polya_run = min(max_poly_a, read2_length - longest_ab_tag - 1)
+#     elif legacy:
+#         # Keep the minimum value between `max_poly_a` provided and the remaining
+#         # length of the read after removing the barcode length.
+#         polya_run = min(max_poly_a, read2_length - longest_ab_tag - 1)
 
-        # Read comment below for `s` meaning in the regex.
-        pattern = r'(^(\L<options>)[TGC][A]{{{},}}){{{}<={}}}'.format(
-            polya_run, error_type, maximum_distance
-        )
+#         # Read comment below for `s` meaning in the regex.
+#         pattern = r'(^(\L<options>)[TGC][A]{{{},}}){{{}<={}}}'.format(
+#             polya_run, error_type, maximum_distance
+#         )
 
-    else:
-        # `e` is part of the `regex` fuzzy logic: it means `error` in general,
-        # whether it's a (s)ubstitution, (i)nsertion or (d)eletion. In this 
-        # case, it means it allows `maximum_distance` errors to happen.
-        pattern = r'((?b)^\L<options>){{{}<={}}}'.format(error_type, maximum_distance)
+#     else:
+#         # `e` is part of the `regex` fuzzy logic: it means `error` in general,
+#         # whether it's a (s)ubstitution, (i)nsertion or (d)eletion. In this 
+#         # case, it means it allows `maximum_distance` errors to happen.
+#         pattern = r'((?b)^\L<options>){{{}<={}}}'.format(error_type, maximum_distance)
 
-    # Compiling the regex makes it run faster.
-    regex_pattern = regex.compile(bytes(pattern, 'ascii'), options=tag_keys)
-    return(regex_pattern)
+#     # Compiling the regex makes it run faster.
+#     regex_pattern = regex.compile(pattern, options=tag_keys)
+#     return(regex_pattern)
 

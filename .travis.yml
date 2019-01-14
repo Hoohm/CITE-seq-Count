@@ -1,13 +1,18 @@
 language: python
+
 python:
-- '3.6'
+  - '3.6'
 branches:
   only:
   - master
+
 install:
 - sudo apt-get update
+
 script:
 - python3 setup.py install
+- pytest
+
 deploy:
   provider: pypi
   user: Hoohm

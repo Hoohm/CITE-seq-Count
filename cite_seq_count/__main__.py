@@ -73,11 +73,17 @@ def get_args():
     barcodes.add_argument('-umil', '--umi_last_base', dest='umi_last',
                           required=True, type=int,
                           help="Postion of the last base of your UMI.")
+    barcodes.add_argument('--umi_collapsing_dist', dest='umi_threshold',
+                          required=False, type=int, default=2,
+                          help="threshold for umi collapsing.")
+    barcodes.add_argument('--bc_collapsing_dist', dest='bc_threshold',
+                          required=False, type=int, default=1,
+                          help="threshold for cellular barcode collapsing.")
 
     # -cells and -whitelist are mutually exclusive options.
     barcodes_filtering = parser.add_mutually_exclusive_group(required=True)
     barcodes_filtering.add_argument(
-        '-cells', '--expected_cells', dest='cells', required=False, type=int,
+        '-cells', '--expected_cells', dest='expected_cells', required=False, type=int,
         help=("Number of expected cells from your run.")
     )
     barcodes_filtering.add_argument(
@@ -111,6 +117,13 @@ def get_args():
         choices=allowed_errors
     )
     
+    filters.add_argument(
+        '-trim', '--start-trim', dest='start_trim',
+        required=False, type=int, default=0,
+        help=("You can discard N bases from read2.")
+    )
+    
+
     # Remaining arguments.
     parser.add_argument('-T', '--threads', required=False, type=int,
                         dest='n_threads', default=cpu_count(),
@@ -156,7 +169,7 @@ def get_args():
     return parser
 
 
-def create_report(n_lines, n_reads, reads_per_cell, no_match, version, start_time, ordered_tags_map, args):
+def create_report(n_lines, n_reads, reads_per_cell, no_match, version, start_time, ordered_tags_map, umis_corrected, args):
     """
     Creates a report with details about the run in a yaml format.
 
@@ -170,7 +183,6 @@ def create_report(n_lines, n_reads, reads_per_cell, no_match, version, start_tim
 
     """
     total_mapped = sum(reads_per_cell.values())
-    print(n_reads)
     total_unmapped = sum(no_match.values())
     mapped_perc = round((total_mapped/n_reads)*100)
     unmapped_perc = round((total_unmapped/n_reads)*100)
@@ -193,8 +205,12 @@ Parameters:
 \tUMI barcode:
 \t\tFirst position: {}
 \t\tLast position: {}
-\tHamming distance: {}
+\tTags error type: {}
+\tTags max errors: {}
+\tUMI collapsing threshold: {}
 \tLegacy: {}        
+Filters:
+\tUMIs corrected: {}
 """.format(
             datetime.datetime.today().strftime('%Y-%m-%d'),
             secondsToText.secondsToText(time.time()-start_time),
@@ -209,8 +225,11 @@ Parameters:
             args.cb_last,
             args.umi_first,
             args.umi_last,
+            args.error_type,
             args.hamming_thresh,
-            args.legacy))
+            args.umi_threshold,
+            args.legacy,
+            umis_corrected))
 
 def main():
     start_time = time.time()
@@ -237,18 +256,18 @@ def main():
     # Check Read1 length against CELL and UMI barcodes length.
     (barcode_slice, 
      umi_slice, 
-     barcode_umi_length) = preprocessing.check_read_lengths(read1_length, args.cb_first,
+     barcode_umi_length) = preprocessing.check_barcodes_lengths(read1_length, args.cb_first,
                                               args.cb_last, 
                                               args.umi_first, args.umi_last)
     
     # Generate the compiled regex pattern.
-    regex_pattern = preprocessing.generate_regex(ab_map, args.hamming_thresh, args.error_type, max_poly_a=6)
+    #regex_pattern = preprocessing.generate_regex(ab_map, args.hamming_thresh, args.error_type, max_poly_a=6)
 
     
     if args.first_n:
         n_lines = args.first_n*4
     else:
-        n_lines = preprocessing.get_n_lines(args.read1_path, args.first_n)  
+        n_lines = preprocessing.get_n_lines(args.read1_path)  
     
     n_threads = args.n_threads
     
@@ -256,24 +275,25 @@ def main():
     #Run with one process
     if n_threads <= 1:
         print('CITE-seq-Count is running with only one core.')
-        (final_results, merged_no_match, total_reads) = processing.classify_reads_multi_process(
+        (final_results, merged_no_match, total_reads) = processing.map_reads(
                 args.read1_path,
                 args.read2_path,               
                 n_lines,
                 ab_map,
                 barcode_slice,
                 umi_slice,
-                regex_pattern,
                 1,
                 whitelist,
                 args.legacy,
-                args.debug)
+                args.debug,
+                args.start_trim,
+                args.hamming_thresh)
         print('Mapping done')
         umis_per_cell = Counter()
         reads_per_cell = Counter()
         for cell_barcode,counts in final_results.items():
-            umis_per_cell[cell_barcode] = sum([len(counts[UMI]) for UMI in counts if UMI != 'no_match' and UMI != 'bad_construct'])
-            reads_per_cell[cell_barcode] = sum([sum(counts[UMI].values()) for UMI in counts if UMI != 'no_match' and UMI != 'bad_construct'])
+            umis_per_cell[cell_barcode] = sum([len(counts[UMI]) for UMI in counts if UMI != 'unmapped'])
+            reads_per_cell[cell_barcode] = sum([sum(counts[UMI].values()) for UMI in counts if UMI != 'unmapped'])
     else:
         # Run with multiple processes
         p = Pool(processes=n_threads)
@@ -286,7 +306,7 @@ def main():
         parallel_results = []
 
         for first_line in list(chunks):
-           p.apply_async(processing.classify_reads_multi_process,
+           p.apply_async(processing.map_reads,
                 args=(
                     args.read1_path,
                     args.read2_path,               
@@ -294,11 +314,12 @@ def main():
                     ab_map,
                     barcode_slice,
                     umi_slice,
-                    regex_pattern,
                     first_line,
                     whitelist,
                     args.legacy,
-                    args.debug),
+                    args.debug,
+                    args.start_trim,
+                    args.hamming_thresh),
                 callback=parallel_results.append,
                 error_callback=sys.stderr)
         p.close()
@@ -308,12 +329,12 @@ def main():
         (final_results, umis_per_cell, reads_per_cell, merged_no_match, total_reads) = processing.merge_results(parallel_results)                
         del(parallel_results)
     
-    #top_cells_tuple = umis_per_cell.most_common(args.cells * 2)
-    #top_cells_uncorrected = set([pair[0] for pair in top_cells_tuple])
+    if args.expected_cells:
+        (final_results, umis_per_cell, corrected_barcodes) = processing.correct_cells(final_results, reads_per_cell, umis_per_cell, args.expected_cells, args.bc_threshold)
+    else:
+        (final_results, umis_per_cell, corrected_barcodes) = processing.correct_cells(final_results, reads_per_cell, umis_per_cell, False, args.bc_threshold)
     
-    #(final_results, umis_per_cell) = processing.correct_cells(final_results, reads_per_cell, umis_per_cell, top_cells_uncorrected)
-    final_results = processing.correct_umis(final_results)
-
+    (final_results, umis_corrected) = processing.correct_umis(final_results, threshold=args.umi_threshold)
     ordered_tags_map = OrderedDict()
     for i,tag in enumerate(ab_map.values()):
         ordered_tags_map[tag] = i
@@ -322,7 +343,7 @@ def main():
 
     # Sort cells by number of mapped umis
     if not whitelist:
-        top_cells_tuple = umis_per_cell.most_common(args.cells)
+        top_cells_tuple = umis_per_cell.most_common(args.expected_cells)
         top_cells = set([pair[0] for pair in top_cells_tuple])
     else:
         top_cells = whitelist
@@ -358,6 +379,7 @@ def main():
         version,
         start_time,
         ordered_tags_map,
+        umis_corrected,
         args)
 
 if __name__ == '__main__':
