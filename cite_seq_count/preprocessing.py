@@ -2,13 +2,52 @@ import csv
 import gzip
 import sys
 import regex
-
 import Levenshtein
 
+from math import floor
 from collections import OrderedDict
 from itertools import combinations
 from itertools import islice 
 
+def get_indexes(start_index, chunk_size, nth):
+    """
+    Creates indexes from a reference index, a chunk size an nth number
+
+    Args:
+        start_index (int): first position
+        chunk_size (int): Chunk size
+        nth (int): The nth number
+    
+    Returns:
+        list: First and last position of indexes
+    """
+    start_index = nth * chunk_size
+    stop_index = chunk_size + nth * chunk_size
+    return([start_index,stop_index])
+
+
+def chunk_reads(n_reads, n):
+    """
+    Creates a list of indexes for the islice iterator from the map_reads function.
+
+    Args:
+        n_reads (int): Number of reads to split
+        n (int): How many buckets for the split.
+    Returns:
+        indexes (list(list)): Each entry contains the first and the last index for a read.
+    """
+    indexes=list()
+    if n_reads % n == 0:
+        chunk_size = int(n_reads/n)
+        rest = 0
+    else:
+        chunk_size = floor(n_reads/n)
+        rest = n_reads - (n*chunk_size)
+    for i in range(0,n):
+        indexes.append(get_indexes(i, chunk_size, i))
+    indexes[-1][1] += rest
+    return(indexes)
+    
 
 def parse_whitelist_csv(filename, barcode_length):
     """Reads white-listed barcodes from a CSV file.
@@ -199,10 +238,9 @@ def get_n_lines(file_path):
 
     Args:
         file_path (string): Path to a fastq.gz file
-        top_n (int): Number of reads to be used as defined by the user.
 
     Returns:
-        n_lines (int): Number of lines to be used
+        n_lines (int): Number of lines in the file
     """
     print('Counting number of reads')
     with gzip.open(file_path, "rt",encoding="utf-8",errors='ignore') as f:
@@ -210,76 +248,4 @@ def get_n_lines(file_path):
     if n_lines %4 !=0:
         sys.exit('{}\'s number of lines is not a multiple of 4. The file might be corrupted.\n Exiting')
     return(n_lines)
-
-
-# def generate_regex(tags, maximum_distance, error_type, legacy=False, max_poly_a=6, read2_length=98, user_regex=None):
-#     """Generate regex based ont he provided TAGs.
-
-#     Args:
-#         tags (dict): A dictionary with the TAGs + TAG Names.
-#         maximum_distance (int): The maximum Levenshtein distance allowed
-#             between two TAGs.
-#         legacy (bool): `True` if you use an earlier version of the kit that adds
-#             a T, C, or G at the end and you expect polyA tails in the data.
-#             Default is False.
-#         max_poly_a (int): Run length of A's expected for the polyA tail. Default
-#             is 6.
-#         read2_length (int): Length of Read2. Default is 98.
-#         user_regex (str): A regular expression to use for TAG matching. Default
-#             is None.
-
-#     Returns:
-#         regex.Pattern: An object that matches against any of the provided TAGs
-#             within the maximum distance provided.
-
-#     """
-#     # Get a list of the available TAGs.
-#     tag_keys = tags.keys()
-#     tags_set = set()
-#     for tag in tags:
-#         tags_set.add(len(tag))
-#     # if len(tags_set) > 1:
-#     #     sys.exit(
-#     #         'Runnning CITE-seq-Count with tags of different lengths is not supported.\n'\
-#     #         'Please split your tags in different tag files and run them separately.')
-
-#     # Get the length of the longest TAG.
-#     longest_ab_tag = len(next(iter(tags)))
-
-#     if user_regex:
-#         # If more than one TAG is provided and their length is different, issue a
-#         # warning.
-#         if len(tag_keys) > 1:
-#             for i in range(1, len(tag_keys)):
-#                 if len(tag_keys[i]) != len(tag_keys[i - 1]):
-#                     print(
-#                         '[WARNING] Different length TAGs have been provided while '
-#                         'you specified a custom Regex. An OR method is recommended '
-#                         'for this scenarios. No additional validations will be '
-#                         'applied. Use it at your own risk.\n'
-#                     )
-#                     break
-        
-#         regex_pattern = regex.compile(user_regex)
-#         return(regex_pattern)
-
-#     elif legacy:
-#         # Keep the minimum value between `max_poly_a` provided and the remaining
-#         # length of the read after removing the barcode length.
-#         polya_run = min(max_poly_a, read2_length - longest_ab_tag - 1)
-
-#         # Read comment below for `s` meaning in the regex.
-#         pattern = r'(^(\L<options>)[TGC][A]{{{},}}){{{}<={}}}'.format(
-#             polya_run, error_type, maximum_distance
-#         )
-
-#     else:
-#         # `e` is part of the `regex` fuzzy logic: it means `error` in general,
-#         # whether it's a (s)ubstitution, (i)nsertion or (d)eletion. In this 
-#         # case, it means it allows `maximum_distance` errors to happen.
-#         pattern = r'((?b)^\L<options>){{{}<={}}}'.format(error_type, maximum_distance)
-
-#     # Compiling the regex makes it run faster.
-#     regex_pattern = regex.compile(pattern, options=tag_keys)
-#     return(regex_pattern)
 

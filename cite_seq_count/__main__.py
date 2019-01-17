@@ -79,14 +79,16 @@ def get_args():
     barcodes.add_argument('--bc_collapsing_dist', dest='bc_threshold',
                           required=False, type=int, default=1,
                           help="threshold for cellular barcode collapsing.")
-
-    # -cells and -whitelist are mutually exclusive options.
-    barcodes_filtering = parser.add_mutually_exclusive_group(required=True)
-    barcodes_filtering.add_argument(
-        '-cells', '--expected_cells', dest='expected_cells', required=False, type=int,
-        help=("Number of expected cells from your run.")
+    cells = parser.add_argument_group(
+        'Cells',
+        description=("Expected number of cells and potential whitelist")
     )
-    barcodes_filtering.add_argument(
+
+    cells.add_argument(
+        '-cells', '--expected_cells', dest='expected_cells', required=True, type=int,
+        help=("Number of expected cells from your run."), default=0
+    )
+    cells.add_argument(
         '-wl', '--whitelist', dest='whitelist', required=False, type=str,
         help=("A csv file containning a whitelist of barcodes produced"
                       " by the mRNA data.\n\n"
@@ -98,29 +100,19 @@ def get_args():
 
     # FILTERS group.
     filters = parser.add_argument_group(
-        'filters',
-        description=("Filtering for structure of antibody barcodes as well as "
-                    "maximum hamming\ndistance.")
+        'TAG filters',
+        description=("Filtering and trimming for read2.")
     )
     filters.add_argument(
-        '-hd', '--hamming-distance', dest='hamming_thresh',
+        '--max-errors', dest='max_error',
         required=False, type=int, default=2,
-        help=("Maximum hamming distance allowed for antibody barcode.")
-    )
-    allowed_errors = ['i','s','d','e','i,s','i,d','s,d']
-    filters.add_argument(
-        '-e', '--error-type', dest='error_type',
-        required=False, type=str, default='s',
-        help=("Error type for the regex match."
-            "\ni: Insertions only\ns: Substitutions only\n"
-            "d: Deletion only\ne: All of the above"),
-        choices=allowed_errors
+        help=("Maximum Levenshtein distance allowed for antibody barcodes.")
     )
     
     filters.add_argument(
         '-trim', '--start-trim', dest='start_trim',
         required=False, type=int, default=0,
-        help=("You can discard N bases from read2.")
+        help=("Number of bases to discard from read2.")
     )
     
 
@@ -133,43 +125,19 @@ def get_args():
                         help="Select N reads to run on instead of all.")
     parser.add_argument('-o', '--output', required=True, type=str,
                         dest='outfolder', help="Results will be written to this folder")
-    parser.add_argument('-u', '--unknown-tags', required=False, type=str,
-                        dest='unknowns_file',
+    parser.add_argument('-u', '--unmapped-tags', required=False, type=str,
+                        dest='unmapped_file',
                         help="Write table of unknown TAGs to file.")
     parser.add_argument('-ut', '--unknown-top-tags', required=False,
                         dest='unknowns_top', type=int, default=100,
                         help="Top n unmapped TAGs.")
     parser.add_argument('--debug', action='store_true',
                         help="Print extra information for debugging.")
-    
-    # REGEX related arguments.
-    regex_pattern = parser.add_mutually_exclusive_group(required=False)
-    regex_pattern.add_argument(
-        '-tr', '--TAG_regex', dest='tag_regex', required=False, type=str,
-        help=("Only use if you know what you are doing. The regex that will be "
-              "used to validate an antibody barcode structure.\n"
-              "Must be given in regex syntax.\n"
-              "Example 1:\n"
-              "\t\"^(GTCAACTCTTTAGCG|TGATGGCCTATTGGG)[TGC][A]{6,}\"\n"
-              "\tMatches TAGs GTCAACTCTTTAGCG or TGATGGCCTATTGGG plus a T, G, "
-              "or C, plus 6 or more As.\n"
-              "Example 2:\n"
-              "\"^[ATGC]{6}[TGC][A]{6,}\"\n"
-              "Matches any 6 letter TAG.")
-    )
-    regex_pattern.add_argument(
-        '-l', '--legacy', required=False, dest='legacy',
-        default=False, action='store_true',
-        help=("Use this option if you used an earlier version of the kit that "
-              "adds a T,\nC, or G at the end of the sequence and you expect "
-              "polyA tails in the data.")
-    )
-
     # Finally! Too many options XD
     return parser
 
 
-def create_report(n_lines, n_reads, reads_per_cell, no_match, version, start_time, ordered_tags_map, umis_corrected, args):
+def create_report(n_reads, reads_per_cell, no_match, version, start_time, ordered_tags_map, umis_corrected, bcs_corrected, args):
     """
     Creates a report with details about the run in a yaml format.
 
@@ -192,7 +160,6 @@ def create_report(n_lines, n_reads, reads_per_cell, no_match, version, start_tim
 """Date: {}
 Running time: {}
 CITE-seq-Count Version: {}
-Total reads: {}
 Reads processed: {}
 Percentage mapped: {}
 Percentage unmapped: {}
@@ -205,17 +172,16 @@ Parameters:
 \tUMI barcode:
 \t\tFirst position: {}
 \t\tLast position: {}
-\tTags error type: {}
 \tTags max errors: {}
+Correction:
+\tCell barcodes collapsing threshold: {}
+\tCell barcodes corrected: {}
 \tUMI collapsing threshold: {}
-\tLegacy: {}        
-Filters:
 \tUMIs corrected: {}
 """.format(
             datetime.datetime.today().strftime('%Y-%m-%d'),
             secondsToText.secondsToText(time.time()-start_time),
             version,
-            int(round(n_lines/4)),
             n_reads,
             mapped_perc,
             unmapped_perc,
@@ -225,10 +191,10 @@ Filters:
             args.cb_last,
             args.umi_first,
             args.umi_last,
-            args.error_type,
-            args.hamming_thresh,
+            args.max_error,
+            args.bc_threshold,
+            bcs_corrected,
             args.umi_threshold,
-            args.legacy,
             umis_corrected))
 
 def main():
@@ -248,46 +214,45 @@ def main():
 
     # Load TAGs/ABs.
     ab_map = preprocessing.parse_tags_csv(args.tags)
-    ab_map = preprocessing.check_tags(ab_map, args.hamming_thresh)
+    ab_map = preprocessing.check_tags(ab_map, args.max_error)
     # Get reads length. So far, there is no validation for Read2.
     read1_length = preprocessing.get_read_length(args.read1_path)
     read2_length = preprocessing.get_read_length(args.read2_path)
-
     # Check Read1 length against CELL and UMI barcodes length.
-    (barcode_slice, 
-     umi_slice, 
-     barcode_umi_length) = preprocessing.check_barcodes_lengths(read1_length, args.cb_first,
-                                              args.cb_last, 
-                                              args.umi_first, args.umi_last)
-    
-    # Generate the compiled regex pattern.
-    #regex_pattern = preprocessing.generate_regex(ab_map, args.hamming_thresh, args.error_type, max_poly_a=6)
-
+    (
+        barcode_slice, 
+        umi_slice, 
+        barcode_umi_length
+    ) = preprocessing.check_barcodes_lengths(
+            read1_length,
+            args.cb_first,
+            args.cb_last, 
+            args.umi_first, args.umi_last)
     
     if args.first_n:
         n_lines = args.first_n*4
     else:
-        n_lines = preprocessing.get_n_lines(args.read1_path)  
-    
+        n_lines = preprocessing.get_n_lines(args.read1_path)
+    n_reads = int(n_lines/4)
     n_threads = args.n_threads
     
     print('Started mapping')
     #Run with one process
-    if n_threads <= 1:
-        print('CITE-seq-Count is running with only one core.')
-        (final_results, merged_no_match, total_reads) = processing.map_reads(
-                args.read1_path,
-                args.read2_path,               
-                n_lines,
-                ab_map,
-                barcode_slice,
-                umi_slice,
-                1,
-                whitelist,
-                args.legacy,
-                args.debug,
-                args.start_trim,
-                args.hamming_thresh)
+    if n_threads <= 1 or n_lines < 1000000:
+        print('CITE-seq-Count is running with one core.')
+        (
+            final_results,
+            merged_no_match) = processing.map_reads(
+                read1_path=args.read1_path,
+                read2_path=args.read2_path,               
+                tags=ab_map,
+                barcode_slice=barcode_slice,
+                umi_slice=umi_slice,
+                indexes=[0,n_reads],
+                whitelist=whitelist,
+                debug=args.debug,
+                start_trim=args.start_trim,
+                maximum_distance=args.max_error)
         print('Mapping done')
         umis_per_cell = Counter()
         reads_per_cell = Counter()
@@ -296,44 +261,62 @@ def main():
             reads_per_cell[cell_barcode] = sum([sum(counts[UMI].values()) for UMI in counts if UMI != 'unmapped'])
     else:
         # Run with multiple processes
+        print('CITE-seq-Count is running with {} cores.'.format(n_threads))
         p = Pool(processes=n_threads)
         # We need the chunk size to be a multiple of 4 to always start on the correct line in the fastq file
-        chunk_size=round((n_lines-1)/n_threads)
-        while chunk_size % 4 != 0:
-            chunk_size +=1
-        chunks = range(1,n_lines,chunk_size)
-
+        # chunk_size=round((n_lines-1)/n_threads)
+        # while chunk_size % 4 != 0:
+        #     chunk_size +=1
+        # chunks = range(1,n_lines,chunk_size)
+        chunk_indexes = preprocessing.chunk_reads(n_reads, n_threads)
         parallel_results = []
 
-        for first_line in list(chunks):
+        for indexes in chunk_indexes:
            p.apply_async(processing.map_reads,
                 args=(
                     args.read1_path,
-                    args.read2_path,               
-                    chunk_size,
+                    args.read2_path,
                     ab_map,
                     barcode_slice,
                     umi_slice,
-                    first_line,
+                    indexes,
                     whitelist,
-                    args.legacy,
                     args.debug,
                     args.start_trim,
-                    args.hamming_thresh),
+                    args.max_error),
                 callback=parallel_results.append,
                 error_callback=sys.stderr)
         p.close()
         p.join()
         print('Mapping done')
         print('Merging results')
-        (final_results, umis_per_cell, reads_per_cell, merged_no_match, total_reads) = processing.merge_results(parallel_results)                
+        (
+            final_results,
+            umis_per_cell,
+            reads_per_cell,
+            merged_no_match
+        ) = processing.merge_results(parallel_results=parallel_results)
         del(parallel_results)
-    if args.expected_cells:
-        (final_results, umis_per_cell, corrected_barcodes) = processing.correct_cells(final_results, reads_per_cell, umis_per_cell, args.expected_cells, args.bc_threshold)
-    else:
-        (final_results, umis_per_cell, corrected_barcodes) = processing.correct_cells(final_results, reads_per_cell, umis_per_cell, False, args.bc_threshold)
+
+    # Correct cell barcodes
+    (
+        final_results,
+        umis_per_cell,
+        bcs_corrected
+    ) = processing.correct_cells(
+            final_results=final_results,
+            umis_per_cell=umis_per_cell,
+            expected_cells=args.expected_cells,
+            collapsing_threshold=args.bc_threshold)
     
-    (final_results, umis_corrected) = processing.correct_umis(final_results, threshold=args.umi_threshold)
+    # Correct umi barcodes
+    (
+        final_results,
+        umis_corrected
+    ) = processing.correct_umis(
+        final_results=final_results,
+        collapsing_threshold=args.umi_threshold)
+
     ordered_tags_map = OrderedDict()
     for i,tag in enumerate(ab_map.values()):
         ordered_tags_map[tag] = i
@@ -357,29 +340,46 @@ def main():
                 top_cells.add(missing_cell)
     
 
-    (umi_results_matrix, read_results_matrix) = processing.generate_sparse_matrices(final_results, ordered_tags_map, top_cells)
+
+    (
+        umi_results_matrix,
+        read_results_matrix
+    ) = processing.generate_sparse_matrices(
+        final_results=final_results,
+        ordered_tags_map=ordered_tags_map,
+        top_cells=top_cells)
     
-    io.write_to_files(umi_results_matrix, top_cells, ordered_tags_map, 'umi', args.outfolder)
-    io.write_to_files(read_results_matrix, top_cells, ordered_tags_map, 'read', args.outfolder)
+    io.write_to_files(
+        sparse_matrix=umi_results_matrix,
+        top_cells=top_cells,
+        ordered_tags_map=ordered_tags_map,
+        data_type='umi',
+        outfolder=args.outfolder)
+    io.write_to_files(
+        sparse_matrix=read_results_matrix,
+        top_cells=top_cells,
+        ordered_tags_map=ordered_tags_map,
+        data_type='read',
+        outfolder=args.outfolder)
       
-    # Save no_match TAGs to `args.unknowns_file` file.
-    if args.unknowns_file:
+    # Save no_match TAGs to `args.unmapped_file` file.
+    if args.unmapped_file:
         # Filter unknown TAGs base on the specified cutoff
         top_unmapped = merged_no_match.most_common(args.unknowns_top)
-        with open(os.path.join(args.outfolder, args.unknowns_file),'w') as unknown_file:
+        with open(os.path.join(args.outfolder, args.unmapped_file),'w') as unknown_file:
             unknown_file.write('tag,count\n')
             for element in top_unmapped:
                 unknown_file.write('{},{}\n'.format(element[0],element[1]))
     create_report(
-        n_lines,
-        total_reads,
-        reads_per_cell,
-        merged_no_match,
-        version,
-        start_time,
-        ordered_tags_map,
-        umis_corrected,
-        args)
+        n_reads=n_reads,
+        reads_per_cell=reads_per_cell,
+        no_match=merged_no_match,
+        version=version,
+        start_time=start_time,
+        ordered_tags_map=ordered_tags_map,
+        umis_corrected=umis_corrected,
+        bcs_corrected=bcs_corrected,
+        args=args)
 
 if __name__ == '__main__':
     main()

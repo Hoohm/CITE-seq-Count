@@ -1,6 +1,9 @@
 # Gist found here: https://gist.github.com/Highstaker/280a09591df4a5fb1363b0bbaf858f0d
 
 def pluralizeRussian(number, nom_sing, gen_sing, gen_pl):
+	"""
+	Changes the hours, minutes, seconds to plural
+	"""
 	s_last_digit = str(number)[-1]
 
 	if int(str(number)[-2:]) in range(11,20):
@@ -17,6 +20,16 @@ def pluralizeRussian(number, nom_sing, gen_sing, gen_pl):
 		return gen_pl
 
 def secondsToText(secs, lang="EN"):
+	"""
+	Converts datetime to human readable hours, minutes, secondes format.
+
+	Args:
+		secs (float): Secondes
+		lang (string): Language
+	
+	Returns:
+		string: Human readable datetime format.
+	"""
 	days = secs//86400
 	hours = (secs - days*86400)//3600
 	minutes = (secs - days*86400 - hours*3600)//60

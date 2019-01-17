@@ -7,22 +7,31 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [1.4.0]
 ### Added
 - Enabled parallelization using multiprocessing. You can choose how many
-  cores/threads you want to use with the `-T` `--threads` option.
+  cores/threads you want to use with the `-T` `--threads` option. It takes max
+  cpu by default.
 - The output is now given in a gzipped mtx format. This is to ensure smooth usage for 
   new/larger datasets such as data from novaseq sequencers.
-- You get both umi and read counts as output. This can help with overamplfication
-  detection.
-- A small report is now produced as `report.yaml` giving some information on the run.
-- UMI and cell barcode correction based on umi_tools.
+  It is also compatible with the `Seurat` package `Read10x` function.
+- You get both umi and read counts as output. This can help with overamplification
+  estimation.
+- UMI and cell barcodes are now corrected based on umi_tools.
+- A small report is now produced as `report.yaml` giving some statistics about the run
+  as well as which parameters have been used.
+- Unittesting have been added now using pytest. This should help prevent further
+  unforseen bugs.
 
 ### Changed
 - CITE-seq-Count uses less memory now.
 - Changed how you select the unmapped tags. The option is now `-ut` instead of `-uc`
   and gives you the top most unmapped tags.
+- Expected cells, `-cells` is now required and not mutually exclusive with whitelists.
+- Hamming distance option has been changed from `-hd` to `--max-error`.
+  Please refer to the documentation for more information.
 
 ### Removed
 - Dense output matrix is gone and replaced by the sparse equivalent.
 - pandas dependency.
+- Regex are gone. Finding out what doesn't map is given by the unmapped file option.
 
 
 ## [1.3.4]

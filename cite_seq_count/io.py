@@ -9,11 +9,10 @@ def write_to_files(sparse_matrix, top_cells, ordered_tags_map, data_type, outfol
 
     Args:
         sparse_matrix (dok_matrix): Results in a sparse matrix.
-        final_results (dict): Results in a dict of dicts of Counters.
+        top_cells (set): Set of cells that are selected for output.
         ordered_tags_map (dict): Tags in order with indexes as values.
         data_type (string): A string definning if the data is umi or read based.
-        oufile (string): Path to the mtx file.
-    
+        outfolder (string): Path to the output folder.
     """
     prefix = os.path.join(outfolder,data_type + '_count')
     os.makedirs(prefix, exist_ok=True)
