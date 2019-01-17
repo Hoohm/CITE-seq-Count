@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   as well as which parameters have been used.
 - Unittesting have been added now using pytest. This should help prevent further
   unforseen bugs.
+- `--version` option now prints the version.
 
 ### Changed
 - CITE-seq-Count uses less memory now.

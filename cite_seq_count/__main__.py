@@ -23,15 +23,14 @@ from cite_seq_count import secondsToText
 
 version = pkg_resources.require("cite_seq_count")[0].version
 
-
 def get_args():
     """
     Get args.
     """
     parser = ArgumentParser(
-        prog='CITE Seq Count', formatter_class=RawTextHelpFormatter,
+        prog='CITE-seq-Count', formatter_class=RawTextHelpFormatter,
         description=("This script counts matching antibody tags from two fastq "
-                     "files. Version {}".format(version))
+                     "files. Version {}".format(version)),
     )
 
     # REQUIRED INPUTS group.
@@ -123,16 +122,19 @@ def get_args():
     parser.add_argument('-n', '--first_n', required=False, type=int,
                         dest='first_n', default=None,
                         help="Select N reads to run on instead of all.")
-    parser.add_argument('-o', '--output', required=True, type=str,
+    parser.add_argument('-o', '--output', required=False, type=str, default='Results',
                         dest='outfolder', help="Results will be written to this folder")
     parser.add_argument('-u', '--unmapped-tags', required=False, type=str,
-                        dest='unmapped_file',
+                        dest='unmapped_file', default='unmapped.csv',
                         help="Write table of unknown TAGs to file.")
     parser.add_argument('-ut', '--unknown-top-tags', required=False,
                         dest='unknowns_top', type=int, default=100,
                         help="Top n unmapped TAGs.")
     parser.add_argument('--debug', action='store_true',
                         help="Print extra information for debugging.")
+    parser.add_argument('--version', action='version', version='CITE-seq-Count v{}'.format(version),
+                        help="Print version number.")
+    
     # Finally! Too many options XD
     return parser
 
