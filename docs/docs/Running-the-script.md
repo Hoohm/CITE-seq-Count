@@ -97,11 +97,9 @@ Positions of the cellular and UMI barcodes.
 `-cbl CB_LAST, --cell_barcode_last_base CB_LAST`
 
 
-
 * [Required] First nucleotide of the UMI in read 1. For 10x Genomics this is typically 17. For Drop-seq this is typically 13.
 
 `-umif UMI_FIRST, --umi_first_base UMI_FIRST`
-
 
 
 
@@ -115,14 +113,14 @@ Barcodes from 1 to 16 and UMI from 17 to 26, then this is the input you need:
 `-cbf 1 -cbl 16 -umif 17 -umil 26`
 
 
-* [Optional] How many mutations are allowed between two cell barcodes to collapse them onto one cell.
+* [Optional] How many errors are allowed between two cell barcodes to collapse them onto one cell.
 
-`--bc_collapsing_dist`, default `1`
+`--bc_collapsing_dist N_ERRORS`, default `1`
 
 
-* [Optional] How many mutations are allowed between two umi within the same cell and TAG to collapse.
+* [Optional] How many errors are allowed between two umi within the same cell and TAG to collapse.
 
-`--umi_collapsing_dist`, default `2`
+`--umi_collapsing_dist N_ERRORS`, default `2`
 
 
 ### FILTERING
@@ -132,7 +130,7 @@ Filtering for structure of the antibody barcode as well as maximum errors.
 
 * [OPTIONAL] Maximum Levenshtein distance allowed. This allows to catch antibody barcodes that might have `--max-error` errors compared to the real barcodes.
 
-`--max-error MAX_ERROR`
+`--max-error MAX_ERROR`, default `3`
 
 Example:
 
@@ -148,7 +146,7 @@ There is a sanity check when for the `MAX_ERROR` value chosen to be sure you are
 
 * [Optional] How many bases should we trim before starting to map. See `CASE2` of special examples in the
 
-`-trim, --start-trim`
+`-trim N_BASES, --start-trim N_BASES`, default `0`
 
 
 ### OUTPUT
@@ -171,12 +169,31 @@ CGACTGCTAACG
 
 * [Required] Path to the result folder that will contain both read and umi mtx results as well as a `run_report.yaml` and potential unmapped tags.
 
-`-o OUTFILE, --output OUTFILE`
+`-o OUTFOLDER, --output OUTFOLDER`, default `Results`
 
 
 ### OPTIONAL
 
-* [Optional] Select first N reads to run on instead of all. This is usefull when trying to test out your parameters before running the whole dataset.
+* [Optional] Select first N reads to run on instead of all. This is usefull when trying to test out your parameters	 before running the whole dataset.
 
 `-n FIRST_N, --first_n FIRST_N`
 
+* [Optional] How many threads/cores should be used by CITE-seq-Count.
+
+`-T N_THREADS, --threads N_THREADS`, default `Number of available cores`
+
+* [Optional] Output file for unmapped tags.
+
+`-u OUTFILE, --unmapped-tags OUTFILE`, default `unmapped.csv`
+
+* [Optional] How many unmapped tags should be written to file
+
+`-ut N_UNMAPPED, --unknown-top-tags N_UNMAPPED`, default `50`
+
+* [Optional] Print more information about the mapping process. Only use it to find issues. Slows down the processing by a lot.
+
+`--debug`
+
+### Version
+
+Prints out the software's currently used version

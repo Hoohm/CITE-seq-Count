@@ -5,6 +5,7 @@ A python package that allows to count antibody TAGS from a [CITE-seq](https://ww
 IMPORTANT NEWS
 ------------------------------------------
 There was a major bug in version 1.3.4 of CITE-seq-Count. The results where in read counts and not in UMI counts.
+
 This is fixed in version 1.4.0. Please rerun your data as this might provide a cleaner result for your data.
 
 Here is the website referencing the wetlab protocols needed https://cite-seq.com/
@@ -17,4 +18,4 @@ pip install CITE-seq-Count
 ```
 
 
-For more details on how to run it, please [click here](https://github.com/Hoohm/CITE-seq-Count/wiki/Running-the-script)
+The official documentation can be found [here](https://github.com/Hoohm/citeseqcount/)

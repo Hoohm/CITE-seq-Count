@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [1.4.0]
+## [1.4.0] - 17.01.2019
 ### Added
 - Enabled parallelization using multiprocessing. You can choose how many
   cores/threads you want to use with the `-T` `--threads` option. It takes max

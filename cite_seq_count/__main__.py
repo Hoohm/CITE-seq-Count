@@ -165,7 +165,12 @@ CITE-seq-Count Version: {}
 Reads processed: {}
 Percentage mapped: {}
 Percentage unmapped: {}
-Parameters:
+Correction:
+\tCell barcodes collapsing threshold: {}
+\tCell barcodes corrected: {}
+\tUMI collapsing threshold: {}
+\tUMIs corrected: {}
+Run parameters:
 \tRead1_filename: {}
 \tRead2_filename: {}
 \tCell barcode:
@@ -175,11 +180,6 @@ Parameters:
 \t\tFirst position: {}
 \t\tLast position: {}
 \tTags max errors: {}
-Correction:
-\tCell barcodes collapsing threshold: {}
-\tCell barcodes corrected: {}
-\tUMI collapsing threshold: {}
-\tUMIs corrected: {}
 """.format(
             datetime.datetime.today().strftime('%Y-%m-%d'),
             secondsToText.secondsToText(time.time()-start_time),
@@ -187,17 +187,17 @@ Correction:
             n_reads,
             mapped_perc,
             unmapped_perc,
+            args.bc_threshold,
+            bcs_corrected,
+            args.umi_threshold,
+            umis_corrected,
             args.read1_path,
             args.read2_path,
             args.cb_first,
             args.cb_last,
             args.umi_first,
             args.umi_last,
-            args.max_error,
-            args.bc_threshold,
-            bcs_corrected,
-            args.umi_threshold,
-            umis_corrected))
+            args.max_error))
 
 def main():
     start_time = time.time()
@@ -240,7 +240,7 @@ def main():
     
     print('Started mapping')
     #Run with one process
-    if n_threads <= 1 or n_lines < 1000000:
+    if n_threads <= 1 or n_reads < 1000001:
         print('CITE-seq-Count is running with one core.')
         (
             final_results,
