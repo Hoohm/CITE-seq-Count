@@ -39,12 +39,7 @@ CITE-seq-Count Version: 1.4.0
 Reads processed: 50000000
 Percentage mapped: 95
 Percentage unmapped: 5
-Correction:
-	Cell barcodes collapsing threshold: 1
-	Cell barcodes corrected: 20000
-	UMI collapsing threshold: 2
-	UMIs corrected: 30000
-Run Parameters:
+Parameters:
 	Read1_filename: read1.fastq.gz
 	Read2_filename: read1.fastq.gz
 	Cell barcode:
@@ -54,8 +49,11 @@ Run Parameters:
 		First position: 17
 		Last position: 26
 	Tags max errors: 3
-	Expected cells: 150000
-	Start trim: 0
+Correction:
+	Cell barcodes collapsing threshold: 1
+	Cell barcodes corrected: 20000
+	UMI collapsing threshold: 2
+	UMIs corrected: 30000
 
 ```
 
@@ -63,13 +61,13 @@ Packages to read MTX
 --------------------------
 **R**
 
-I recommend using `Seurat` and their `Read10x` function to read the results.
+I recommend using [Seurat](https://satijalab.org/seurat/) and their `Read10x` function to read the results.
 
 Example: `Read10x('OUTFOLDER/umi_count', gene.column=1)`
 
 **Python**
 
-I recommend using `scanpy` and their read_mtx function to read the results.
+I recommend using [Scanpy](https://icb-scanpy.readthedocs-hosted.com/en/latest/index.html) and their read_mtx function to read the results.
 
 Example:
 

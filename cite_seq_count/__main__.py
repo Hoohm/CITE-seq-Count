@@ -179,7 +179,9 @@ Run parameters:
 \tUMI barcode:
 \t\tFirst position: {}
 \t\tLast position: {}
+\tExpected cells: {}
 \tTags max errors: {}
+\tStart trim: {}
 """.format(
             datetime.datetime.today().strftime('%Y-%m-%d'),
             secondsToText.secondsToText(time.time()-start_time),
@@ -197,7 +199,9 @@ Run parameters:
             args.cb_last,
             args.umi_first,
             args.umi_last,
-            args.max_error))
+            args.expected_cells,
+            args.max_error,
+            args.start_trim))
 
 def main():
     start_time = time.time()
