@@ -1,0 +1,10 @@
+site_name: Cite-seq-Count
+theme: readthedocs
+repo_name: 'GitHub'
+repo_url: https://github.com/Hoohm/citeseqcount
+nav:
+  - 'index.md'
+  - 'Installation.md'
+  - 'Runnin-the-script.md'
+  - 'Reading-the-output.md'
+  - 'Running-dropSeqPipe.md'
