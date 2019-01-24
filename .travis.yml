@@ -1,17 +1,45 @@
 language: python
+
 python:
-- '3.6'
+  - '3.6'
 branches:
   only:
-  - master
+    - master
+
 install:
-- sudo apt-get update
+  - sudo apt-get update
+  - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - export PATH="$HOME/miniconda/bin:$PATH"
+  - hash -r
+  - conda config --set always_yes yes --set changeps1 no
+  - conda update -q conda
+  # Useful for debugging any issues with conda
+  - conda info -a
+  - conda config --add channels defaults
+  - conda config --add channels conda-forge
+  - conda config --add channels bioconda
+  - conda install -c bioconda -c conda-forge snakemake
+  - conda create -q -n snakemake snakemake>=5.3.1 python=$TRAVIS_PYTHON_VERSION
+
 script:
-- python3 setup.py install
+  - python3 setup.py install
+  - pytest
+
+after_success:
+  - cd docs && snakemake --use-conda build_docs
+
 deploy:
-  provider: pypi
-  user: Hoohm
-  on:
-    branch: master
-  password:
-    secure: n4xDXvUO5kQFvcnW2yNSbheGNC4p59dx867B+3PehgheKJAgPswsGNDTLJfTFwbxnLwwprj9/dZCtLyQo5jBhxyK5Gmp2/YzFFvZ27cPbZkQOyIpD+o+bMFvDtA9FM5M8sHvtPw54SLfGsR6TdfC9ys9LkUpGLy6tXHsy3HgVRA9nPQz2+gNVPiFfG+cIGpYHG0XWnCUDLy0C+Y+zOjQO1WJMHqCTkATZAAfnhpafAD2HVPx4qrBgn3is778DpIImmrRtn1RlTd//njmkQYw8OYvnOVsq4iaw3oL/48jRP8B7SE7PugduCRtv5Xp/vKw4MIFTg4r6hYsuVPg3Lgl0moe3YmBvxrOaEuNeFOL0g63IhwEyqYq793Aq1HtcKQMZip+cGDTpSPcksYJx+MVTzYEKJCupZ71YGt4ljY03Is22NGGwhDmoAftaC+tl/WykKcaNu/xo/ww/qQAj7Q5cHs2BBRX5SJ7kw1SFBiyGF3MCbYtTtEqxPP1x07tYrrGeegFu3hQw6XiQqU8MkROcBUHNEl1Oal4SPrQqhY4MrSFIo8Ba91ST7QbZ5M26wnXOaYaeUvMSESgvZxX2ZhLm2R33Z3P2ZC+bBOSUKQ28La15GfW9hhhpxTmgw1jzw9cimvQepN16Spza8N0RM1b5WCNAoRFxGHBHt/dXsgo9HY=
+  - provider: pypi
+    user: Hoohm
+    on:
+      tags: true
+    password:
+      secure: n4xDXvUO5kQFvcnW2yNSbheGNC4p59dx867B+3PehgheKJAgPswsGNDTLJfTFwbxnLwwprj9/dZCtLyQo5jBhxyK5Gmp2/YzFFvZ27cPbZkQOyIpD+o+bMFvDtA9FM5M8sHvtPw54SLfGsR6TdfC9ys9LkUpGLy6tXHsy3HgVRA9nPQz2+gNVPiFfG+cIGpYHG0XWnCUDLy0C+Y+zOjQO1WJMHqCTkATZAAfnhpafAD2HVPx4qrBgn3is778DpIImmrRtn1RlTd//njmkQYw8OYvnOVsq4iaw3oL/48jRP8B7SE7PugduCRtv5Xp/vKw4MIFTg4r6hYsuVPg3Lgl0moe3YmBvxrOaEuNeFOL0g63IhwEyqYq793Aq1HtcKQMZip+cGDTpSPcksYJx+MVTzYEKJCupZ71YGt4ljY03Is22NGGwhDmoAftaC+tl/WykKcaNu/xo/ww/qQAj7Q5cHs2BBRX5SJ7kw1SFBiyGF3MCbYtTtEqxPP1x07tYrrGeegFu3hQw6XiQqU8MkROcBUHNEl1Oal4SPrQqhY4MrSFIo8Ba91ST7QbZ5M26wnXOaYaeUvMSESgvZxX2ZhLm2R33Z3P2ZC+bBOSUKQ28La15GfW9hhhpxTmgw1jzw9cimvQepN16Spza8N0RM1b5WCNAoRFxGHBHt/dXsgo9HY=
+  - provider: pages
+    skip-cleanup: true
+    github-token: $GITHUB_PAT
+    keep-history: true
+    local-dir: docs/site
+    on:
+      branch: master

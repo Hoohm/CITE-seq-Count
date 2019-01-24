@@ -5,10 +5,10 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="CITE-seq-Count",
-    version="1.3.4",
+    version="1.4.0",
     author="Roelli Patrick",
     author_email="patrick.roelli@gmail.com",
-    description="A small python package that deals with counting CITE seq or hashing data for single cell",
+    description="A python package that counts CITE seq or hashing data for single cell experiments",
     url="https://github.com/Hoohm/CITE-seq-Count/",
     packages=setuptools.find_packages(),
     entry_points={
@@ -22,9 +22,13 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ),
     install_requires=[
-          'regex>=2018.07.11',
           'python-levenshtein>=0.12.0',
-          'pandas>=0.23.3'
+          'scipy>=1.1.0',
+          'multiprocess>=0.70.6.1',
+          'umi_tools>=0.5.5',
+          'pytest==4.1.0',
+          'pytest-dependency==0.4.0',
+          'pandans>=0.23.4'
       ],
-      python_requires='>3'
+      python_requires='>=3.6'
 )
