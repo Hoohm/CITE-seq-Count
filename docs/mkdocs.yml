@@ -5,6 +5,5 @@ repo_url: https://github.com/Hoohm/citeseqcount
 nav:
   - 'index.md'
   - 'Installation.md'
-  - 'Runnin-the-script.md'
+  - 'Running-the-script.md'
   - 'Reading-the-output.md'
-  - 'Running-dropSeqPipe.md'
