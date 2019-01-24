@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  
+  <link rel="shortcut icon" href="../img/favicon.ico">
+  <title>Running the script - Cite-seq-Count</title>
+  <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
+
+  <link rel="stylesheet" href="../css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../css/theme_extra.css" type="text/css" />
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css">
+  
+  <script>
+    // Current page data
+    var mkdocs_page_name = "Running the script";
+    var mkdocs_page_input_path = "Running-the-script.md";
+    var mkdocs_page_url = null;
+  </script>
+  
+  <script src="../js/jquery-2.1.1.min.js" defer></script>
+  <script src="../js/modernizr-2.8.3.min.js" defer></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+  <script>hljs.initHighlightingOnLoad();</script> 
+  
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+      <div class="wy-side-nav-search">
+        <a href=".." class="icon icon-home"> Cite-seq-Count</a>
+        <div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+	<ul class="current">
+	  
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="..">Welcome to CITE-seq-Count's documentation</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../Installation/">Installation</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../Runnin-the-script.md">None</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../Reading-the-output/">Reading the output</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../Running-dropSeqPipe.md">None</a>
+	    </li>
+          
+        </ul>
+      </div>
+      &nbsp;
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="..">Cite-seq-Count</a>
+      </nav>
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="..">Docs</a> &raquo;</li>
+    
+      
+    
+    <li>Running the script</li>
+    <li class="wy-breadcrumbs-aside">
+      
+        <a href="https://github.com/Hoohm/citeseqcount/edit/master/docs/Running-the-script.md"
+          class="icon icon-github"> Edit on GitHub</a>
+      
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main">
+            <div class="section">
+              
+                <h2 id="introduction">Introduction</h2>
+<p><code>CITE-seq-Count</code> is a program that outputs umi and read counts from raq fastq CITE-seq or hashing data.</p>
+<h2 id="how-to-use-it">How to use it</h2>
+<p>TLDR:</p>
+<p><code>CITE-seq-count -R1 TAGS_R1.fastq.gz -R2 TAGS_R2.fastq.gz -t TAG_LIST.csv -cbf X1 -cbl X2 -umif Y1 -umil Y2 -cells EXPECTED_CELLS -o OUTFOLDER</code></p>
+<p>The script is going to count the number of UMIs and reads mapping to an antiobdy from your CITE-Seq experiment.</p>
+<p>Here is an image explaining the expected structure of read1 and read2 from the sequencer.
+<img alt="Read structure" src="../images/read_scructure.png" /></p>
+<h2 id="options">Options</h2>
+<p>You can find a description of each option bellow.</p>
+<h3 id="input">INPUT</h3>
+<ul>
+<li>[Required] Read1 fastq file location in fastq.gz format. Read 1 typically contains Cell barcode and UMI.</li>
+</ul>
+<p><code>-R1 READ1_PATH.fastq.gz, --read1 READ1_PATH.fastq.gz</code></p>
+<ul>
+<li>[Required] Read2 fastq file location in fastq.gz. Read 2 typically contains the Antibody barcode.</li>
+</ul>
+<p><code>-R2 READ2_PATH.fastq.gz, --read2 READ2_PATH.fastq.gz</code></p>
+<ul>
+<li>[Required] The path to the csv file containing the antibody barcodes as well as their respective names.
+You can run tags of different length together.</li>
+</ul>
+<p><code>-t tags.csv, --tags tags.csv</code></p>
+<h3 id="antibody-barcodes-structure">Antibody barcodes structure:</h3>
+<pre><code>ATGCGA,First_tag_name
+GTCATG,Second_tag_name
+GCTAGTCGTACGA,Third_tag_name
+GCTAGGTGTCGTA,Forth_tag_name
+</code></pre>
+
+<p><em>IMPORTANT</em>: You need to provide only the variable region of the TAG in the tags.csv. Please refer to the following examples.</p>
+<ul>
+<li>CASE1: Legacy barcodes.
+If you are using barcoes that have a T, C or G plus a polyA tail at the end, the tags.csv file should not contain those additions.
+Expected barcode:</li>
+</ul>
+<pre><code>GCTAGTCGTACGA T AAAAAAAAAA
+GCTAGTCGTACGA C AAAAAAAAAA
+GCTAGTCGTACGA G AAAAAAAAAA
+GCTGTCAGCATAC T AAAAAAAAAA
+GCTGTCAGCATAC C AAAAAAAAAA
+GCTGTCAGCATAC G AAAAAAAAAA
+</code></pre>
+
+<p>The tags.csv should only contain the part before the <code>T</code></p>
+<pre><code>GCTAGTCGTACGA,tag1
+GCTGTCAGCATAC,tag2
+</code></pre>
+
+<ul>
+<li>CASE2: Constant sequences.
+If you are using barcoes that have a constant sequence at the end or at the start, the tags.csv file should only contain the variable part.
+You should also use the <code>-trim</code> <code>--start-trim</code> option to tell <code>CITE-seq-Count</code> where the variable part of the barcode starts
+Expected barcode:</li>
+</ul>
+<pre><code>CGTAGTCGTAGCTA GCTAGTCGTACGA GCTAGCTGACT
+CGTAGTCGTAGCTA AACGTAGCTATGT GCTAGCTGACT
+CGTAGTCGTAGCTA GCTAGCATATCAG GCTAGCTGACT
+</code></pre>
+
+<p>The tags.csv should only contain the variable parts and use <code>-trim 14</code> to trim the first 14 bases.</p>
+<pre><code>GCTAGTCGTACGA,tag1
+AACGTAGCTATGT,tag2
+GCTAGCATATCAG,tag3
+</code></pre>
+
+<h3 id="barcoding">BARCODING</h3>
+<p>Positions of the cellular and UMI barcodes.</p>
+<ul>
+<li>[Required] First nucleotide of cell barcode in read 1. For Drop-seq and 10x Genomics this is typically 1.</li>
+</ul>
+<p><code>-cbf CB_FIRST, --cell_barcode_first_base CB_FIRST</code></p>
+<ul>
+<li>[Required] Last nucleotide of the cell barcode in read 1. For 10x Genomics this is typically 16. For Drop-seq this depends on the bead configuration, typically 12.</li>
+</ul>
+<p><code>-cbl CB_LAST, --cell_barcode_last_base CB_LAST</code></p>
+<ul>
+<li>[Required] First nucleotide of the UMI in read 1. For 10x Genomics this is typically 17. For Drop-seq this is typically 13.</li>
+</ul>
+<p><code>-umif UMI_FIRST, --umi_first_base UMI_FIRST</code></p>
+<ul>
+<li>[Required] Last nucleotide of the UMI in read 1. For 10x Genomics this is typically 26. For Drop-seq this is typically 20.</li>
+</ul>
+<p><code>-umil UMI_LAST, --umi_last_base UMI_LAST</code></p>
+<p>Example:
+Barcodes from 1 to 16 and UMI from 17 to 26, then this is the input you need:</p>
+<p><code>-cbf 1 -cbl 16 -umif 17 -umil 26</code></p>
+<ul>
+<li>[Optional] How many errors are allowed between two cell barcodes to collapse them onto one cell.</li>
+</ul>
+<p><code>--bc_collapsing_dist N_ERRORS</code>, default <code>1</code></p>
+<ul>
+<li>[Optional] How many errors are allowed between two umi within the same cell and TAG to collapse.</li>
+</ul>
+<p><code>--umi_collapsing_dist N_ERRORS</code>, default <code>2</code></p>
+<h3 id="filtering">FILTERING</h3>
+<p>Filtering for structure of the antibody barcode as well as maximum errors.</p>
+<ul>
+<li>[OPTIONAL] Maximum Levenshtein distance allowed. This allows to catch antibody barcodes that might have <code>--max-error</code> errors compared to the real barcodes.</li>
+</ul>
+<p><code>--max-error MAX_ERROR</code>, default <code>3</code></p>
+<p>Example:</p>
+<p>If we have this kind of antibody barcode:</p>
+<p><code>ATGCCAG</code></p>
+<p>The script will be looking for ATGCCAG in R2</p>
+<p>A <code>MAX_ERROR</code> of 1 will allow barcodes such as <code>ATGTCAG</code>, having one mismatch to be counted as valid.</p>
+<p>There is a sanity check when for the <code>MAX_ERROR</code> value chosen to be sure you are not allowing too many mismatches and confuse your antibody barcodes. Mismatches on cell or UMI barcodes are discarded.</p>
+<ul>
+<li>[Optional] How many bases should we trim before starting to map. See <code>CASE2</code> of special examples in the</li>
+</ul>
+<p><code>-trim N_BASES, --start-trim N_BASES</code>, default <code>0</code></p>
+<h3 id="output">OUTPUT</h3>
+<p>You have to choose either the number of cells you expect or give it a list of cell barcodes to retrieve.</p>
+<ul>
+<li>[Required] Number of expected cells from your run. This will reduce the size of the output matrix. It will be used for cell barcode correction as well.</li>
+</ul>
+<p><code>-cells CELLS, --expected_cells CELLS</code></p>
+<ul>
+<li>[Optional] If you have a whitelist of barcodes produced by the cDNA data, you are using a well-plate based protocol or any known whitelist, you can use this list to only extract TAGS matching those barcodes. Typically using the cell list from the mRNA data of the same experiment.</li>
+</ul>
+<p><code>-wl WHITELIST, --whitelist WHITELIST</code></p>
+<p>Example:</p>
+<pre><code>ATGCTAGTGCTA
+GCTAGTCAGGAT
+CGACTGCTAACG
+</code></pre>
+
+<ul>
+<li>[Required] Path to the result folder that will contain both read and umi mtx results as well as a <code>run_report.yaml</code> and potential unmapped tags.</li>
+</ul>
+<p><code>-o OUTFOLDER, --output OUTFOLDER</code>, default <code>Results</code></p>
+<ul>
+<li>[Optional] Will output the dense umi count matrix in a tsv format in addition to the sparse outputs.</li>
+</ul>
+<p><code>--dense</code></p>
+<h3 id="optional">OPTIONAL</h3>
+<ul>
+<li>[Optional] Select first N reads to run on instead of all. This is usefull when trying to test out your parameters  before running the whole dataset.</li>
+</ul>
+<p><code>-n FIRST_N, --first_n FIRST_N</code></p>
+<ul>
+<li>[Optional] How many threads/cores should be used by CITE-seq-Count.</li>
+</ul>
+<p><code>-T N_THREADS, --threads N_THREADS</code>, default <code>Number of available cores</code></p>
+<ul>
+<li>[Optional] Output file for unmapped tags.</li>
+</ul>
+<p><code>-u OUTFILE, --unmapped-tags OUTFILE</code>, default <code>unmapped.csv</code></p>
+<ul>
+<li>[Optional] How many unmapped tags should be written to file</li>
+</ul>
+<p><code>-ut N_UNMAPPED, --unknown-top-tags N_UNMAPPED</code>, default <code>50</code></p>
+<ul>
+<li>[Optional] Print more information about the mapping process. Only use it to find issues. Slows down the processing by a lot.</li>
+</ul>
+<p><code>--debug</code></p>
+<h3 id="version">Version</h3>
+<p>Prints out the software's currently used version</p>
+              
+            </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+    
+  </div>
+
+  Built with <a href="http://www.mkdocs.org">MkDocs</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+      
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" style="cursor: pointer">
+    <span class="rst-current-version" data-toggle="rst-current-version">
+      
+          <a href="https://github.com/Hoohm/citeseqcount/" class="fa fa-github" style="float: left; color: #fcfcfc"> GitHub</a>
+      
+      
+      
+    </span>
+</div>
+    <script>var base_url = '..';</script>
+    <script src="../js/theme.js" defer></script>
+      <script src="../search/main.js" defer></script>
+
+</body>
+</html>
