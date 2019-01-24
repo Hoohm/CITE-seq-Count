@@ -7,32 +7,35 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [1.4.0] - 17.01.2019
 ### Added
 - Enabled parallelization using multiprocessing. You can choose how many
-  cores/threads you want to use with the `-T` `--threads` option. It takes max
-  cpu by default.
+  cores/threads you want to use with the `-T` `--threads` option. Takes max
+  cpu by default. It will run on only one core if you run only 1'000'000 reads.
 - The output is now given in a gzipped mtx format. This is to ensure smooth usage for 
-  new/larger datasets such as data from novaseq sequencers.
-  It is also compatible with the `Seurat` package `Read10x` function.
+  new/larger datasets such as data from novaseq sequencers. For those who still want
+  to use the dense format, there is an option `--dense` which will add the dense output
+  as a tsv format.
+  The sparse outputs are compatible the `Read10x` from the [Seurat](https://satijalab.org/seurat/) package.
 - You get both umi and read counts as output. This can help with overamplification
   estimation.
-- UMI and cell barcodes are now corrected based on umi_tools.
+- UMI and cell barcodes are now corrected based on [umi_tools](https://github.com/CGATOxford/UMI-tools).
 - A small report is now produced as `report.yaml` giving some statistics about the run
   as well as which parameters have been used.
-- Unittesting have been added now using pytest. This should help prevent further
+- Unittesting has been added using pytest. This should help prevent further
   unforseen bugs.
+- New option for trimming the start of read2 sequences. `--start-trim`
 - `--version` option now prints the version.
 
 ### Changed
-- CITE-seq-Count uses less memory now.
+- CITE-seq-Count uses less memory and is faster.
 - Changed how you select the unmapped tags. The option is now `-ut` instead of `-uc`
   and gives you the top most unmapped tags.
 - Expected cells, `-cells` is now required and not mutually exclusive with whitelists.
 - Hamming distance option has been changed from `-hd` to `--max-error`.
-  Please refer to the documentation for more information.
+  Please refer to the [documentation](https://hoohm.github.io/CITE-seq-Count/) for more information.
 
 ### Removed
-- Dense output matrix is gone and replaced by the sparse equivalent.
-- pandas dependency.
-- Regex are gone. Finding out what doesn't map is given by the unmapped file option.
+- The default dense output matrix is gone and replaced by the sparse equivalent.
+  See the [documentation](https://hoohm.github.io/CITE-seq-Count/) on how to read it.
+- Regex is gone. Finding out what doesn't map is given by the unmapped file option.
 
 
 ## [1.3.4]

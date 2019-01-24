@@ -193,7 +193,6 @@ def correct_umis(final_results, collapsing_threshold):
                             corrected_umis += 1
                             temp = final_results[cell_barcode][TAG].pop(minor_umi)
                             final_results[cell_barcode][TAG][major_umi] += temp
-    print('Corrected {} umis'.format(corrected_umis))
     return(final_results, corrected_umis)
 
 
@@ -229,7 +228,6 @@ def correct_cells(final_results, umis_per_cell, collapsing_threshold, expected_c
                         final_results[real_barcode][TAG].update(temp[TAG])
                     temp_umi_counts = umis_per_cell.pop(fake_barcode)
                     umis_per_cell[real_barcode] += temp_umi_counts
-            print('Corrected {} cell barcodes'.format(corrected_barcodes))
     except Exception as e:
         print('Could not find a good local minima for correction.\nNo cell barcode correction was done.')
     return(final_results, umis_per_cell, corrected_barcodes)

@@ -2,7 +2,10 @@ import os
 import gzip
 import shutil
 
+import pandas as pd
+
 from scipy import io
+
 
 def write_to_files(sparse_matrix, top_cells, ordered_tags_map, data_type, outfolder):
     """Write the umi and read sparse matrices to file in gzipped mtx format.
@@ -27,3 +30,7 @@ def write_to_files(sparse_matrix, top_cells, ordered_tags_map, data_type, outfol
         with gzip.open(os.path.join(prefix,'matrix.mtx') + '.gz','wb') as mtx_gz:
             shutil.copyfileobj(mtx_in, mtx_gz)
     os.remove(os.path.join(prefix,'matrix.mtx'))
+
+def write_dense(sparse_matrix, index, columns, file_path):
+    pandas_dense = pd.DataFrame(sparse_matrix.todense(), columns=columns, index=index)
+    pandas_dense.to_csv(file_path, sep='\t')

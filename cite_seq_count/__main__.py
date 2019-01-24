@@ -124,6 +124,8 @@ def get_args():
                         help="Select N reads to run on instead of all.")
     parser.add_argument('-o', '--output', required=False, type=str, default='Results',
                         dest='outfolder', help="Results will be written to this folder")
+    parser.add_argument('--dense', required=False, action='store_true', default=False,
+                        dest='dense', help="Add a dense output to the results folder")
     parser.add_argument('-u', '--unmapped-tags', required=False, type=str,
                         dest='unmapped_file', default='unmapped.csv',
                         help="Write table of unknown TAGs to file.")
@@ -269,11 +271,6 @@ def main():
         # Run with multiple processes
         print('CITE-seq-Count is running with {} cores.'.format(n_threads))
         p = Pool(processes=n_threads)
-        # We need the chunk size to be a multiple of 4 to always start on the correct line in the fastq file
-        # chunk_size=round((n_lines-1)/n_threads)
-        # while chunk_size % 4 != 0:
-        #     chunk_size +=1
-        # chunks = range(1,n_lines,chunk_size)
         chunk_indexes = preprocessing.chunk_reads(n_reads, n_threads)
         parallel_results = []
 
@@ -354,7 +351,6 @@ def main():
         final_results=final_results,
         ordered_tags_map=ordered_tags_map,
         top_cells=top_cells)
-    
     io.write_to_files(
         sparse_matrix=umi_results_matrix,
         top_cells=top_cells,
@@ -368,14 +364,11 @@ def main():
         data_type='read',
         outfolder=args.outfolder)
       
-    # Save no_match TAGs to `args.unmapped_file` file.
-    if args.unmapped_file:
-        # Filter unknown TAGs base on the specified cutoff
-        top_unmapped = merged_no_match.most_common(args.unknowns_top)
-        with open(os.path.join(args.outfolder, args.unmapped_file),'w') as unknown_file:
-            unknown_file.write('tag,count\n')
-            for element in top_unmapped:
-                unknown_file.write('{},{}\n'.format(element[0],element[1]))
+    top_unmapped = merged_no_match.most_common(args.unknowns_top)
+    with open(os.path.join(args.outfolder, args.unmapped_file),'w') as unknown_file:
+        unknown_file.write('tag,count\n')
+        for element in top_unmapped:
+            unknown_file.write('{},{}\n'.format(element[0],element[1]))
     create_report(
         n_reads=n_reads,
         reads_per_cell=reads_per_cell,
@@ -386,6 +379,13 @@ def main():
         umis_corrected=umis_corrected,
         bcs_corrected=bcs_corrected,
         args=args)
+    if args.dense:
+        print('Writing dense format output')
+        io.write_dense(
+            sparse_matrix=umi_results_matrix,
+            index=list(ordered_tags_map.keys()),
+            columns=top_cells,
+            file_path=os.path.join(args.outfolder, 'dense_umis.tsv'))
 
 if __name__ == '__main__':
     main()
