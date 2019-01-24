@@ -28,7 +28,7 @@ setuptools.setup(
           'umi_tools>=0.5.5',
           'pytest==4.1.0',
           'pytest-dependency==0.4.0',
-          'pandans>=0.23.4'
+          'pandas>=0.23.4'
       ],
       python_requires='>=3.6'
 )
