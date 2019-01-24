@@ -18,4 +18,4 @@ pip install CITE-seq-Count
 ```
 
 
-The official documentation can be found [here](https://github.com/Hoohm/citeseqcount/)
+The official documentation can be found [here](https://hoohm.github.io/CITE-seq-Count/)
