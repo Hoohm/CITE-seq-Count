@@ -171,6 +171,10 @@ CGACTGCTAACG
 
 `-o OUTFOLDER, --output OUTFOLDER`, default `Results`
 
+* [Optional] Will output the dense umi count matrix in a tsv format in addition to the sparse outputs.
+
+`--dense`
+
 
 ### OPTIONAL
 
