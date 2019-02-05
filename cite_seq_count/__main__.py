@@ -75,6 +75,8 @@ def get_args():
     barcodes.add_argument('--umi_collapsing_dist', dest='umi_threshold',
                           required=False, type=int, default=2,
                           help="threshold for umi collapsing.")
+    barcodes.add_argument('--no_umi_correction', required=False, action='store_true', default=False,
+                        dest='no_umi_correction', help="Deactivate UMI collapsing")
     barcodes.add_argument('--bc_collapsing_dist', dest='bc_threshold',
                           required=False, type=int, default=1,
                           help="threshold for cellular barcode collapsing.")
@@ -300,6 +302,10 @@ def main():
             merged_no_match
         ) = processing.merge_results(parallel_results=parallel_results)
         del(parallel_results)
+    ordered_tags_map = OrderedDict()
+    for i,tag in enumerate(ab_map.values()):
+        ordered_tags_map[tag] = i
+    ordered_tags_map['unmapped'] = i + 1
 
     # Correct cell barcodes
     (
@@ -313,23 +319,10 @@ def main():
             collapsing_threshold=args.bc_threshold)
     
     # Correct umi barcodes
-    (
-        final_results,
-        umis_corrected
-    ) = processing.correct_umis(
-        final_results=final_results,
-        collapsing_threshold=args.umi_threshold)
-
-    ordered_tags_map = OrderedDict()
-    for i,tag in enumerate(ab_map.values()):
-        ordered_tags_map[tag] = i
-    ordered_tags_map['unmapped'] = i + 1
-
-
-    # Sort cells by number of mapped umis
     if not whitelist:
         top_cells_tuple = umis_per_cell.most_common(args.expected_cells)
         top_cells = set([pair[0] for pair in top_cells_tuple])
+    # Sort cells by number of mapped umis
     else:
         top_cells = whitelist
         # Add potential missing cell barcodes.
@@ -339,8 +332,21 @@ def main():
             else:
                 final_results[missing_cell] = dict()
                 for TAG in ordered_tags_map:
-                    final_results[missing_cell][TAG] = 0
+                    final_results[missing_cell][TAG] = Counter()
                 top_cells.add(missing_cell)
+    if not args.no_umi_correction:
+        (
+            final_results,
+            umis_corrected
+        ) = processing.correct_umis(
+            final_results=final_results,
+            collapsing_threshold=args.umi_threshold,
+            top_cells=top_cells)
+    else:
+        umis_corrected = 0
+    
+
+    
     
 
 

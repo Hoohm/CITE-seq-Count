@@ -164,7 +164,7 @@ def merge_results(parallel_results):
     return(merged_results, umis_per_cell, reads_per_cell, merged_no_match)
 
 
-def correct_umis(final_results, collapsing_threshold):
+def correct_umis(final_results, collapsing_threshold, top_cells):
     """
     Corrects umi barcodes within same cell/tag groups.
     
@@ -178,7 +178,7 @@ def correct_umis(final_results, collapsing_threshold):
     """
     print('Correcting umis')
     corrected_umis = 0
-    for cell_barcode in final_results:
+    for cell_barcode in top_cells:
         for TAG in final_results[cell_barcode]:
             if len(final_results[cell_barcode][TAG]) > 1:
                 umi_clusters = network.UMIClusterer()
