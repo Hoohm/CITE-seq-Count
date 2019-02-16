@@ -7,6 +7,7 @@ import time
 import os
 import datetime
 import pkg_resources
+import logging
 
 from argparse import ArgumentParser
 from argparse import RawTextHelpFormatter
@@ -208,6 +209,7 @@ Run parameters:
             args.start_trim))
 
 def main():
+    logger = logging.getLogger('cite_seq_count')
     start_time = time.time()
     parser = get_args()
     if not sys.argv[1:]:
@@ -334,6 +336,7 @@ def main():
                 for TAG in ordered_tags_map:
                     final_results[missing_cell][TAG] = Counter()
                 top_cells.add(missing_cell)
+    #If we want umi correction
     if not args.no_umi_correction:
         (
             final_results,
@@ -344,11 +347,6 @@ def main():
             top_cells=top_cells)
     else:
         umis_corrected = 0
-    
-
-    
-    
-
 
     (
         umi_results_matrix,
@@ -371,6 +369,7 @@ def main():
         outfolder=args.outfolder)
       
     top_unmapped = merged_no_match.most_common(args.unknowns_top)
+
     with open(os.path.join(args.outfolder, args.unmapped_file),'w') as unknown_file:
         unknown_file.write('tag,count\n')
         for element in top_unmapped:
