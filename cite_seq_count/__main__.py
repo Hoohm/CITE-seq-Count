@@ -76,7 +76,7 @@ def get_args():
     barcodes.add_argument('--umi_collapsing_dist', dest='umi_threshold',
                           required=False, type=int, default=2,
                           help="threshold for umi collapsing.")
-    barcodes.add_argument('--no_umi_correction', required=False, action='store_true', default=False,
+    barcodes.add_argument('--no_umi_correctio', required=False, action='store_true', default=False,
                         dest='no_umi_correction', help="Deactivate UMI collapsing")
     barcodes.add_argument('--bc_collapsing_dist', dest='bc_threshold',
                           required=False, type=int, default=1,
@@ -139,12 +139,11 @@ def get_args():
                         help="Print extra information for debugging.")
     parser.add_argument('--version', action='version', version='CITE-seq-Count v{}'.format(version),
                         help="Print version number.")
-    
     # Finally! Too many options XD
     return parser
 
 
-def create_report(n_reads, reads_per_cell, no_match, version, start_time, ordered_tags_map, umis_corrected, bcs_corrected, args):
+def create_report(n_reads, reads_per_cell, no_match, version, start_time, ordered_tags_map, umis_corrected, bcs_corrected, bad_cells, args):
     """
     Creates a report with details about the run in a yaml format.
 
@@ -170,6 +169,7 @@ CITE-seq-Count Version: {}
 Reads processed: {}
 Percentage mapped: {}
 Percentage unmapped: {}
+Bad cells: {}
 Correction:
 \tCell barcodes collapsing threshold: {}
 \tCell barcodes corrected: {}
@@ -194,6 +194,7 @@ Run parameters:
             n_reads,
             mapped_perc,
             unmapped_perc,
+            len(bad_cells),
             args.bc_threshold,
             bcs_corrected,
             args.umi_threshold,
@@ -340,14 +341,18 @@ def main():
     if not args.no_umi_correction:
         (
             final_results,
-            umis_corrected
+            umis_corrected,
+            aberrant_cells
         ) = processing.correct_umis(
             final_results=final_results,
             collapsing_threshold=args.umi_threshold,
-            top_cells=top_cells)
+            top_cells=top_cells,
+            max_umis=20000)
     else:
         umis_corrected = 0
-
+        aberrant_cells = set()
+    for cell_barcode in aberrant_cells:
+        top_cells.remove(cell_barcode)
     (
         umi_results_matrix,
         read_results_matrix
@@ -355,12 +360,14 @@ def main():
         final_results=final_results,
         ordered_tags_map=ordered_tags_map,
         top_cells=top_cells)
+    # Write umis to file
     io.write_to_files(
         sparse_matrix=umi_results_matrix,
         top_cells=top_cells,
         ordered_tags_map=ordered_tags_map,
         data_type='umi',
         outfolder=args.outfolder)
+    # Write reads to file
     io.write_to_files(
         sparse_matrix=read_results_matrix,
         top_cells=top_cells,
@@ -383,6 +390,7 @@ def main():
         ordered_tags_map=ordered_tags_map,
         umis_corrected=umis_corrected,
         bcs_corrected=bcs_corrected,
+        bad_cells=aberrant_cells,
         args=args)
     if args.dense:
         print('Writing dense format output')

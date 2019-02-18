@@ -9,7 +9,7 @@ from collections import Counter
 from collections import defaultdict
 
 from itertools import islice
-from numpy import int16
+from numpy import int32
 from scipy import sparse
 from umi_tools import network
 from umi_tools import umi_methods
@@ -164,7 +164,7 @@ def merge_results(parallel_results):
     return(merged_results, umis_per_cell, reads_per_cell, merged_no_match)
 
 
-def correct_umis(final_results, collapsing_threshold, top_cells):
+def correct_umis(final_results, collapsing_threshold, top_cells, max_umis):
     """
     Corrects umi barcodes within same cell/tag groups.
     
@@ -178,22 +178,45 @@ def correct_umis(final_results, collapsing_threshold, top_cells):
     """
     print('Correcting umis')
     corrected_umis = 0
+    aberrant_umi_count_cells = set()
     for cell_barcode in top_cells:
         for TAG in final_results[cell_barcode]:
-            if len(final_results[cell_barcode][TAG]) > 1:
+            n_umis = len(final_results[cell_barcode][TAG])
+            if n_umis > 1 and n_umis <= max_umis:
                 umi_clusters = network.UMIClusterer()
                 UMIclusters = umi_clusters(
                     final_results[cell_barcode][TAG].keys(),
                     final_results[cell_barcode][TAG],
                     collapsing_threshold)
-                for umi_cluster in UMIclusters:  # This is a list with the first element the dominant barcode
-                    if(len(umi_cluster) > 1):  # This means we got a correction
-                        major_umi = umi_cluster[0]
-                        for minor_umi in umi_cluster[1:]:
-                            corrected_umis += 1
-                            temp = final_results[cell_barcode][TAG].pop(minor_umi)
-                            final_results[cell_barcode][TAG][major_umi] += temp
-    return(final_results, corrected_umis)
+                (new_res, temp_corrected_umis) = update_umi_counts(UMIclusters, final_results[cell_barcode].pop(TAG))
+                final_results[cell_barcode][TAG] = new_res
+                corrected_umis += temp_corrected_umis
+            elif n_umis > max_umis:
+                aberrant_umi_count_cells.add(cell_barcode)
+    return(final_results, corrected_umis, aberrant_umi_count_cells)
+
+
+def update_umi_counts(UMIclusters, cell_tag_counts):
+    """
+    Update a dict object with umis corrected.
+
+    Args:
+        UMIclusters (list): List of lists with corrected umis
+        cell_tag_counts (Counter): Counter of umis
+
+    Returns:
+        cell_tag_counts (Counter): Updated Counter of umis
+        temp_corrected_umis (int): Number of corrected umis
+    """
+    temp_corrected_umis = 0
+    for umi_cluster in UMIclusters:  # This is a list with the first element the dominant barcode
+        if(len(umi_cluster) > 1):  # This means we got a correction
+            major_umi = umi_cluster[0]
+            for minor_umi in umi_cluster[1:]:
+                temp_corrected_umis += 1
+                temp = cell_tag_counts.pop(minor_umi)
+                cell_tag_counts[major_umi] += temp
+    return(cell_tag_counts, temp_corrected_umis)
 
 
 def correct_cells(final_results, umis_per_cell, collapsing_threshold, expected_cells):
@@ -246,8 +269,8 @@ def generate_sparse_matrices(final_results, ordered_tags_map, top_cells):
         read_results_matrix (scipy.sparse.dok_matrix): Read counts
 
     """
-    umi_results_matrix = sparse.dok_matrix((len(ordered_tags_map) ,len(top_cells)), dtype=int16)
-    read_results_matrix = sparse.dok_matrix((len(ordered_tags_map) ,len(top_cells)), dtype=int16)
+    umi_results_matrix = sparse.dok_matrix((len(ordered_tags_map) ,len(top_cells)), dtype=int32)
+    read_results_matrix = sparse.dok_matrix((len(ordered_tags_map) ,len(top_cells)), dtype=int32)
     for i,cell_barcode in enumerate(top_cells):
         for j,TAG in enumerate(final_results[cell_barcode]):
             if final_results[cell_barcode][TAG]:
