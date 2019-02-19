@@ -131,7 +131,11 @@ def check_tags(tags, maximum_distance):
         distance = Levenshtein.distance(a, b)
         if (distance <= (maximum_distance - 1)):
             offending_pairs.append([a, b, distance])
-    
+    DNA_pattern = regex.compile('^[ATGC]*$')
+    for tag in tags:
+        if not DNA_pattern.match(tag):
+            print('This tag {} is not only composed of ATGC bases.\nPlease check your tags file'.format(tag))
+            sys.exit('Exiting the application.\n')
     # If offending pairs are found, print them all.
     if offending_pairs:
         print(

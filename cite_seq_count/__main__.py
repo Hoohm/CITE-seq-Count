@@ -156,8 +156,8 @@ def create_report(n_reads, reads_per_cell, no_match, version, start_time, ordere
         args (arg_parse): Arguments provided by the user.
 
     """
-    total_mapped = sum(reads_per_cell.values())
     total_unmapped = sum(no_match.values())
+    total_mapped = sum(reads_per_cell.values()) - total_unmapped
     mapped_perc = round((total_mapped/n_reads)*100)
     unmapped_perc = round((total_unmapped/n_reads)*100)
     
@@ -231,7 +231,7 @@ def main():
         whitelist = preprocessing.parse_whitelist_csv(args.whitelist,
                                         args.cb_last - args.cb_first + 1)
     else:
-        whitelist = None
+        whitelist = False
 
     # Load TAGs/ABs.
     ab_map = preprocessing.parse_tags_csv(args.tags)
@@ -256,8 +256,8 @@ def main():
         n_lines = preprocessing.get_n_lines(args.read1_path)
     n_reads = int(n_lines/4)
     n_threads = args.n_threads
-    
     print('Started mapping')
+    print('Processing {:,} reads'.format(n_reads))
     #Run with one process
     if n_threads <= 1 or n_reads < 1000001:
         print('CITE-seq-Count is running with one core.')
@@ -278,8 +278,8 @@ def main():
         umis_per_cell = Counter()
         reads_per_cell = Counter()
         for cell_barcode,counts in final_results.items():
-            umis_per_cell[cell_barcode] = sum([len(counts[UMI]) for UMI in counts if UMI != 'unmapped'])
-            reads_per_cell[cell_barcode] = sum([sum(counts[UMI].values()) for UMI in counts if UMI != 'unmapped'])
+            umis_per_cell[cell_barcode] = sum([len(counts[UMI]) for UMI in counts])
+            reads_per_cell[cell_barcode] = sum([sum(counts[UMI].values()) for UMI in counts])
     else:
         # Run with multiple processes
         print('CITE-seq-Count is running with {} cores.'.format(n_threads))
@@ -306,6 +306,7 @@ def main():
         p.join()
         print('Mapping done')
         print('Merging results')
+
         (
             final_results,
             umis_per_cell,
@@ -313,22 +314,34 @@ def main():
             merged_no_match
         ) = processing.merge_results(parallel_results=parallel_results)
         del(parallel_results)
+
     ordered_tags_map = OrderedDict()
     for i,tag in enumerate(ab_map.values()):
         ordered_tags_map[tag] = i
     ordered_tags_map['unmapped'] = i + 1
 
     # Correct cell barcodes
-    (
-        final_results,
-        umis_per_cell,
-        bcs_corrected
-    ) = processing.correct_cells(
-            final_results=final_results,
-            umis_per_cell=umis_per_cell,
-            expected_cells=args.expected_cells,
-            collapsing_threshold=args.bc_threshold)
-    
+    print('Correcting cell barcodes')
+    if not whitelist:
+        (
+            final_results,
+            umis_per_cell,
+            bcs_corrected
+        ) = processing.correct_cells(
+                final_results=final_results,
+                umis_per_cell=umis_per_cell,
+                expected_cells=args.expected_cells,
+                collapsing_threshold=args.bc_threshold)
+    else:
+        (
+            final_results,
+            umis_per_cell,
+            bcs_corrected) = processing.correct_cells_whitelist(
+                final_results=final_results,
+                umis_per_cell=umis_per_cell,
+                whitelist=whitelist,
+                collapsing_threshold=args.bc_threshold)
+
     # Correct umi barcodes
     if not whitelist:
         top_cells_tuple = umis_per_cell.most_common(args.expected_cells)

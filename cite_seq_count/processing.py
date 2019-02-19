@@ -4,6 +4,7 @@ import sys
 import os
 import Levenshtein
 import regex
+import pybktree
 
 from collections import Counter
 from collections import defaultdict
@@ -157,9 +158,8 @@ def merge_results(parallel_results):
                 if mapped[cell_barcode][TAG]:
                     for UMI in mapped[cell_barcode][TAG]:
                         merged_results[cell_barcode][TAG][UMI] += mapped[cell_barcode][TAG][UMI]
-                        if TAG != 'unmapped':
-                            umis_per_cell[cell_barcode] += len(mapped[cell_barcode][TAG])
-                            reads_per_cell[cell_barcode] += mapped[cell_barcode][TAG][UMI]
+                        umis_per_cell[cell_barcode] += len(mapped[cell_barcode][TAG])
+                        reads_per_cell[cell_barcode] += mapped[cell_barcode][TAG][UMI]
         merged_no_match.update(unmapped)
     return(merged_results, umis_per_cell, reads_per_cell, merged_no_match)
 
@@ -218,6 +218,32 @@ def update_umi_counts(UMIclusters, cell_tag_counts):
                 cell_tag_counts[major_umi] += temp
     return(cell_tag_counts, temp_corrected_umis)
 
+def collapse_cells(true_to_false, umis_per_cell, final_results):
+    """
+    Collapses cell barcodes based on the mapping true_to_false
+
+    Args:
+        true_to_false (dict): Mapping between the reference and the "mutated" barcodes.
+        umis_per_cell (Counter): Counter of number of umis per cell.
+        final_results (dict): Dict of dict of Counters with mapping results.
+
+    Returns:
+        umis_per_cell (Counter): Counter of number of umis per cell.
+        final_results (dict): Same as input but with corrected cell barcodes.
+        corrected_barcodes (int): How many cell barcodes have been corrected.
+    """
+    print('Collapsing cell barcodes')
+    corrected_barcodes = 0
+    for real_barcode in true_to_false:
+        for fake_barcode in true_to_false[real_barcode]:
+            if real_barcode in final_results:
+                temp = final_results.pop(fake_barcode)
+                corrected_barcodes += 1
+                for TAG in temp.keys():
+                    final_results[real_barcode][TAG].update(temp[TAG])
+                temp_umi_counts = umis_per_cell.pop(fake_barcode)
+                umis_per_cell[real_barcode] += temp_umi_counts    
+    return(umis_per_cell, final_results, corrected_barcodes)
 
 def correct_cells(final_results, umis_per_cell, collapsing_threshold, expected_cells):
     """
@@ -231,28 +257,75 @@ def correct_cells(final_results, umis_per_cell, collapsing_threshold, expected_c
     
     Returns:
         final_results (dict): Same as input but with corrected umis.
+        umis_per_cell (Counter): Counter of umis per cell after cell barcode correction
         corrected_umis (int): How many umis have been corrected.
     """
-    print('Correcting cell barcodes')
-    corrected_barcodes = 0
-    try:
-        cell_whitelist, true_to_false_map = umi_methods.getCellWhitelist(
-            cell_barcode_counts=umis_per_cell,
-            expect_cells=expected_cells,
-            cell_number=expected_cells,
-            error_correct_threshold=collapsing_threshold,
-            plotfile_prefix=False)
-        if true_to_false_map:
-            for real_barcode in true_to_false_map:
-                for fake_barcode in true_to_false_map[real_barcode]:
-                    temp = final_results.pop(fake_barcode)
-                    corrected_barcodes += 1
-                    for TAG in temp.keys():
-                        final_results[real_barcode][TAG].update(temp[TAG])
-                    temp_umi_counts = umis_per_cell.pop(fake_barcode)
-                    umis_per_cell[real_barcode] += temp_umi_counts
-    except:
-        print('Could not find a good local minima for correction.\nNo cell barcode correction was done.')
+    print('Finding a whitelist')
+    cell_whitelist, true_to_false = umi_methods.getCellWhitelist(
+        cell_barcode_counts=umis_per_cell,
+        expect_cells=expected_cells,
+        cell_number=expected_cells,
+        error_correct_threshold=collapsing_threshold,
+        plotfile_prefix=False)
+    
+    (
+        umis_per_cell,
+        final_results,
+        corrected_barcodes
+        ) = collapse_cells(
+            true_to_false=true_to_false,
+            umis_per_cell=umis_per_cell,
+            final_results=final_results)
+    return(final_results, umis_per_cell, corrected_barcodes)
+
+
+def correct_cells_whitelist(final_results, umis_per_cell, whitelist, collapsing_threshold):
+    """
+    Corrects cell barcodes.
+    
+    Args:
+        final_results (dict): Dict of dict of Counters with mapping results.
+        umis_per_cell (Counter): Counter of number of umis per cell.
+        whitelist (set): The whitelist reference given by the user.
+        collapsing_threshold (int): Max distance between umis.
+    
+    Returns:
+        final_results (dict): Same as input but with corrected umis.
+        umis_per_cell (Counter): Counter of umis per cell after cell barcode correction
+        corrected_umis (int): How many umis have been corrected.
+    """
+    true_to_false = defaultdict(set)
+    barcode_tree = pybktree.BKTree(Levenshtein.hamming, whitelist)
+    print('Generated barcode tree from whitelist')
+    cell_barcodes = list(final_results.keys())
+    print('Finding reference candidates')
+    for i, cell_barcode in enumerate(cell_barcodes):
+        if cell_barcode in whitelist:
+            # if the barcode is already whitelisted, no need to add
+            continue
+        # get all members of whitelist that are at distance of collapsing_threshold
+        candidates = [white_cell for d, white_cell in barcode_tree.find(cell_barcode, collapsing_threshold) if d > 0]
+
+        if len(candidates) == 0:
+            # the cell doesnt match to any whitelisted barcode,
+            # hence we have to drop it
+            # (as it cannot be asscociated with any frequent barcode)
+            continue
+        elif len(candidates) == 1:
+            white_cell_str = candidates[0]
+            true_to_false[white_cell_str].add(cell_barcode)
+        else:
+            # more than on whitelisted candidate:
+            # we drop it as its not uniquely assignable
+            continue
+    (
+        umis_per_cell,
+        final_results,
+        corrected_barcodes
+        ) = collapse_cells(
+            true_to_false=true_to_false,
+            umis_per_cell=umis_per_cell,
+            final_results=final_results)
     return(final_results, umis_per_cell, corrected_barcodes)
 
 
