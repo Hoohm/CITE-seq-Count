@@ -210,7 +210,15 @@ Run parameters:
             args.start_trim))
 
 def main():
+    #Create logger and stream handler
     logger = logging.getLogger('cite_seq_count')
+    logger.setLevel(logging.CRITICAL)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.CRITICAL)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+
     start_time = time.time()
     parser = get_args()
     if not sys.argv[1:]:

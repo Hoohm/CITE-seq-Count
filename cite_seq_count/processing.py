@@ -239,7 +239,7 @@ def correct_cells(final_results, umis_per_cell, collapsing_threshold, expected_c
         cell_whitelist, true_to_false_map = umi_methods.getCellWhitelist(
             cell_barcode_counts=umis_per_cell,
             expect_cells=expected_cells,
-            cell_number=False,
+            cell_number=expected_cells,
             error_correct_threshold=collapsing_threshold,
             plotfile_prefix=False)
         if true_to_false_map:
