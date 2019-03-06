@@ -185,7 +185,6 @@ def correct_umis(final_results, collapsing_threshold, top_cells, max_umis):
             if n_umis > 1 and n_umis <= max_umis:
                 umi_clusters = network.UMIClusterer()
                 UMIclusters = umi_clusters(
-                    final_results[cell_barcode][TAG].keys(),
                     final_results[cell_barcode][TAG],
                     collapsing_threshold)
                 (new_res, temp_corrected_umis) = update_umi_counts(UMIclusters, final_results[cell_barcode].pop(TAG))
