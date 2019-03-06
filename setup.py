@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="CITE-seq-Count",
-    version="1.4.1",
+    version="1.4.1.1",
     author="Roelli Patrick",
     author_email="patrick.roelli@gmail.com",
     description="A python package that counts CITE seq or hashing data for single cell experiments",
@@ -25,7 +25,7 @@ setuptools.setup(
           'python-levenshtein>=0.12.0',
           'scipy>=1.1.0',
           'multiprocess>=0.70.6.1',
-          'umi_tools>=1.0.0',
+          'umi_tools==1.0.0',
           'pytest==4.1.0',
           'pytest-dependency==0.4.0',
           'pandas>=0.23.4'
