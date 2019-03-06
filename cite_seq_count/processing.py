@@ -183,7 +183,6 @@ def correct_umis(final_results, collapsing_threshold):
             if len(final_results[cell_barcode][TAG]) > 1:
                 umi_clusters = network.UMIClusterer()
                 UMIclusters = umi_clusters(
-                    final_results[cell_barcode][TAG].keys(),
                     final_results[cell_barcode][TAG],
                     collapsing_threshold)
                 for umi_cluster in UMIclusters:  # This is a list with the first element the dominant barcode
