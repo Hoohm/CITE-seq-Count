@@ -25,7 +25,7 @@ setuptools.setup(
           'python-levenshtein>=0.12.0',
           'scipy>=1.1.0',
           'multiprocess>=0.70.6.1',
-          'umi_tools>=1.0.0',
+          'umi_tools==1.0.0',
           'pytest==4.1.0',
           'pytest-dependency==0.4.0',
           'pandas>=0.23.4',

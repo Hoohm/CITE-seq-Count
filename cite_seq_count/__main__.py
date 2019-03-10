@@ -117,6 +117,12 @@ def get_args():
         help=("Number of bases to discard from read2.")
     )
     
+    filters.add_argument(
+        '--sliding-window', dest='sliding_window',
+        required=False, default=False, action='store_true',
+        help=("Allow for a sliding window when aligning.")
+    )
+        
 
     # Remaining arguments.
     parser.add_argument('-T', '--threads', required=False, type=int,
@@ -169,7 +175,7 @@ CITE-seq-Count Version: {}
 Reads processed: {}
 Percentage mapped: {}
 Percentage unmapped: {}
-Bad cells: {}
+Uncorrected cells: {}
 Correction:
 \tCell barcodes collapsing threshold: {}
 \tCell barcodes corrected: {}
@@ -228,8 +234,10 @@ def main():
     # Parse arguments.
     args = parser.parse_args()
     if args.whitelist:
-        whitelist = preprocessing.parse_whitelist_csv(args.whitelist,
-                                        args.cb_last - args.cb_first + 1)
+        (whitelist, args.bc_threshold) = preprocessing.parse_whitelist_csv(
+            filename=args.whitelist,
+            barcode_length=args.cb_last - args.cb_first + 1,
+            collapsing_threshold=args.bc_threshold)
     else:
         whitelist = False
 
@@ -273,7 +281,8 @@ def main():
                 whitelist=whitelist,
                 debug=args.debug,
                 start_trim=args.start_trim,
-                maximum_distance=args.max_error)
+                maximum_distance=args.max_error,
+                sliding_window=args.sliding_window)
         print('Mapping done')
         umis_per_cell = Counter()
         reads_per_cell = Counter()
@@ -299,7 +308,8 @@ def main():
                     whitelist,
                     args.debug,
                     args.start_trim,
-                    args.max_error),
+                    args.max_error,
+                    args.sliding_window),
                 callback=parallel_results.append,
                 error_callback=sys.stderr)
         p.close()
@@ -320,32 +330,41 @@ def main():
         ordered_tags_map[tag] = i
     ordered_tags_map['unmapped'] = i + 1
 
+    
     # Correct cell barcodes
-    print('Correcting cell barcodes')
-    if not whitelist:
-        (
-            final_results,
-            umis_per_cell,
-            bcs_corrected
-        ) = processing.correct_cells(
-                final_results=final_results,
-                umis_per_cell=umis_per_cell,
-                expected_cells=args.expected_cells,
-                collapsing_threshold=args.bc_threshold)
+    if(len(umis_per_cell) <= args.expected_cells):
+        print("Number of expected cells, {}, is higher " \
+            "than number of cells found {}.\nNot performing" \
+            "cell barcode correction" \
+            "".format(args.expected_cells, len(umis_per_cell)))
+        bcs_corrected = 0
     else:
-        (
-            final_results,
-            umis_per_cell,
-            bcs_corrected) = processing.correct_cells_whitelist(
-                final_results=final_results,
-                umis_per_cell=umis_per_cell,
-                whitelist=whitelist,
-                collapsing_threshold=args.bc_threshold)
+        print('Correcting cell barcodes')
+        if not whitelist:
+            (
+                final_results,
+                umis_per_cell,
+                bcs_corrected
+            ) = processing.correct_cells(
+                    final_results=final_results,
+                    umis_per_cell=umis_per_cell,
+                    expected_cells=args.expected_cells,
+                    collapsing_threshold=args.bc_threshold)
+        else:
+            (
+                final_results,
+                umis_per_cell,
+                bcs_corrected) = processing.correct_cells_whitelist(
+                    final_results=final_results,
+                    umis_per_cell=umis_per_cell,
+                    whitelist=whitelist,
+                    collapsing_threshold=args.bc_threshold)
 
     # Correct umi barcodes
     if not whitelist:
         top_cells_tuple = umis_per_cell.most_common(args.expected_cells)
         top_cells = set([pair[0] for pair in top_cells_tuple])
+
     # Sort cells by number of mapped umis
     else:
         top_cells = whitelist
@@ -374,6 +393,23 @@ def main():
         aberrant_cells = set()
     for cell_barcode in aberrant_cells:
         top_cells.remove(cell_barcode)
+    #Create sparse aberrant cells matrix
+    (
+    umi_aberrant_matrix,
+    read_aberrant_matrix
+    ) = processing.generate_sparse_matrices(
+        final_results=final_results,
+        ordered_tags_map=ordered_tags_map,
+        top_cells=aberrant_cells)
+    
+    #Write uncorrected cells to dense output
+    io.write_dense(
+            sparse_matrix=umi_aberrant_matrix,
+            index=list(ordered_tags_map.keys()),
+            columns=aberrant_cells,
+            outfolder=os.path.join(args.outfolder,'uncorrected_cells'),
+            filename='dense_umis.tsv')
+    
     (
         umi_results_matrix,
         read_results_matrix
@@ -419,7 +455,8 @@ def main():
             sparse_matrix=umi_results_matrix,
             index=list(ordered_tags_map.keys()),
             columns=top_cells,
-            file_path=os.path.join(args.outfolder, 'dense_umis.tsv'))
+            outfolder=args.outfolder,
+            filename='dense_umis.tsv')
 
 if __name__ == '__main__':
     main()

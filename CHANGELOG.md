@@ -13,16 +13,23 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   Cells containing a TAG with more than 20'000 umis will be discarded. This means that more than 20'000
   antibody tags with different umis have been captured which is odd. Such high numbers could mean
   that cells have been aggregating and can't be used for downstream analysis. 
-  The number of cells are reported under `Bad cells`. Fixing issues #32
+  The number of cells are reported under `Bad cells` and the dense matrix of those cells is provided in `uncorrected_cells`.
+  Fixing issues #32
 - The option to not correct for umis with `--no_umi_correction`.
 - Now prints how many reads will be processed.
-- Check that tags are indeed made of ATGC bases.
+- Checks that tags are indeed made of ATGC bases.
+- Added a check for cell barcode correction and collapsing threshold.
+- New option to allow for a sliding window when aligning TAGS. `--sliding-window`
+  Use when you have a variable sequence before your tags.
 
 ### Changed
-- Sparse matrix is now a 32bit int structure instead of 16bit. Fixing issue #40
+- Sparse matrix is now based on int32 instead of int16. Fixing issue #40
 - Cell barcode correction without a whitelist is not outputing any error anymore.
   This is due to the fact that it uses a hard threshold based on the `-cells` option
-  instead of trying to discover one. Fixing issues #29, #36
+  if it kind find one. Fixing issues #29, #36
+- Fixed umi_tools version to `1.0.0`
+- fixed the error linked to umi_tools version update `getCellWhitelist` #45.
+
 
 ## [1.4.0] - 24.01.2019
 ### Added

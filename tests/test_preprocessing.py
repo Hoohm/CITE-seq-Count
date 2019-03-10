@@ -44,7 +44,7 @@ def data():
 
 @pytest.mark.dependency()
 def test_parse_whitelist_csv(data):
-    assert preprocessing.parse_whitelist_csv(pytest.correct_whitelist_path, 16) == pytest.correct_whitelist
+    assert preprocessing.parse_whitelist_csv(pytest.correct_whitelist_path, 16, 1) == (pytest.correct_whitelist,1)
 
 @pytest.mark.dependency()
 def test_parse_tags_csv(data):

@@ -14,6 +14,7 @@ from numpy import int32
 from scipy import sparse
 from umi_tools import network
 from umi_tools import umi_methods
+import umi_tools.whitelist_methods as whitelist_methods
 
 
 from cite_seq_count import secondsToText
@@ -38,17 +39,53 @@ def find_best_match(TAG_seq, tags, maximum_distance):
     best_match = 'unmapped'
     best_score = maximum_distance
     for tag, name in tags.items():
-        score = Levenshtein.distance(tag, TAG_seq[:len(tag)])
-        if score <= best_score:
+        score = Levenshtein.hamming(tag, TAG_seq[:len(tag)])
+        if score == 0:
+            #Best possible match
+            return(name)
+        elif score <= best_score:
             best_score = score
             best_match = name
             return(best_match)
     return(best_match)
 
 
+def find_best_match_shift(TAG_seq, tags, maximum_distance):
+    """
+    Find the best match from the list of tags with sliding window.
+
+    Compares the Levenshtein distance between tags and the trimmed sequences.
+    The tag and the sequence must have the same length.
+    If no matches found returns 'unmapped'.
+    We add 1
+    Args:
+        TAG_seq (string): Sequence from R1 already start trimmed
+        tags (dict): A dictionary with the TAGs as keys and TAG Names as values.
+        maximum_distance (int): Maximum distance given by the user.
+
+    Returns:
+        best_match (string): The TAG name that will be used for counting.
+    """
+    best_match = 'unmapped'
+    best_score = maximum_distance
+    shifts = range(0,len(TAG_seq) - len(max(tags,key=len)))
+
+    for shift in shifts:
+        for tag, name in tags.items():
+            score = Levenshtein.hamming(tag, TAG_seq[shift:len(tag)+shift])
+            if score == 0:
+                #Best possible match
+                return(name)
+            elif score <= best_score:
+                best_score = score
+                best_match = name
+                return(best_match)
+    return(best_match)
+
+
 def map_reads(read1_path, read2_path, tags, barcode_slice,
                 umi_slice, indexes, whitelist, debug,
-                start_trim, maximum_distance):
+                start_trim, maximum_distance, sliding_window):
     """Read through R1/R2 files and generate a islice starting at a specific index.
 
     It reads both Read1 and Read2 files, creating a dict based on cell barcode.
@@ -107,7 +144,10 @@ def map_reads(read1_path, read2_path, tags, barcode_slice,
             if cell_barcode not in results:
                 results[cell_barcode] = defaultdict(Counter)
             
-            best_match = find_best_match(TAG_seq, tags, maximum_distance)
+            if(sliding_window):
+                best_match = find_best_match_shift(TAG_seq, tags, maximum_distance)
+            else:
+                best_match = find_best_match(TAG_seq, tags, maximum_distance)
             
             results[cell_barcode][best_match][UMI] += 1
             
@@ -217,6 +257,7 @@ def update_umi_counts(UMIclusters, cell_tag_counts):
                 cell_tag_counts[major_umi] += temp
     return(cell_tag_counts, temp_corrected_umis)
 
+
 def collapse_cells(true_to_false, umis_per_cell, final_results):
     """
     Collapses cell barcodes based on the mapping true_to_false
@@ -244,6 +285,7 @@ def collapse_cells(true_to_false, umis_per_cell, final_results):
                 umis_per_cell[real_barcode] += temp_umi_counts    
     return(umis_per_cell, final_results, corrected_barcodes)
 
+
 def correct_cells(final_results, umis_per_cell, collapsing_threshold, expected_cells):
     """
     Corrects cell barcodes.
@@ -260,7 +302,7 @@ def correct_cells(final_results, umis_per_cell, collapsing_threshold, expected_c
         corrected_umis (int): How many umis have been corrected.
     """
     print('Finding a whitelist')
-    cell_whitelist, true_to_false = umi_methods.getCellWhitelist(
+    cell_whitelist, true_to_false = whitelist_methods.getCellWhitelist(
         cell_barcode_counts=umis_per_cell,
         expect_cells=expected_cells,
         cell_number=expected_cells,

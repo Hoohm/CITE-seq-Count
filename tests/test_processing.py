@@ -85,13 +85,15 @@ def data():
         {'test2-CGTACGTAGCCTAGC':
         Counter({b'TAGCTTAGTA': 5, b'GCGATGCATA': 1})}
     }
-    pytest.umis_per_cell = {
+    pytest.umis_per_cell = Counter({
         'ACTGTTTTATTGGCCT': 1,
         'TTCATAAGGTAGGGAT': 2
-    }
+    })
     pytest.expected_cells = 2
     pytest.no_match = Counter()
     pytest.collapsing_threshold = 1
+    pytest.sliding_window = False
+    pytest.max_umis = 20000
 
     pytest.sequence_pool = []
     pytest.tags_complete = preprocessing.check_tags(preprocessing.parse_tags_csv('tests/test_data/tags/correct.csv'), 5)
@@ -151,12 +153,13 @@ def test_classify_reads_multi_process(data):
         pytest.correct_whitelist,
         pytest.debug,
         pytest.start_trim,
-        pytest.maximum_distance)
+        pytest.maximum_distance,
+        pytest.sliding_window)
     assert len(results) == 2
 
 @pytest.mark.dependency(depends=['test_classify_reads_multi_process'])
 def test_correct_umis(data):
-    temp = processing.correct_umis(pytest.results, 2, pytest.corrected_results.keys())
+    temp = processing.correct_umis(pytest.results, 2, pytest.corrected_results.keys(), pytest.max_umis)
     results = temp[0]
     n_corrected = temp[1]
     for cell_barcode in results.keys():
