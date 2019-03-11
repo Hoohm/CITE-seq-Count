@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 
-## [1.4.2] - 20.02.2019
+## [1.4.2] - 11.03.2019
 ### Added
 - Cell barcode correction based on whitelist instead of top cells. This will trigger automatically
   when a whitelist is provided.
@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - The option to not correct for umis with `--no_umi_correction`.
 - Now prints how many reads will be processed.
 - Checks that tags are indeed made of ATGC bases.
-- Added a check for cell barcode correction and collapsing threshold.
+- Added a check for cell barcode correction and collapsing threshold for given whitelist.
 - New option to allow for a sliding window when aligning TAGS. `--sliding-window`
   Use when you have a variable sequence before your tags.
 
@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Cell barcode correction without a whitelist is not outputing any error anymore.
   This is due to the fact that it uses a hard threshold based on the `-cells` option
   if it kind find one. Fixing issues #29, #36
-- Fixed umi_tools version to `1.0.0`
+- Upgraded umi_tools to `1.0.0`
 - fixed the error linked to umi_tools version update `getCellWhitelist` #45.
 
 
