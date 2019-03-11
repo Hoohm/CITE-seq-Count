@@ -39,6 +39,7 @@ CITE-seq-Count Version: 1.4.0
 Reads processed: 50000000
 Percentage mapped: 95
 Percentage unmapped: 5
+Uncorrected cells: 33
 Correction:
 	Cell barcodes collapsing threshold: 1
 	Cell barcodes corrected: 20000
@@ -65,7 +66,25 @@ Packages to read MTX
 
 I recommend using `Seurat` and their `Read10x` function to read the results.
 
-Example: `Read10x('OUTFOLDER/umi_count', gene.column=1)`
+With Seurat V3:
+
+`Read10x('OUTFOLDER/umi_count/', gene.column=1)`
+
+
+With Matrix:
+
+```
+library(Matrix)
+matrix_dir = "/path_to_your_directory/out_cite_seq_count/umi_count/"
+barcode.path <- paste0(matrix_dir, "barcodes.tsv.gz")
+features.path <- paste0(matrix_dir, "features.tsv.gz")
+matrix.path <- paste0(matrix_dir, "matrix.mtx.gz")
+mat <- readMM(file = matrix.path)
+feature.names = read.delim(features.path, header = FALSE, stringsAsFactors = FALSE)
+barcode.names = read.delim(barcode.path, header = FALSE, stringsAsFactors = FALSE)
+colnames(mat) = barcode.names$V1
+rownames(mat) = feature.names$V1
+```
 
 **Python**
 
