@@ -128,7 +128,7 @@ Barcodes from 1 to 16 and UMI from 17 to 26, then this is the input you need:
 
 Filtering for structure of the antibody barcode as well as maximum errors.
 
-* [OPTIONAL] Maximum Levenshtein distance allowed. This allows to catch antibody barcodes that might have `--max-error` errors compared to the real barcodes.
+* [OPTIONAL] Maximum Levenshtein distance allowed. This allows to catch antibody barcodes that might have `--max-error` errors compared to the real barcodes. (was `-hd` in previous versions)
 
 `--max-error MAX_ERROR`, default `3`
 
@@ -148,6 +148,23 @@ There is a sanity check when for the `MAX_ERROR` value chosen to be sure you are
 
 `-trim N_BASES, --start-trim N_BASES`, default `0`
 
+* [OPTIONAL] Activate sliding window alignement. Use this when you have a protocol that has a variable sequence before the inserted TAG.
+
+`--sliding-window`, default `False`
+
+Example:
+
+The TAG: `ATGCTAGCT` with a variable prefix: `TTCAATTTCA`
+R2 reads:
+```
+TTCA ATGCTAGCTAAAAAAAAAAAAAAAAA
+TTCAA ATGCTAGCTAAAAAAAAAAAAAAAA
+TTCAAT ATGCTAGCTAAAAAAAAAAAAAAA
+TTCAATT ATGCTAGCTAAAAAAAAAAAAAA
+TTCAATTT ATGCTAGCTAAAAAAAAAAAAA
+TTCAATTTC ATGCTAGCTAAAAAAAAAAAA
+```
+
 
 ### OUTPUT
 You have to choose either the number of cells you expect or give it a list of cell barcodes to retrieve.
@@ -156,7 +173,7 @@ You have to choose either the number of cells you expect or give it a list of ce
 
 `-cells CELLS, --expected_cells CELLS`
 
-* [Optional] If you have a whitelist of barcodes produced by the cDNA data, you are using a well-plate based protocol or any known whitelist, you can use this list to only extract TAGS matching those barcodes. Typically using the cell list from the mRNA data of the same experiment.
+* [Optional] If you have a whitelist of barcodes produced by the cDNA data, you are using a well-plate based protocol or a platform reference, you can use this list to only extract TAGS matching those barcodes. Typically using the cell list from the mRNA data of the same experiment. This is highly recommended as knowing the true cells helps for cell barcode correction.
 
 `-wl WHITELIST, --whitelist WHITELIST`
 

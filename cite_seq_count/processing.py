@@ -4,15 +4,17 @@ import sys
 import os
 import Levenshtein
 import regex
+import pybktree
 
 from collections import Counter
 from collections import defaultdict
 
 from itertools import islice
-from numpy import int16
+from numpy import int32
 from scipy import sparse
 from umi_tools import network
 from umi_tools import umi_methods
+import umi_tools.whitelist_methods as whitelist_methods
 
 
 from cite_seq_count import secondsToText
@@ -37,17 +39,53 @@ def find_best_match(TAG_seq, tags, maximum_distance):
     best_match = 'unmapped'
     best_score = maximum_distance
     for tag, name in tags.items():
-        score = Levenshtein.distance(tag, TAG_seq[:len(tag)])
-        if score <= best_score:
+        score = Levenshtein.hamming(tag, TAG_seq[:len(tag)])
+        if score == 0:
+            #Best possible match
+            return(name)
+        elif score <= best_score:
             best_score = score
             best_match = name
             return(best_match)
     return(best_match)
 
 
+def find_best_match_shift(TAG_seq, tags, maximum_distance):
+    """
+    Find the best match from the list of tags with sliding window.
+
+    Compares the Levenshtein distance between tags and the trimmed sequences.
+    The tag and the sequence must have the same length.
+    If no matches found returns 'unmapped'.
+    We add 1
+    Args:
+        TAG_seq (string): Sequence from R1 already start trimmed
+        tags (dict): A dictionary with the TAGs as keys and TAG Names as values.
+        maximum_distance (int): Maximum distance given by the user.
+
+    Returns:
+        best_match (string): The TAG name that will be used for counting.
+    """
+    best_match = 'unmapped'
+    best_score = maximum_distance
+    shifts = range(0,len(TAG_seq) - len(max(tags,key=len)))
+
+    for shift in shifts:
+        for tag, name in tags.items():
+            score = Levenshtein.hamming(tag, TAG_seq[shift:len(tag)+shift])
+            if score == 0:
+                #Best possible match
+                return(name)
+            elif score <= best_score:
+                best_score = score
+                best_match = name
+                return(best_match)
+    return(best_match)
+
+
 def map_reads(read1_path, read2_path, tags, barcode_slice,
                 umi_slice, indexes, whitelist, debug,
-                start_trim, maximum_distance):
+                start_trim, maximum_distance, sliding_window):
     """Read through R1/R2 files and generate a islice starting at a specific index.
 
     It reads both Read1 and Read2 files, creating a dict based on cell barcode.
@@ -106,7 +144,10 @@ def map_reads(read1_path, read2_path, tags, barcode_slice,
             if cell_barcode not in results:
                 results[cell_barcode] = defaultdict(Counter)
             
-            best_match = find_best_match(TAG_seq, tags, maximum_distance)
+            if(sliding_window):
+                best_match = find_best_match_shift(TAG_seq, tags, maximum_distance)
+            else:
+                best_match = find_best_match(TAG_seq, tags, maximum_distance)
             
             results[cell_barcode][best_match][UMI] += 1
             
@@ -157,14 +198,13 @@ def merge_results(parallel_results):
                 if mapped[cell_barcode][TAG]:
                     for UMI in mapped[cell_barcode][TAG]:
                         merged_results[cell_barcode][TAG][UMI] += mapped[cell_barcode][TAG][UMI]
-                        if TAG != 'unmapped':
-                            umis_per_cell[cell_barcode] += len(mapped[cell_barcode][TAG])
-                            reads_per_cell[cell_barcode] += mapped[cell_barcode][TAG][UMI]
+                        umis_per_cell[cell_barcode] += len(mapped[cell_barcode][TAG])
+                        reads_per_cell[cell_barcode] += mapped[cell_barcode][TAG][UMI]
         merged_no_match.update(unmapped)
     return(merged_results, umis_per_cell, reads_per_cell, merged_no_match)
 
 
-def correct_umis(final_results, collapsing_threshold):
+def correct_umis(final_results, collapsing_threshold, top_cells, max_umis):
     """
     Corrects umi barcodes within same cell/tag groups.
     
@@ -178,21 +218,72 @@ def correct_umis(final_results, collapsing_threshold):
     """
     print('Correcting umis')
     corrected_umis = 0
-    for cell_barcode in final_results:
+    aberrant_umi_count_cells = set()
+    for cell_barcode in top_cells:
         for TAG in final_results[cell_barcode]:
-            if len(final_results[cell_barcode][TAG]) > 1:
+            n_umis = len(final_results[cell_barcode][TAG])
+            if n_umis > 1 and n_umis <= max_umis:
                 umi_clusters = network.UMIClusterer()
                 UMIclusters = umi_clusters(
                     final_results[cell_barcode][TAG],
                     collapsing_threshold)
-                for umi_cluster in UMIclusters:  # This is a list with the first element the dominant barcode
-                    if(len(umi_cluster) > 1):  # This means we got a correction
-                        major_umi = umi_cluster[0]
-                        for minor_umi in umi_cluster[1:]:
-                            corrected_umis += 1
-                            temp = final_results[cell_barcode][TAG].pop(minor_umi)
-                            final_results[cell_barcode][TAG][major_umi] += temp
-    return(final_results, corrected_umis)
+                (new_res, temp_corrected_umis) = update_umi_counts(UMIclusters, final_results[cell_barcode].pop(TAG))
+                final_results[cell_barcode][TAG] = new_res
+                corrected_umis += temp_corrected_umis
+            elif n_umis > max_umis:
+                aberrant_umi_count_cells.add(cell_barcode)
+    return(final_results, corrected_umis, aberrant_umi_count_cells)
+
+
+def update_umi_counts(UMIclusters, cell_tag_counts):
+    """
+    Update a dict object with umis corrected.
+
+    Args:
+        UMIclusters (list): List of lists with corrected umis
+        cell_tag_counts (Counter): Counter of umis
+
+    Returns:
+        cell_tag_counts (Counter): Updated Counter of umis
+        temp_corrected_umis (int): Number of corrected umis
+    """
+    temp_corrected_umis = 0
+    for umi_cluster in UMIclusters:  # This is a list with the first element the dominant barcode
+        if(len(umi_cluster) > 1):  # This means we got a correction
+            major_umi = umi_cluster[0]
+            for minor_umi in umi_cluster[1:]:
+                temp_corrected_umis += 1
+                temp = cell_tag_counts.pop(minor_umi)
+                cell_tag_counts[major_umi] += temp
+    return(cell_tag_counts, temp_corrected_umis)
+
+
+def collapse_cells(true_to_false, umis_per_cell, final_results):
+    """
+    Collapses cell barcodes based on the mapping true_to_false
+
+    Args:
+        true_to_false (dict): Mapping between the reference and the "mutated" barcodes.
+        umis_per_cell (Counter): Counter of number of umis per cell.
+        final_results (dict): Dict of dict of Counters with mapping results.
+
+    Returns:
+        umis_per_cell (Counter): Counter of number of umis per cell.
+        final_results (dict): Same as input but with corrected cell barcodes.
+        corrected_barcodes (int): How many cell barcodes have been corrected.
+    """
+    print('Collapsing cell barcodes')
+    corrected_barcodes = 0
+    for real_barcode in true_to_false:
+        for fake_barcode in true_to_false[real_barcode]:
+            if real_barcode in final_results:
+                temp = final_results.pop(fake_barcode)
+                corrected_barcodes += 1
+                for TAG in temp.keys():
+                    final_results[real_barcode][TAG].update(temp[TAG])
+                temp_umi_counts = umis_per_cell.pop(fake_barcode)
+                umis_per_cell[real_barcode] += temp_umi_counts    
+    return(umis_per_cell, final_results, corrected_barcodes)
 
 
 def correct_cells(final_results, umis_per_cell, collapsing_threshold, expected_cells):
@@ -207,28 +298,75 @@ def correct_cells(final_results, umis_per_cell, collapsing_threshold, expected_c
     
     Returns:
         final_results (dict): Same as input but with corrected umis.
+        umis_per_cell (Counter): Counter of umis per cell after cell barcode correction
         corrected_umis (int): How many umis have been corrected.
     """
-    print('Correcting cell barcodes')
-    corrected_barcodes = 0
-    try:
-        cell_whitelist, true_to_false_map = umi_methods.getCellWhitelist(
-            cell_barcode_counts=umis_per_cell,
-            expect_cells=expected_cells,
-            cell_number=False,
-            error_correct_threshold=collapsing_threshold,
-            plotfile_prefix=False)
-        if true_to_false_map:
-            for real_barcode in true_to_false_map:
-                for fake_barcode in true_to_false_map[real_barcode]:
-                    temp = final_results.pop(fake_barcode)
-                    corrected_barcodes += 1
-                    for TAG in temp.keys():
-                        final_results[real_barcode][TAG].update(temp[TAG])
-                    temp_umi_counts = umis_per_cell.pop(fake_barcode)
-                    umis_per_cell[real_barcode] += temp_umi_counts
-    except Exception as e:
-        print('Could not find a good local minima for correction.\nNo cell barcode correction was done.')
+    print('Finding a whitelist')
+    cell_whitelist, true_to_false = whitelist_methods.getCellWhitelist(
+        cell_barcode_counts=umis_per_cell,
+        expect_cells=expected_cells,
+        cell_number=expected_cells,
+        error_correct_threshold=collapsing_threshold,
+        plotfile_prefix=False)
+    
+    (
+        umis_per_cell,
+        final_results,
+        corrected_barcodes
+        ) = collapse_cells(
+            true_to_false=true_to_false,
+            umis_per_cell=umis_per_cell,
+            final_results=final_results)
+    return(final_results, umis_per_cell, corrected_barcodes)
+
+
+def correct_cells_whitelist(final_results, umis_per_cell, whitelist, collapsing_threshold):
+    """
+    Corrects cell barcodes.
+    
+    Args:
+        final_results (dict): Dict of dict of Counters with mapping results.
+        umis_per_cell (Counter): Counter of number of umis per cell.
+        whitelist (set): The whitelist reference given by the user.
+        collapsing_threshold (int): Max distance between umis.
+    
+    Returns:
+        final_results (dict): Same as input but with corrected umis.
+        umis_per_cell (Counter): Counter of umis per cell after cell barcode correction
+        corrected_umis (int): How many umis have been corrected.
+    """
+    true_to_false = defaultdict(set)
+    barcode_tree = pybktree.BKTree(Levenshtein.hamming, whitelist)
+    print('Generated barcode tree from whitelist')
+    cell_barcodes = list(final_results.keys())
+    print('Finding reference candidates')
+    for i, cell_barcode in enumerate(cell_barcodes):
+        if cell_barcode in whitelist:
+            # if the barcode is already whitelisted, no need to add
+            continue
+        # get all members of whitelist that are at distance of collapsing_threshold
+        candidates = [white_cell for d, white_cell in barcode_tree.find(cell_barcode, collapsing_threshold) if d > 0]
+
+        if len(candidates) == 0:
+            # the cell doesnt match to any whitelisted barcode,
+            # hence we have to drop it
+            # (as it cannot be asscociated with any frequent barcode)
+            continue
+        elif len(candidates) == 1:
+            white_cell_str = candidates[0]
+            true_to_false[white_cell_str].add(cell_barcode)
+        else:
+            # more than on whitelisted candidate:
+            # we drop it as its not uniquely assignable
+            continue
+    (
+        umis_per_cell,
+        final_results,
+        corrected_barcodes
+        ) = collapse_cells(
+            true_to_false=true_to_false,
+            umis_per_cell=umis_per_cell,
+            final_results=final_results)
     return(final_results, umis_per_cell, corrected_barcodes)
 
 
@@ -245,8 +383,8 @@ def generate_sparse_matrices(final_results, ordered_tags_map, top_cells):
         read_results_matrix (scipy.sparse.dok_matrix): Read counts
 
     """
-    umi_results_matrix = sparse.dok_matrix((len(ordered_tags_map) ,len(top_cells)), dtype=int16)
-    read_results_matrix = sparse.dok_matrix((len(ordered_tags_map) ,len(top_cells)), dtype=int16)
+    umi_results_matrix = sparse.dok_matrix((len(ordered_tags_map) ,len(top_cells)), dtype=int32)
+    read_results_matrix = sparse.dok_matrix((len(ordered_tags_map) ,len(top_cells)), dtype=int32)
     for i,cell_barcode in enumerate(top_cells):
         for j,TAG in enumerate(final_results[cell_barcode]):
             if final_results[cell_barcode][TAG]:

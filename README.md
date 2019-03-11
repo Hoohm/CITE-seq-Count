@@ -1,3 +1,4 @@
+[![DOI](https://zenodo.org/badge/99617772.svg)](https://zenodo.org/badge/latestdoi/99617772)
 # CITE-seq-Count
 A python package that allows to count antibody TAGS from a [CITE-seq](https://www.nature.com/articles/nmeth.4380) and/or [cell hashing](https://www.biorxiv.org/content/early/2017/12/21/237693) experiment.
 
@@ -14,7 +15,7 @@ Installation
 -------------------------------------------
 
 ```
-pip install CITE-seq-Count==1.4.1.1
+pip install CITE-seq-Count==1.4.2
 ```
 
 

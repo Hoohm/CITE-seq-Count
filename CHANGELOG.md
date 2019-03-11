@@ -5,11 +5,37 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 
+## [1.4.2] - 11.03.2019
+### Added
+- Cell barcode correction based on whitelist instead of top cells. This will trigger automatically
+  when a whitelist is provided.
+- UMI correction for tags with more than than 20'000 umis is too slow right now.
+  Cells containing a TAG with more than 20'000 umis will be discarded. This means that more than 20'000
+  antibody tags with different umis have been captured which is odd. Such high numbers could mean
+  that cells have been aggregating and can't be used for downstream analysis. 
+  The number of cells are reported under `Bad cells` and the dense matrix of those cells is provided in `uncorrected_cells`.
+  Fixing issues #32
+- The option to not correct for umis with `--no_umi_correction`.
+- Now prints how many reads will be processed.
+- Checks that tags are indeed made of ATGC bases.
+- Added a check for cell barcode correction and collapsing threshold for given whitelist.
+- New option to allow for a sliding window when aligning TAGS. `--sliding-window`
+  Use when you have a variable sequence before your tags.
+
+### Changed
+- Sparse matrix is now based on int32 instead of int16. Fixing issue #40
+- Cell barcode correction without a whitelist is not outputing any error anymore.
+  This is due to the fact that it uses a hard threshold based on the `-cells` option
+  if it kind find one. Fixing issues #29, #36
+- Upgraded umi_tools to `1.0.0`
+- fixed the error linked to umi_tools version update `getCellWhitelist` #45.
+
+
 ## [1.4.0] - 24.01.2019
 ### Added
 - Enabled parallelization using multiprocessing. You can choose how many
   cores/threads you want to use with the `-T` `--threads` option. Takes max
-  cpu by default. It will run on only one core if you run only 1'000'000 reads.
+  cpu by default. It will run on only one core if you run 1'000'000 reads or less.
 - The output is now given in a gzipped mtx format. This is to ensure smooth usage for 
   new/larger datasets such as data from novaseq sequencers. For those who still want
   to use the dense format, there is an option `--dense` which will add the dense output

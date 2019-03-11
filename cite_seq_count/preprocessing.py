@@ -49,7 +49,7 @@ def chunk_reads(n_reads, n):
     return(indexes)
     
 
-def parse_whitelist_csv(filename, barcode_length):
+def parse_whitelist_csv(filename, barcode_length, collapsing_threshold):
     """Reads white-listed barcodes from a CSV file.
 
     The function accepts plain barcodes or even 10X style barcodes with the
@@ -69,10 +69,38 @@ def parse_whitelist_csv(filename, barcode_length):
         cell_pattern = regex.compile(r'[ATGC]{{{}}}'.format(barcode_length))
         whitelist = [row[0].strip(STRIP_CHARS) for row in csv_reader
                      if (len(row[0].strip(STRIP_CHARS)) == barcode_length)]
-        for cell_barcode in whitelist:
-            if not cell_pattern.match(cell_barcode):
-                sys.exit('This barcode {} is not only composed of ATGC bases.'.format(cell_barcode))
-    return set(whitelist)
+    for cell_barcode in whitelist:
+        if not cell_pattern.match(cell_barcode):
+            sys.exit('This barcode {} is not only composed of ATGC bases.'.format(cell_barcode))
+    collapsing_threshold=test_cell_distances(whitelist, collapsing_threshold)
+    return(set(whitelist), collapsing_threshold)
+
+
+def test_cell_distances(whitelist, collapsing_threshold):
+    """Tests cell barcode distances to validate provided cell barcode collapsing threshold
+    
+    Function needs the given whitelist as well as the threshold.
+    If the value is too high, it will rerun until an acceptable value is found.
+    
+    Args:
+        whitelist (set): Whitelist barcode set
+        collapsing_threshold (int): Value of threshold
+
+    Returns:
+        collapsing_threshold (int): Valid threshold
+    """
+    ok = False
+    while not ok:
+        print('Testing cell barcode collapsing threshold of {}'.format(collapsing_threshold))
+        for comb in combinations(whitelist, 2):
+            if Levenshtein.hamming(comb[0], comb[1]) <= collapsing_threshold:
+                collapsing_threshold -= 1
+                print('Value is too high, reducing it by 1')
+                break
+        else:
+            ok = True
+    print('Using {} for cell barcode collapsing threshold'.format(collapsing_threshold))
+    return(collapsing_threshold)
 
 
 def parse_tags_csv(filename):
@@ -131,7 +159,11 @@ def check_tags(tags, maximum_distance):
         distance = Levenshtein.distance(a, b)
         if (distance <= (maximum_distance - 1)):
             offending_pairs.append([a, b, distance])
-    
+    DNA_pattern = regex.compile('^[ATGC]*$')
+    for tag in tags:
+        if not DNA_pattern.match(tag):
+            print('This tag {} is not only composed of ATGC bases.\nPlease check your tags file'.format(tag))
+            sys.exit('Exiting the application.\n')
     # If offending pairs are found, print them all.
     if offending_pairs:
         print(
@@ -211,6 +243,7 @@ def check_barcodes_lengths(read1_length, cb_first, cb_last, umi_first, umi_last)
         )
     
     return(barcode_slice, umi_slice, barcode_umi_length)
+
 
 def blocks(files, size=65536):
     """

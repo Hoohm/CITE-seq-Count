@@ -31,6 +31,8 @@ def write_to_files(sparse_matrix, top_cells, ordered_tags_map, data_type, outfol
             shutil.copyfileobj(mtx_in, mtx_gz)
     os.remove(os.path.join(prefix,'matrix.mtx'))
 
-def write_dense(sparse_matrix, index, columns, file_path):
+def write_dense(sparse_matrix, index, columns, outfolder, filename):
+    prefix = os.path.join(outfolder)
+    os.makedirs(prefix, exist_ok=True)
     pandas_dense = pd.DataFrame(sparse_matrix.todense(), columns=columns, index=index)
-    pandas_dense.to_csv(file_path, sep='\t')
+    pandas_dense.to_csv(os.path.join(outfolder,filename), sep='\t')
