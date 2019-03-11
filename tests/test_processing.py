@@ -157,6 +157,7 @@ def test_classify_reads_multi_process(data):
         pytest.sliding_window)
     assert len(results) == 2
 
+
 @pytest.mark.dependency(depends=['test_classify_reads_multi_process'])
 def test_correct_umis(data):
     temp = processing.correct_umis(pytest.results, 2, pytest.corrected_results.keys(), pytest.max_umis)
@@ -168,9 +169,11 @@ def test_correct_umis(data):
             assert sum(results[cell_barcode][TAG].values()) == sum(pytest.corrected_results[cell_barcode][TAG].values())
     assert n_corrected == 3
 
+
 @pytest.mark.dependency(depends=['test_correct_umis'])
 def test_correct_cells(data):
     processing.correct_cells(pytest.corrected_results, pytest.umis_per_cell, pytest.expected_cells, pytest.collapsing_threshold)
+
 
 @pytest.mark.dependency(depends=['test_correct_umis'])
 def test_generate_sparse_matrices(data):
