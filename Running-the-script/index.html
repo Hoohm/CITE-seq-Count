@@ -232,7 +232,7 @@ Barcodes from 1 to 16 and UMI from 17 to 26, then this is the input you need:</p
 <h3 id="filtering">FILTERING</h3>
 <p>Filtering for structure of the antibody barcode as well as maximum errors.</p>
 <ul>
-<li>[OPTIONAL] Maximum Levenshtein distance allowed. This allows to catch antibody barcodes that might have <code>--max-error</code> errors compared to the real barcodes.</li>
+<li>[OPTIONAL] Maximum Levenshtein distance allowed. This allows to catch antibody barcodes that might have <code>--max-error</code> errors compared to the real barcodes. (was <code>-hd</code> in previous versions)</li>
 </ul>
 <p><code>--max-error MAX_ERROR</code>, default <code>3</code></p>
 <p>Example:</p>
@@ -245,6 +245,21 @@ Barcodes from 1 to 16 and UMI from 17 to 26, then this is the input you need:</p
 <li>[Optional] How many bases should we trim before starting to map. See <code>CASE2</code> of special examples in the</li>
 </ul>
 <p><code>-trim N_BASES, --start-trim N_BASES</code>, default <code>0</code></p>
+<ul>
+<li>[OPTIONAL] Activate sliding window alignement. Use this when you have a protocol that has a variable sequence before the inserted TAG.</li>
+</ul>
+<p><code>--sliding-window</code>, default <code>False</code></p>
+<p>Example:</p>
+<p>The TAG: <code>ATGCTAGCT</code> with a variable prefix: <code>TTCAATTTCA</code>
+R2 reads:</p>
+<pre><code>TTCA ATGCTAGCTAAAAAAAAAAAAAAAAA
+TTCAA ATGCTAGCTAAAAAAAAAAAAAAAA
+TTCAAT ATGCTAGCTAAAAAAAAAAAAAAA
+TTCAATT ATGCTAGCTAAAAAAAAAAAAAA
+TTCAATTT ATGCTAGCTAAAAAAAAAAAAA
+TTCAATTTC ATGCTAGCTAAAAAAAAAAAA
+</code></pre>
+
 <h3 id="output">OUTPUT</h3>
 <p>You have to choose either the number of cells you expect or give it a list of cell barcodes to retrieve.</p>
 <ul>
@@ -252,7 +267,7 @@ Barcodes from 1 to 16 and UMI from 17 to 26, then this is the input you need:</p
 </ul>
 <p><code>-cells CELLS, --expected_cells CELLS</code></p>
 <ul>
-<li>[Optional] If you have a whitelist of barcodes produced by the cDNA data, you are using a well-plate based protocol or any known whitelist, you can use this list to only extract TAGS matching those barcodes. Typically using the cell list from the mRNA data of the same experiment.</li>
+<li>[Optional] If you have a whitelist of barcodes produced by the cDNA data, you are using a well-plate based protocol or a platform reference, you can use this list to only extract TAGS matching those barcodes. Typically using the cell list from the mRNA data of the same experiment. This is highly recommended as knowing the true cells helps for cell barcode correction.</li>
 </ul>
 <p><code>-wl WHITELIST, --whitelist WHITELIST</code></p>
 <p>Example:</p>

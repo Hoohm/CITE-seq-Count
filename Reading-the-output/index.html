@@ -148,6 +148,7 @@ CITE-seq-Count Version: 1.4.0
 Reads processed: 50000000
 Percentage mapped: 95
 Percentage unmapped: 5
+Uncorrected cells: 33
 Correction:
     Cell barcodes collapsing threshold: 1
     Cell barcodes corrected: 20000
@@ -171,7 +172,21 @@ Run Parameters:
 <h2 id="packages-to-read-mtx">Packages to read MTX</h2>
 <p><strong>R</strong></p>
 <p>I recommend using <code>Seurat</code> and their <code>Read10x</code> function to read the results.</p>
-<p>Example: <code>Read10x('OUTFOLDER/umi_count', gene.column=1)</code></p>
+<p>With Seurat V3:</p>
+<p><code>Read10x('OUTFOLDER/umi_count/', gene.column=1)</code></p>
+<p>With Matrix:</p>
+<pre><code>library(Matrix)
+matrix_dir = &quot;/path_to_your_directory/out_cite_seq_count/umi_count/&quot;
+barcode.path &lt;- paste0(matrix_dir, &quot;barcodes.tsv.gz&quot;)
+features.path &lt;- paste0(matrix_dir, &quot;features.tsv.gz&quot;)
+matrix.path &lt;- paste0(matrix_dir, &quot;matrix.mtx.gz&quot;)
+mat &lt;- readMM(file = matrix.path)
+feature.names = read.delim(features.path, header = FALSE, stringsAsFactors = FALSE)
+barcode.names = read.delim(barcode.path, header = FALSE, stringsAsFactors = FALSE)
+colnames(mat) = barcode.names$V1
+rownames(mat) = feature.names$V1
+</code></pre>
+
 <p><strong>Python</strong></p>
 <p>I recommend using <code>scanpy</code> and their read_mtx function to read the results.</p>
 <p>Example:</p>
