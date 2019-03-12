@@ -343,20 +343,22 @@ def main():
         if not whitelist:
             (
                 final_results,
+                reads_per_cell,
                 umis_per_cell,
                 bcs_corrected
             ) = processing.correct_cells(
                     final_results=final_results,
+                    reads_per_cell=reads_per_cell,
                     umis_per_cell=umis_per_cell,
                     expected_cells=args.expected_cells,
                     collapsing_threshold=args.bc_threshold)
         else:
             (
                 final_results,
-                umis_per_cell,
+                reads_per_cell,
                 bcs_corrected) = processing.correct_cells_whitelist(
                     final_results=final_results,
-                    umis_per_cell=umis_per_cell,
+                    reads_per_cell=reads_per_cell,
                     whitelist=whitelist,
                     collapsing_threshold=args.bc_threshold)
 
