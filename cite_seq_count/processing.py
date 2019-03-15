@@ -383,7 +383,6 @@ def correct_cells_whitelist(final_results, umis_per_cell, whitelist, collapsing_
         for chunk in parallel_results:
             for cell_barcode in chunk:
                 true_to_false[cell_barcode].update(chunk[cell_barcode])
-    print(true_to_false)
     (
         umis_per_cell,
         final_results,
@@ -407,14 +406,14 @@ def find_true_to_false_map(barcode_tree, cell_barcodes, whitelist, collapsing_th
             continue
         # get all members of whitelist that are at distance of collapsing_threshold
         candidates = [white_cell for d, white_cell in barcode_tree.find(cell_barcode, collapsing_threshold) if d > 0]
-        if len(candidates) == 1:
-            white_cell_str = candidates[0]
-            true_to_false[white_cell_str].add(cell_barcode)
-        elif len(candidates) == 0:
+        if len(candidates) == 0:
             # the cell doesnt match to any whitelisted barcode,
             # hence we have to drop it
             # (as it cannot be asscociated with any frequent barcode)
             continue
+        elif len(candidates) == 1:
+            white_cell_str = candidates[0]
+            true_to_false[white_cell_str].add(cell_barcode)
         else:
             # more than on whitelisted candidate:
             # we drop it as its not uniquely assignable
