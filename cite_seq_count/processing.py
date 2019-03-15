@@ -378,7 +378,6 @@ def correct_cells_whitelist(final_results, umis_per_cell, whitelist, collapsing_
                 error_callback=sys.stderr)
         p.close()
         p.join()
-
         print('Merging cell barcode mapping')
         for chunk in parallel_results:
             for cell_barcode in chunk:
@@ -418,7 +417,7 @@ def find_true_to_false_map(barcode_tree, cell_barcodes, whitelist, collapsing_th
             # more than on whitelisted candidate:
             # we drop it as its not uniquely assignable
             continue
-        return(true_to_false)
+    return(true_to_false)
 
 
 
