@@ -341,7 +341,7 @@ def correct_cells_whitelist(final_results, umis_per_cell, whitelist, collapsing_
     true_to_false = defaultdict(set)
     barcode_tree = pybktree.BKTree(Levenshtein.hamming, whitelist)
     print('Generated barcode tree from whitelist')
-    cell_barcodes = set(final_results.keys())
+    cell_barcodes = list(set(final_results.keys()))
     n_barcodes = len(cell_barcodes)
     print('Finding reference candidates')
     print('Processing {:,} cell barcodes'.format(n_barcodes))
@@ -387,6 +387,8 @@ def correct_cells_whitelist(final_results, umis_per_cell, whitelist, collapsing_
 
 
 def find_true_to_false_map(barcode_tree, cell_barcodes, whitelist, collapsing_threshold):
+    """
+    """
     true_to_false = defaultdict(set)
     for i, cell_barcode in enumerate(cell_barcodes):
         if cell_barcode in whitelist:
@@ -408,27 +410,7 @@ def find_true_to_false_map(barcode_tree, cell_barcodes, whitelist, collapsing_th
             continue
         return(true_to_false)
 
-def find_true_to_false_map_parallel(barcode_tree, cell_barcodes, whitelist, collapsing_threshold):
-    true_to_false = defaultdict(set)
-    for i, cell_barcode in enumerate(cell_barcodes):
-        if cell_barcode in whitelist:
-            # if the barcode is already whitelisted, no need to add
-            continue
-        # get all members of whitelist that are at distance of collapsing_threshold
-        candidates = [white_cell for d, white_cell in barcode_tree.find(cell_barcode, collapsing_threshold) if d > 0]
-        if len(candidates) == 1:
-            white_cell_str = candidates[0]
-            true_to_false[white_cell_str].add(cell_barcode)
-        elif len(candidates) == 0:
-            # the cell doesnt match to any whitelisted barcode,
-            # hence we have to drop it
-            # (as it cannot be asscociated with any frequent barcode)
-            continue
-        else:
-            # more than on whitelisted candidate:
-            # we drop it as its not uniquely assignable
-            continue
-        return(true_to_false)
+
 
 def generate_sparse_matrices(final_results, ordered_tags_map, top_cells):
     """
