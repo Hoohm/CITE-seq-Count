@@ -73,7 +73,7 @@ def parse_whitelist_csv(filename, barcode_length, collapsing_threshold):
     for cell_barcode in whitelist:
         if not cell_pattern.match(cell_barcode):
             sys.exit('This barcode {} is not only composed of ATGC bases.'.format(cell_barcode))
-    #collapsing_threshold=test_cell_distances(whitelist, collapsing_threshold)
+    collapsing_threshold=test_cell_distances(whitelist, collapsing_threshold)
     if len(whitelist) == 0:
         sys.exit('Please check cell barcode indexes -cbs, -cbl because none of the given whitelist is valid.')
     return(set(whitelist), collapsing_threshold)

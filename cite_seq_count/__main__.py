@@ -329,6 +329,12 @@ def main():
         ) = processing.merge_results(parallel_results=parallel_results)
         del(parallel_results)
     
+    #Generate a mapping with indexes for the sparse matrix
+    ordered_tags_map = OrderedDict()
+    for i,tag in enumerate(ab_map.values()):
+        ordered_tags_map[tag] = i
+    ordered_tags_map['unmapped'] = i + 1
+
     # Correct cell barcodes
     if(len(umis_per_cell) <= args.expected_cells):
         print("Number of expected cells, {}, is higher " \
@@ -348,7 +354,8 @@ def main():
                     reads_per_cell=reads_per_cell,
                     umis_per_cell=umis_per_cell,
                     expected_cells=args.expected_cells,
-                    collapsing_threshold=args.bc_threshold)
+                    collapsing_threshold=args.bc_threshold,
+                    ab_map=ab_map)
         else:
             (
                 final_results,
@@ -358,13 +365,8 @@ def main():
                     umis_per_cell=umis_per_cell,
                     whitelist=whitelist,
                     collapsing_threshold=args.bc_threshold,
-                    n_threads=n_threads)
-
-    #Generate a mapping with indexes for the sparse matrix
-    ordered_tags_map = OrderedDict()
-    for i,tag in enumerate(ab_map.values()):
-        ordered_tags_map[tag] = i
-    ordered_tags_map['unmapped'] = i + 1
+                    n_threads=n_threads,
+                    ab_map=ab_map)
 
     # If given, use whitelist for top cells
     if whitelist:

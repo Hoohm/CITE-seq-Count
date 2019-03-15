@@ -260,7 +260,7 @@ def update_umi_counts(UMIclusters, cell_tag_counts):
     return(cell_tag_counts, temp_corrected_umis)
 
 
-def collapse_cells(true_to_false, umis_per_cell, final_results):
+def collapse_cells(true_to_false, umis_per_cell, final_results, ab_map):
     """
     Collapses cell barcodes based on the mapping true_to_false
 
@@ -277,21 +277,28 @@ def collapse_cells(true_to_false, umis_per_cell, final_results):
     print('Collapsing cell barcodes')
     corrected_barcodes = 0
     for real_barcode in true_to_false:
+        # If the cell barcode is not in the results
+        if real_barcode not in final_results:
+            final_results[real_barcode] = Counter()
+            for TAG in ab_map:
+                final_results[real_barcode][TAG] = defaultdict(Counter)
+            final_results[real_barcode]['unmapped'] = defaultdict(Counter)
+
         for fake_barcode in true_to_false[real_barcode]:
-            if real_barcode in final_results:
-                temp = final_results.pop(fake_barcode)
-                corrected_barcodes += 1
-                for TAG in temp.keys():
-                    final_results[real_barcode][TAG].update(temp[TAG])
-                temp_umi_counts = umis_per_cell.pop(fake_barcode)
-                #temp_read_counts = reads_per_cell.pop(fake_barcode)
-                
-                umis_per_cell[real_barcode] += temp_umi_counts
-                #reads_per_cell[real_barcode] += temp_read_counts
+            temp = final_results.pop(fake_barcode)
+            corrected_barcodes += 1
+            for TAG in temp.keys():
+                final_results[real_barcode][TAG].update(temp[TAG])
+            temp_umi_counts = umis_per_cell.pop(fake_barcode)
+            #temp_read_counts = reads_per_cell.pop(fake_barcode)
+            
+            umis_per_cell[real_barcode] += temp_umi_counts
+            #reads_per_cell[real_barcode] += temp_read_counts
+
     return(umis_per_cell, final_results, corrected_barcodes)
 
 
-def correct_cells(final_results, reads_per_cell, umis_per_cell, collapsing_threshold, expected_cells):
+def correct_cells(final_results, reads_per_cell, umis_per_cell, collapsing_threshold, expected_cells, ab_map):
     """
     Corrects cell barcodes.
     
@@ -313,6 +320,7 @@ def correct_cells(final_results, reads_per_cell, umis_per_cell, collapsing_thres
         cell_number=expected_cells,
         error_correct_threshold=collapsing_threshold,
         plotfile_prefix=False)
+    print(true_to_false)
     
     (
         umis_per_cell,
@@ -321,11 +329,12 @@ def correct_cells(final_results, reads_per_cell, umis_per_cell, collapsing_thres
         ) = collapse_cells(
             true_to_false=true_to_false,
             umis_per_cell=umis_per_cell,
-            final_results=final_results)
+            final_results=final_results,
+            ab_map=ab_map)
     return(final_results, umis_per_cell, corrected_barcodes)
 
 
-def correct_cells_whitelist(final_results, umis_per_cell, whitelist, collapsing_threshold, n_threads):
+def correct_cells_whitelist(final_results, umis_per_cell, whitelist, collapsing_threshold, n_threads, ab_map):
     """
     Corrects cell barcodes.
     
@@ -347,7 +356,7 @@ def correct_cells_whitelist(final_results, umis_per_cell, whitelist, collapsing_
     print('Processing {:,} cell barcodes'.format(n_barcodes))
 
     #Run with one process
-    if n_threads <= 1 or n_barcodes < 1000001:
+    if n_threads <= 1 or n_barcodes < 500001:
         true_to_false = find_true_to_false_map(
             barcode_tree=barcode_tree,
             cell_barcodes=cell_barcodes,
@@ -355,8 +364,8 @@ def correct_cells_whitelist(final_results, umis_per_cell, whitelist, collapsing_
             collapsing_threshold=collapsing_threshold)
     else:
         # Run with multiple processes
-        p = Pool(processes=n_threads)
-        chunk_indexes = preprocessing.chunk_reads(n_barcodes, n_threads)
+        p = Pool(processes=2)
+        chunk_indexes = preprocessing.chunk_reads(n_barcodes, 2)
         parallel_results = []
         for indexes in chunk_indexes:
            p.apply_async(find_true_to_false_map,
@@ -374,13 +383,15 @@ def correct_cells_whitelist(final_results, umis_per_cell, whitelist, collapsing_
         for chunk in parallel_results:
             for cell_barcode in chunk:
                 true_to_false[cell_barcode].update(chunk[cell_barcode])
+    print(true_to_false)
     (
         umis_per_cell,
         final_results,
         corrected_barcodes) = collapse_cells(
             true_to_false,
             umis_per_cell,
-            final_results)
+            final_results,
+            ab_map)
     return(final_results, umis_per_cell, corrected_barcodes)
 
     
