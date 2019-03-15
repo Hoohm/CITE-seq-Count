@@ -31,8 +31,36 @@ def write_to_files(sparse_matrix, top_cells, ordered_tags_map, data_type, outfol
             shutil.copyfileobj(mtx_in, mtx_gz)
     os.remove(os.path.join(prefix,'matrix.mtx'))
 
+
 def write_dense(sparse_matrix, index, columns, outfolder, filename):
+    """
+    Writes a dense matrix in a csv format
+    
+    Args:
+       sparse_matrix (dok_matrix): Results in a sparse matrix.
+       index (list): List of TAGS
+       columns (set): List of cells
+       outfolder (str): Output folder
+       filename (str): Filename
+    """
     prefix = os.path.join(outfolder)
     os.makedirs(prefix, exist_ok=True)
     pandas_dense = pd.DataFrame(sparse_matrix.todense(), columns=columns, index=index)
     pandas_dense.to_csv(os.path.join(outfolder,filename), sep='\t')
+
+
+def write_unmapped(merged_no_match, top_unknowns, outfolder, filename):
+    """
+    Writes a list of top unmapped sequences
+
+    Args:
+        merged_no_match (Counter): Counter of unmapped sequences
+        top_unknowns (int): Number of unmapped sequences to output
+    """
+    
+    top_unmapped = merged_no_match.most_common(top_unknowns)
+
+    with open(os.path.join(outfolder, filename),'w') as unknown_file:
+        unknown_file.write('tag,count\n')
+        for element in top_unmapped:
+            unknown_file.write('{},{}\n'.format(element[0],element[1]))

@@ -58,6 +58,7 @@ def parse_whitelist_csv(filename, barcode_length, collapsing_threshold):
     Args:
         filename (str): Whitelist barcode file.
         barcode_length (int): Length of the expected barcodes.
+        collapsing_threshold (int): Maximum distance to collapse cell barcodes.
 
     Returns:
         set: The set of white-listed barcodes.
@@ -72,7 +73,7 @@ def parse_whitelist_csv(filename, barcode_length, collapsing_threshold):
     for cell_barcode in whitelist:
         if not cell_pattern.match(cell_barcode):
             sys.exit('This barcode {} is not only composed of ATGC bases.'.format(cell_barcode))
-    collapsing_threshold=test_cell_distances(whitelist, collapsing_threshold)
+    #collapsing_threshold=test_cell_distances(whitelist, collapsing_threshold)
     return(set(whitelist), collapsing_threshold)
 
 
@@ -92,7 +93,8 @@ def test_cell_distances(whitelist, collapsing_threshold):
     ok = False
     while not ok:
         print('Testing cell barcode collapsing threshold of {}'.format(collapsing_threshold))
-        for comb in combinations(whitelist, 2):
+        all_comb = combinations(whitelist, 2)
+        for comb in all_comb:
             if Levenshtein.hamming(comb[0], comb[1]) <= collapsing_threshold:
                 collapsing_threshold -= 1
                 print('Value is too high, reducing it by 1')

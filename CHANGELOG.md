@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [1.4.3] - XX.03.2019
+### Changed
+- Cell barcode whitelist is now based on reads instead of UMIs. Fixing issue #48
+
 
 ## [1.4.2] - 11.03.2019
 ### Added
