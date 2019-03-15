@@ -8,6 +8,7 @@ import pybktree
 
 from collections import Counter
 from collections import defaultdict
+from multiprocess import Pool
 
 from itertools import islice
 from numpy import int32
@@ -18,6 +19,7 @@ import umi_tools.whitelist_methods as whitelist_methods
 
 
 from cite_seq_count import secondsToText
+from cite_seq_count import preprocessing
 
 
 def find_best_match(TAG_seq, tags, maximum_distance):
