@@ -234,6 +234,7 @@ def main():
     # Parse arguments.
     args = parser.parse_args()
     if args.whitelist:
+        print('Loading whitelist')
         (whitelist, args.bc_threshold) = preprocessing.parse_whitelist_csv(
             filename=args.whitelist,
             barcode_length=args.cb_last - args.cb_first + 1,
@@ -298,7 +299,6 @@ def main():
         p = Pool(processes=n_threads)
         chunk_indexes = preprocessing.chunk_reads(n_reads, n_threads)
         parallel_results = []
-
         for indexes in chunk_indexes:
            p.apply_async(processing.map_reads,
                 args=(
@@ -341,7 +341,6 @@ def main():
         if not whitelist:
             (
                 final_results,
-                reads_per_cell,
                 umis_per_cell,
                 bcs_corrected
             ) = processing.correct_cells(
@@ -353,12 +352,13 @@ def main():
         else:
             (
                 final_results,
-                reads_per_cell,
+                umis_per_cell,
                 bcs_corrected) = processing.correct_cells_whitelist(
                     final_results=final_results,
-                    reads_per_cell=reads_per_cell,
+                    umis_per_cell=umis_per_cell,
                     whitelist=whitelist,
-                    collapsing_threshold=args.bc_threshold)
+                    collapsing_threshold=args.bc_threshold,
+                    n_threads=n_threads)
 
     #Generate a mapping with indexes for the sparse matrix
     ordered_tags_map = OrderedDict()

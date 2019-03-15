@@ -258,7 +258,7 @@ def update_umi_counts(UMIclusters, cell_tag_counts):
     return(cell_tag_counts, temp_corrected_umis)
 
 
-def collapse_cells(true_to_false, reads_per_cell, umis_per_cell, final_results):
+def collapse_cells(true_to_false, umis_per_cell, final_results):
     """
     Collapses cell barcodes based on the mapping true_to_false
 
@@ -282,11 +282,11 @@ def collapse_cells(true_to_false, reads_per_cell, umis_per_cell, final_results):
                 for TAG in temp.keys():
                     final_results[real_barcode][TAG].update(temp[TAG])
                 temp_umi_counts = umis_per_cell.pop(fake_barcode)
-                temp_read_counts = reads_per_cell.pop(fake_barcode)
+                #temp_read_counts = reads_per_cell.pop(fake_barcode)
                 
                 umis_per_cell[real_barcode] += temp_umi_counts
-                reads_per_cell[real_barcode] += temp_read_counts
-    return(reads_per_cell, umis_per_cell, final_results, corrected_barcodes)
+                #reads_per_cell[real_barcode] += temp_read_counts
+    return(umis_per_cell, final_results, corrected_barcodes)
 
 
 def correct_cells(final_results, reads_per_cell, umis_per_cell, collapsing_threshold, expected_cells):
@@ -313,66 +313,97 @@ def correct_cells(final_results, reads_per_cell, umis_per_cell, collapsing_thres
         plotfile_prefix=False)
     
     (
-        reads_per_cell,
         umis_per_cell,
         final_results,
         corrected_barcodes
         ) = collapse_cells(
             true_to_false=true_to_false,
-            reads_per_cell=reads_per_cell,
             umis_per_cell=umis_per_cell,
             final_results=final_results)
-    return(final_results, reads_per_cell, umis_per_cell, corrected_barcodes)
+    return(final_results, umis_per_cell, corrected_barcodes)
 
 
-def correct_cells_whitelist(final_results, reads_per_cell, whitelist, collapsing_threshold):
+def correct_cells_whitelist(final_results, umis_per_cell, whitelist, collapsing_threshold, n_threads):
     """
     Corrects cell barcodes.
     
     Args:
         final_results (dict): Dict of dict of Counters with mapping results.
-        reads_per_cell (Counter): Counter of number of umis per cell.
         whitelist (set): The whitelist reference given by the user.
         collapsing_threshold (int): Max distance between umis.
     
     Returns:
         final_results (dict): Same as input but with corrected umis.
-        reads_per_cell (Counter): Counter of umis per cell after cell barcode correction
         corrected_umis (int): How many umis have been corrected.
     """
     true_to_false = defaultdict(set)
     barcode_tree = pybktree.BKTree(Levenshtein.hamming, whitelist)
     print('Generated barcode tree from whitelist')
-    cell_barcodes = list(final_results.keys())
+    cell_barcodes = set(final_results.keys())
+    n_barcodes = len(cell_barcodes)
     print('Finding reference candidates')
+    print('Processing {:,} cell barcodes'.format(n_barcodes))
+
+    #Run with one process
+    if n_threads <= 1 or n_barcodes < 100001:
+        true_to_false = find_true_to_false_map(
+            barcode_tree=barcode_tree,
+            cell_barcodes=cell_barcodes,
+            whitelist=whitelist,
+            collapsing_threshold=collapsing_threshold)
+    else:
+        # Run with multiple processes
+        p = Pool(processes=n_threads)
+        chunk_indexes = preprocessing.chunk_reads(n_barcodes, n_threads)
+        parallel_results = []
+        for indexes in chunk_indexes:
+           p.apply_async(find_true_to_false_map,
+                args=(
+                    barcode_tree,
+                    cell_barcodes,
+                    whitelist,
+                    collapsing_threshold),
+                callback=parallel_results.append,
+                error_callback=sys.stderr)
+        p.close()
+        p.join()
+        print('Merging cell barcode mapping')
+        for chunk in parallel_results:
+            for cell_barcode in chunk:
+                true_to_false[cell_barcode].update(chunk[cell_barcode])
+    (
+        umis_per_cell,
+        final_results,
+        corrected_barcodes) = collapse_cells(
+            true_to_false,
+            umis_per_cell,
+            final_results)
+    return(final_results, umis_per_cell, corrected_barcodes)
+
+    
+
+
+def find_true_to_false_map(barcode_tree, cell_barcodes, whitelist, collapsing_threshold):
+    true_to_false = defaultdict(set)
     for i, cell_barcode in enumerate(cell_barcodes):
         if cell_barcode in whitelist:
             # if the barcode is already whitelisted, no need to add
             continue
         # get all members of whitelist that are at distance of collapsing_threshold
         candidates = [white_cell for d, white_cell in barcode_tree.find(cell_barcode, collapsing_threshold) if d > 0]
-
-        if len(candidates) == 0:
+        if len(candidates) == 1:
+            white_cell_str = candidates[0]
+            true_to_false[white_cell_str].add(cell_barcode)
+        elif len(candidates) == 0:
             # the cell doesnt match to any whitelisted barcode,
             # hence we have to drop it
             # (as it cannot be asscociated with any frequent barcode)
             continue
-        elif len(candidates) == 1:
-            white_cell_str = candidates[0]
-            true_to_false[white_cell_str].add(cell_barcode)
         else:
             # more than on whitelisted candidate:
             # we drop it as its not uniquely assignable
             continue
-    (
-        reads_per_cell,
-        final_results,
-        corrected_barcodes
-        ) = collapse_cells(
-            true_to_false=true_to_false,
-            reads_per_cell=reads_per_cell,
-            final_results=final_results)
-    return(final_results, reads_per_cell, corrected_barcodes)
+        return(true_to_false)
 
 
 def generate_sparse_matrices(final_results, ordered_tags_map, top_cells):
