@@ -347,7 +347,7 @@ def correct_cells_whitelist(final_results, umis_per_cell, whitelist, collapsing_
     print('Processing {:,} cell barcodes'.format(n_barcodes))
 
     #Run with one process
-    if n_threads <= 1 or n_barcodes < 100001:
+    if n_threads <= 1 or n_barcodes < 1000001:
         true_to_false = find_true_to_false_map(
             barcode_tree=barcode_tree,
             cell_barcodes=cell_barcodes,
@@ -362,7 +362,7 @@ def correct_cells_whitelist(final_results, umis_per_cell, whitelist, collapsing_
            p.apply_async(find_true_to_false_map,
                 args=(
                     barcode_tree,
-                    cell_barcodes[indexes],
+                    cell_barcodes[indexes[0]:indexes[1]],
                     whitelist,
                     collapsing_threshold),
                 callback=parallel_results.append,
