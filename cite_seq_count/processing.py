@@ -362,13 +362,14 @@ def correct_cells_whitelist(final_results, umis_per_cell, whitelist, collapsing_
            p.apply_async(find_true_to_false_map,
                 args=(
                     barcode_tree,
-                    cell_barcodes,
+                    cell_barcodes[indexes],
                     whitelist,
                     collapsing_threshold),
                 callback=parallel_results.append,
                 error_callback=sys.stderr)
         p.close()
         p.join()
+
         print('Merging cell barcode mapping')
         for chunk in parallel_results:
             for cell_barcode in chunk:
@@ -407,6 +408,27 @@ def find_true_to_false_map(barcode_tree, cell_barcodes, whitelist, collapsing_th
             continue
         return(true_to_false)
 
+def find_true_to_false_map_parallel(barcode_tree, cell_barcodes, whitelist, collapsing_threshold):
+    true_to_false = defaultdict(set)
+    for i, cell_barcode in enumerate(cell_barcodes):
+        if cell_barcode in whitelist:
+            # if the barcode is already whitelisted, no need to add
+            continue
+        # get all members of whitelist that are at distance of collapsing_threshold
+        candidates = [white_cell for d, white_cell in barcode_tree.find(cell_barcode, collapsing_threshold) if d > 0]
+        if len(candidates) == 1:
+            white_cell_str = candidates[0]
+            true_to_false[white_cell_str].add(cell_barcode)
+        elif len(candidates) == 0:
+            # the cell doesnt match to any whitelisted barcode,
+            # hence we have to drop it
+            # (as it cannot be asscociated with any frequent barcode)
+            continue
+        else:
+            # more than on whitelisted candidate:
+            # we drop it as its not uniquely assignable
+            continue
+        return(true_to_false)
 
 def generate_sparse_matrices(final_results, ordered_tags_map, top_cells):
     """
