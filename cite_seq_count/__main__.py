@@ -355,7 +355,7 @@ def main():
                     umis_per_cell=umis_per_cell,
                     expected_cells=args.expected_cells,
                     collapsing_threshold=args.bc_threshold,
-                    ab_map=ab_map)
+                    ab_map=ordered_tags_map)
         else:
             (
                 final_results,
@@ -366,7 +366,7 @@ def main():
                     whitelist=whitelist,
                     collapsing_threshold=args.bc_threshold,
                     n_threads=n_threads,
-                    ab_map=ab_map)
+                    ab_map=ordered_tags_map)
 
     # If given, use whitelist for top cells
     if whitelist:

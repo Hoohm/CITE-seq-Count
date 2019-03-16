@@ -282,8 +282,6 @@ def collapse_cells(true_to_false, umis_per_cell, final_results, ab_map):
             final_results[real_barcode] = defaultdict()
             for TAG in ab_map:
                 final_results[real_barcode][TAG] = Counter()
-            final_results[real_barcode]['unmapped'] = Counter()
-
         for fake_barcode in true_to_false[real_barcode]:
             temp = final_results.pop(fake_barcode)
             corrected_barcodes += 1
