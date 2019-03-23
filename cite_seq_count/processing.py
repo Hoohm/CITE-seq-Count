@@ -318,7 +318,6 @@ def correct_cells(final_results, reads_per_cell, umis_per_cell, collapsing_thres
         cell_number=expected_cells,
         error_correct_threshold=collapsing_threshold,
         plotfile_prefix=False)
-    print(true_to_false)
     
     (
         umis_per_cell,
@@ -362,8 +361,8 @@ def correct_cells_whitelist(final_results, umis_per_cell, whitelist, collapsing_
             collapsing_threshold=collapsing_threshold)
     else:
         # Run with multiple processes
-        p = Pool(processes=n_threads)
-        chunk_indexes = preprocessing.chunk_reads(n_barcodes, n_threads)
+        p = Pool(processes=4)
+        chunk_indexes = preprocessing.chunk_reads(n_barcodes, 4)
         parallel_results = []
         for indexes in chunk_indexes:
            p.apply_async(find_true_to_false_map,
