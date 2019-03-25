@@ -353,32 +353,11 @@ def correct_cells_whitelist(final_results, umis_per_cell, whitelist, collapsing_
     print('Processing {:,} cell barcodes'.format(n_barcodes))
 
     #Run with one process
-    if n_threads <= 1 or n_barcodes < 500001:
-        true_to_false = find_true_to_false_map(
+    true_to_false = find_true_to_false_map(
             barcode_tree=barcode_tree,
             cell_barcodes=cell_barcodes,
             whitelist=whitelist,
             collapsing_threshold=collapsing_threshold)
-    else:
-        # Run with multiple processes
-        p = Pool(processes=4)
-        chunk_indexes = preprocessing.chunk_reads(n_barcodes, 4)
-        parallel_results = []
-        for indexes in chunk_indexes:
-           p.apply_async(find_true_to_false_map,
-                args=(
-                    barcode_tree,
-                    cell_barcodes[indexes[0]:indexes[1]],
-                    whitelist,
-                    collapsing_threshold),
-                callback=parallel_results.append,
-                error_callback=sys.stderr)
-        p.close()
-        p.join()
-        print('Merging cell barcode mapping')
-        for chunk in parallel_results:
-            for cell_barcode in chunk:
-                true_to_false[cell_barcode].update(chunk[cell_barcode])
     (
         umis_per_cell,
         final_results,
