@@ -274,7 +274,7 @@ def main():
     #    sys.exit('Input barcode fastqs (read1) do not all have same length.\nExiting')
 
     # Initialize the counts dicts that will be generated from each input fastq pair
-    final_results = defaultdict(Counter)
+    final_results = defaultdict(lambda: defaultdict(Counter))
     umis_per_cell = Counter()
     reads_per_cell = Counter()
     merged_no_match = Counter()
@@ -358,7 +358,6 @@ def main():
                 else:
                     # Explicitly save the counter to that tag
                     final_results[cell_barcode][tag] = _final_results[cell_barcode][tag]
-
     ordered_tags_map = OrderedDict()
     for i,tag in enumerate(ab_map.values()):
         ordered_tags_map[tag] = i
