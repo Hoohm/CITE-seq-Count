@@ -185,8 +185,8 @@ Correction:
 \tUMI collapsing threshold: {}
 \tUMIs corrected: {}
 Run parameters:
-\tRead1_filename: {}
-\tRead2_filename: {}
+\tRead1_paths: {}
+\tRead2_paths: {}
 \tCell barcode:
 \t\tFirst position: {}
 \t\tLast position: {}
@@ -278,12 +278,19 @@ def main():
     umis_per_cell = Counter()
     reads_per_cell = Counter()
     merged_no_match = Counter()
+    number_of_samples = len(read1_paths)
+    n_reads = 0
+    
+    #Print a statement if multiple files are run.
+    if number_of_samples != 1:
+        print('Detected {} files to run on.'.format(number_of_samples))
+    
     for read1_path, read2_path in zip(read1_paths, read2_paths):
         if args.first_n:
             n_lines = args.first_n*4
         else:
             n_lines = preprocessing.get_n_lines(read1_path)
-        n_reads = int(n_lines/4)
+        n_reads += int(n_lines/4)
         n_threads = args.n_threads
         print('Started mapping')
         print('Processing {:,} reads'.format(n_reads))
