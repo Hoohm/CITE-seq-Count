@@ -176,7 +176,7 @@ def test_correct_umis(data):
 
 @pytest.mark.dependency(depends=['test_correct_umis'])
 def test_correct_cells(data):
-    processing.correct_cells(pytest.corrected_results, pytest.reads_per_cell, pytest.umis_per_cell, pytest.expected_cells, pytest.collapsing_threshold)
+    processing.correct_cells(pytest.corrected_results, pytest.reads_per_cell, pytest.umis_per_cell, pytest.expected_cells, pytest.collapsing_threshold, pytest.tags)
 
 
 @pytest.mark.dependency(depends=['test_correct_umis'])

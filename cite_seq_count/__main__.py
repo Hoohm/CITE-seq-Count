@@ -40,10 +40,10 @@ def get_args():
                                        description="Required input files.")
     inputs.add_argument('-R1', '--read1', dest='read1_path', required=True,
                         help=("The path of Read1 in gz format, or a comma-separated list of paths to all Read1 files in"
-                              " gz format (E.g. A1.fq.gz,B1,fq,gz,..."))
+                              " gz format (E.g. A1.fq.gz,B1.fq,gz,..."))
     inputs.add_argument('-R2', '--read2', dest='read2_path', required=True,
                         help=("The path of Read2 in gz format, or a comma-separated list of paths to all Read2 files in"
-                              " gz format (E.g. A2.fq.gz,B2,fq,gz,..."))
+                              " gz format (E.g. A2.fq.gz,B2.fq,gz,..."))
     inputs.add_argument(
         '-t', '--tags', dest='tags', required=True,
         help=("The path to the csv file containing the antibody\n"

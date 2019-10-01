@@ -268,6 +268,7 @@ def collapse_cells(true_to_false, umis_per_cell, final_results, ab_map):
         true_to_false (dict): Mapping between the reference and the "mutated" barcodes.
         umis_per_cell (Counter): Counter of number of umis per cell.
         final_results (dict): Dict of dict of Counters with mapping results.
+        ab_map (dict): Dict of the TAGS.
 
     Returns:
         umis_per_cell (Counter): Counter of number of umis per cell.
@@ -305,6 +306,7 @@ def correct_cells(final_results, reads_per_cell, umis_per_cell, collapsing_thres
         umis_per_cell (Counter): Counter of number of umis per cell.
         collapsing_threshold (int): Max distance between umis.
         expected_cells (int): Number of expected cells.
+        ab_map (dict): Dict of the TAGS.
     
     Returns:
         final_results (dict): Same as input but with corrected umis.
