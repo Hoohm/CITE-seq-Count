@@ -8,7 +8,7 @@ How to use it
 
 TLDR:
 
-`CITE-seq-count -R1 TAGS_R1.fastq.gz -R2 TAGS_R2.fastq.gz -t TAG_LIST.csv -cbf X1 -cbl X2 -umif Y1 -umil Y2 -cells EXPECTED_CELLS -o OUTFOLDER`
+`CITE-seq-Count -R1 TAGS_R1.fastq.gz -R2 TAGS_R2.fastq.gz -t TAG_LIST.csv -cbf X1 -cbl X2 -umif Y1 -umil Y2 -cells EXPECTED_CELLS -o OUTFOLDER`
 
 The script is going to count the number of UMIs and reads mapping to an antiobdy from your CITE-Seq experiment.
 

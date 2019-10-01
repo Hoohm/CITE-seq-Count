@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [1.4.3] - XX.03.2019
 ### Changed
-- Cell barcode whitelist is now based on reads instead of UMIs. Fixing issue #48
+- Cell barcode whitelist is now based on reads instead of UMIs. Fixing issue #35,#37,#48,#49
 
 
 ## [1.4.2] - 11.03.2019
