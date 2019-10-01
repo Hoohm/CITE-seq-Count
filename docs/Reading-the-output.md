@@ -11,7 +11,7 @@ For CITE-seq-Count, the output looks like this:
 OUTFOLDER/
 -- umi_count/
 -- -- matrix.mtx.gz
--- -- features.tsvgz
+-- -- features.tsv.gz
 -- -- barcodes.tsv.gz
 -- read_count/
 -- -- matrix.mtx.gz
