@@ -5,8 +5,13 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [1.4.3] - XX.03.2019
+### Added
+  - Support for multiple files as input. This allows you to not merge different lanes before
+    running CITE-seq-Count. Thanks to @arkal for the contribution on this! #79
+
 ### Changed
-- Cell barcode whitelist is now based on reads instead of UMIs. Fixing issue #35,#37,#48,#49
+  - Cell barcode whitelist is now based on reads instead of UMIs. Fixing issue #35,#37,#48,#49
+  - Added a low filter for UMI correction not trying to correct unique UMIs. Small improvement on performance.
 
 
 ## [1.4.2] - 11.03.2019

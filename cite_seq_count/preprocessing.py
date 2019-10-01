@@ -283,6 +283,26 @@ def get_n_lines(file_path):
     with gzip.open(file_path, "rt",encoding="utf-8",errors='ignore') as f:
         n_lines = sum(bl.count("\n") for bl in blocks(f))
     if n_lines %4 !=0:
-        sys.exit('{}\'s number of lines is not a multiple of 4. The file might be corrupted.\n Exiting')
+        sys.exit('{}\'s number of lines is not a multiple of 4. The file '
+                 'might be corrupted.\n Exiting'.format(file_path))
     return(n_lines)
 
+
+def get_read_paths(read1_path, read2_path):
+    """
+    Splits up 2 comma-separated strings of input files into list of files
+    to process. Ensures both lists are equal in length.
+
+    Args:
+        read1_path (string): Comma-separated paths to read1.fq
+        read2_path (string): Comma-separated paths to read2.fq
+    Returns:
+        _read1_path (list(string)): list of paths to read1.fq
+        _read2_path (list(string)): list of paths to read2.fq
+    """
+    _read1_path = read1_path.split(',')
+    _read2_path = read2_path.split(',')
+    if len(read1_path) != len(read2_path):
+        sys.exit('Unequal number of read1 ({}) and read2({}) files provided'
+                 '\n Exiting'.format(len(read1_path),len(read2_path)))
+    return _read1_path, _read2_path

@@ -13,6 +13,7 @@ from argparse import ArgumentParser
 from argparse import RawTextHelpFormatter
 from collections import OrderedDict
 from collections import Counter
+from collections import defaultdict
 
 from multiprocess import cpu_count
 from multiprocess import Pool
@@ -30,7 +31,7 @@ def get_args():
     """
     parser = ArgumentParser(
         prog='CITE-seq-Count', formatter_class=RawTextHelpFormatter,
-        description=("This script counts matching antibody tags from two fastq "
+        description=("This script counts matching antibody tags from paired fastq "
                      "files. Version {}".format(version)),
     )
 
@@ -38,9 +39,11 @@ def get_args():
     inputs = parser.add_argument_group('Inputs',
                                        description="Required input files.")
     inputs.add_argument('-R1', '--read1', dest='read1_path', required=True,
-                        help="The path of Read1 in gz format.")
+                        help=("The path of Read1 in gz format, or a comma-separated list of paths to all Read1 files in"
+                              " gz format (E.g. A1.fq.gz,B1,fq,gz,..."))
     inputs.add_argument('-R2', '--read2', dest='read2_path', required=True,
-                        help="The path of Read2 in gz format.")
+                        help=("The path of Read2 in gz format, or a comma-separated list of paths to all Read2 files in"
+                              " gz format (E.g. A2.fq.gz,B2,fq,gz,..."))
     inputs.add_argument(
         '-t', '--tags', dest='tags', required=True,
         help=("The path to the csv file containing the antibody\n"
@@ -182,8 +185,8 @@ Correction:
 \tUMI collapsing threshold: {}
 \tUMIs corrected: {}
 Run parameters:
-\tRead1_filename: {}
-\tRead2_filename: {}
+\tRead1_paths: {}
+\tRead2_paths: {}
 \tCell barcode:
 \t\tFirst position: {}
 \t\tLast position: {}
@@ -246,90 +249,123 @@ def main():
     ab_map = preprocessing.parse_tags_csv(args.tags)
     ab_map = preprocessing.check_tags(ab_map, args.max_error)
 
-    # Get reads length. So far, there is no validation for Read2.
-    read1_length = preprocessing.get_read_length(args.read1_path)
-    read2_length = preprocessing.get_read_length(args.read2_path)
-    
-    # Check Read1 length against CELL and UMI barcodes length.
-    (
-        barcode_slice, 
-        umi_slice, 
-        barcode_umi_length
-    ) = preprocessing.check_barcodes_lengths(
-            read1_length,
-            args.cb_first,
-            args.cb_last, 
-            args.umi_first, args.umi_last)
-    
-    if args.first_n:
-        n_lines = args.first_n*4
-    else:
-        n_lines = preprocessing.get_n_lines(args.read1_path)
-    n_reads = int(n_lines/4)
-    n_threads = args.n_threads
-    print('Started mapping')
-    print('Processing {:,} reads'.format(n_reads))
+    # Identify input file(s)
+    read1_paths, read2_paths = preprocessing.get_read_paths(args.read1_path, args.read2_path)
 
-    #Run with one process
-    if n_threads <= 1 or n_reads < 1000001:
-        print('CITE-seq-Count is running with one core.')
+    # preprocessing and processing occur in separate loops so the program can crash earlier if
+    # one of the inputs is not valid.
+    read1_lengths = []
+    read2_lengths = []
+    for read1_path, read2_path in zip(read1_paths, read2_paths):
+        # Get reads length. So far, there is no validation for Read2.
+        read1_lengths.append(preprocessing.get_read_length(read1_path))
+        read2_lengths.append(preprocessing.get_read_length(read2_path))
+        # Check Read1 length against CELL and UMI barcodes length.
         (
-            final_results,
-            merged_no_match) = processing.map_reads(
-                read1_path=args.read1_path,
-                read2_path=args.read2_path,               
-                tags=ab_map,
-                barcode_slice=barcode_slice,
-                umi_slice=umi_slice,
-                indexes=[0,n_reads],
-                whitelist=whitelist,
-                debug=args.debug,
-                start_trim=args.start_trim,
-                maximum_distance=args.max_error,
-                sliding_window=args.sliding_window)
-        print('Mapping done')
-        umis_per_cell = Counter()
-        reads_per_cell = Counter()
-        for cell_barcode,counts in final_results.items():
-            umis_per_cell[cell_barcode] = sum([len(counts[UMI]) for UMI in counts])
-            reads_per_cell[cell_barcode] = sum([sum(counts[UMI].values()) for UMI in counts])
-    else:
-        # Run with multiple processes
-        print('CITE-seq-Count is running with {} cores.'.format(n_threads))
-        p = Pool(processes=n_threads)
-        chunk_indexes = preprocessing.chunk_reads(n_reads, n_threads)
-        parallel_results = []
-        for indexes in chunk_indexes:
-           p.apply_async(processing.map_reads,
-                args=(
-                    args.read1_path,
-                    args.read2_path,
-                    ab_map,
-                    barcode_slice,
-                    umi_slice,
-                    indexes,
-                    whitelist,
-                    args.debug,
-                    args.start_trim,
-                    args.max_error,
-                    args.sliding_window),
-                callback=parallel_results.append,
-                error_callback=sys.stderr)
-        p.close()
-        p.join()
-        print('Mapping done')
-        print('Merging results')
+            barcode_slice,
+            umi_slice,
+            barcode_umi_length
+        ) = preprocessing.check_barcodes_lengths(
+                read1_lengths[-1],
+                args.cb_first,
+                args.cb_last,
+                args.umi_first, args.umi_last)
+    # Ensure all files have the same input length
+    #if len(set(read1_lengths)) != 1:
+    #    sys.exit('Input barcode fastqs (read1) do not all have same length.\nExiting')
 
-        #Merge results
-        (
-            final_results,
-            umis_per_cell,
-            reads_per_cell,
-            merged_no_match
-        ) = processing.merge_results(parallel_results=parallel_results)
-        del(parallel_results)
+    # Initialize the counts dicts that will be generated from each input fastq pair
+    final_results = defaultdict(lambda: defaultdict(Counter))
+    umis_per_cell = Counter()
+    reads_per_cell = Counter()
+    merged_no_match = Counter()
+    number_of_samples = len(read1_paths)
+    n_reads = 0
     
-    #Generate a mapping with indexes for the sparse matrix
+    #Print a statement if multiple files are run.
+    if number_of_samples != 1:
+        print('Detected {} files to run on.'.format(number_of_samples))
+    
+    for read1_path, read2_path in zip(read1_paths, read2_paths):
+        if args.first_n:
+            n_lines = args.first_n*4
+        else:
+            n_lines = preprocessing.get_n_lines(read1_path)
+        n_reads += int(n_lines/4)
+        n_threads = args.n_threads
+        print('Started mapping')
+        print('Processing {:,} reads'.format(n_reads))
+        #Run with one process
+        if n_threads <= 1 or n_reads < 1000001:
+            print('CITE-seq-Count is running with one core.')
+            (
+                _final_results,
+                _merged_no_match) = processing.map_reads(
+                    read1_path=read1_path,
+                    read2_path=read2_path,
+                    tags=ab_map,
+                    barcode_slice=barcode_slice,
+                    umi_slice=umi_slice,
+                    indexes=[0,n_reads],
+                    whitelist=whitelist,
+                    debug=args.debug,
+                    start_trim=args.start_trim,
+                    maximum_distance=args.max_error,
+                    sliding_window=args.sliding_window)
+            print('Mapping done')
+            _umis_per_cell = Counter()
+            _reads_per_cell = Counter()
+            for cell_barcode, counts in _final_results.items():
+                _umis_per_cell[cell_barcode] = sum([len(counts[UMI]) for UMI in counts])
+                _reads_per_cell[cell_barcode] = sum([sum(counts[UMI].values()) for UMI in counts])
+        else:
+            # Run with multiple processes
+            print('CITE-seq-Count is running with {} cores.'.format(n_threads))
+            p = Pool(processes=n_threads)
+            chunk_indexes = preprocessing.chunk_reads(n_reads, n_threads)
+            parallel_results = []
+
+            for indexes in chunk_indexes:
+               p.apply_async(processing.map_reads,
+                    args=(
+                        read1_path,
+                        read2_path,
+                        ab_map,
+                        barcode_slice,
+                        umi_slice,
+                        indexes,
+                        whitelist,
+                        args.debug,
+                        args.start_trim,
+                        args.max_error,
+                        args.sliding_window),
+                    callback=parallel_results.append,
+                    error_callback=sys.stderr)
+            p.close()
+            p.join()
+            print('Mapping done')
+            print('Merging results')
+
+            (
+                _final_results,
+                _umis_per_cell,
+                _reads_per_cell,
+                _merged_no_match
+            ) = processing.merge_results(parallel_results=parallel_results)
+            del(parallel_results)
+
+        # Update the overall counts dicts
+        umis_per_cell.update(_umis_per_cell)
+        reads_per_cell.update(_reads_per_cell)
+        merged_no_match.update(_merged_no_match)
+        for cell_barcode in _final_results:
+            for tag in _final_results[cell_barcode]:
+                if tag in final_results[cell_barcode]:
+                    # Counter + Counter = Counter
+                    final_results[cell_barcode][tag] += _final_results[cell_barcode][tag]
+                else:
+                    # Explicitly save the counter to that tag
+                    final_results[cell_barcode][tag] = _final_results[cell_barcode][tag]
     ordered_tags_map = OrderedDict()
     for i,tag in enumerate(ab_map.values()):
         ordered_tags_map[tag] = i
