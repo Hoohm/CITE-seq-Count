@@ -79,7 +79,7 @@ def get_args():
     barcodes.add_argument('--umi_collapsing_dist', dest='umi_threshold',
                           required=False, type=int, default=2,
                           help="threshold for umi collapsing.")
-    barcodes.add_argument('--no_umi_correctio', required=False, action='store_true', default=False,
+    barcodes.add_argument('--no_umi_correction', required=False, action='store_true', default=False,
                         dest='no_umi_correction', help="Deactivate UMI collapsing")
     barcodes.add_argument('--bc_collapsing_dist', dest='bc_threshold',
                           required=False, type=int, default=1,
