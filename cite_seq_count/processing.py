@@ -106,6 +106,7 @@ def map_reads(read1_path, read2_path, tags, barcode_slice,
         debug (bool): Print debug messages. Default is False.
         start_trim (int): Number of bases to trim at the start.
         maximum_distance (int): Maximum distance given by the user.
+        sliding_window (bool): A bool enabling a sliding window search
 
     Returns:
         results (dict): A dict of dict of Counters with the mapping results.
@@ -213,10 +214,13 @@ def correct_umis(final_results, collapsing_threshold, top_cells, max_umis):
     Args:
         final_results (dict): Dict of dict of Counters with mapping results.
         collapsing_threshold (int): Max distance between umis.
+        top_cells (set): Set of cells to go through.
+        max_umis (int): Maximum UMIs to consider for one cluster.
     
     Returns:
         final_results (dict): Same as input but with corrected umis.
         corrected_umis (int): How many umis have been corrected.
+        aberrant_umi_count_cells (set): Set of uncorrected cells.
     """
     print('Correcting umis')
     corrected_umis = 0
@@ -333,23 +337,26 @@ def correct_cells(final_results, reads_per_cell, umis_per_cell, collapsing_thres
     return(final_results, umis_per_cell, corrected_barcodes)
 
 
-def correct_cells_whitelist(final_results, umis_per_cell, whitelist, collapsing_threshold, n_threads, ab_map):
+def correct_cells_whitelist(final_results, umis_per_cell, whitelist, collapsing_threshold, ab_map):
     """
     Corrects cell barcodes.
     
     Args:
         final_results (dict): Dict of dict of Counters with mapping results.
+        umis_per_cell (Counter): Counter of UMIs per cell.
         whitelist (set): The whitelist reference given by the user.
         collapsing_threshold (int): Max distance between umis.
+        ab_map (OrederedDict): Tags in an ordered dict.
+
     
     Returns:
         final_results (dict): Same as input but with corrected umis.
-        corrected_umis (int): How many umis have been corrected.
+        umis_per_cell (Counter): Updated UMI counts after correction.
+        corrected_barcodes (int): How many umis have been corrected.
     """
-    true_to_false = defaultdict(set)
     barcode_tree = pybktree.BKTree(Levenshtein.hamming, whitelist)
     print('Generated barcode tree from whitelist')
-    cell_barcodes = list(set(final_results.keys()))
+    cell_barcodes = list(final_results.keys())
     n_barcodes = len(cell_barcodes)
     print('Finding reference candidates')
     print('Processing {:,} cell barcodes'.format(n_barcodes))
@@ -375,8 +382,18 @@ def correct_cells_whitelist(final_results, umis_per_cell, whitelist, collapsing_
 
 def find_true_to_false_map(barcode_tree, cell_barcodes, whitelist, collapsing_threshold):
     """
+    Creates a mapping between "fake" cell barcodes and their original true barcode.
+
+    Args:
+        barcode_tree (BKTree): BKTree of all original cell barcodes.
+        cell_barcodes (List): Cell barcodes to go through.
+        whitelist (Set): Set of the whitelist, the "true" cell barcodes.
+        collasping_threshold (int): How many mistakes to correct.
+
+    Return:
+        true_to_false (defaultdict(list)): Contains the mapping between the fake and real barcodes. The key is the real one.
     """
-    true_to_false = defaultdict(set)
+    true_to_false = defaultdict(list)
     for i, cell_barcode in enumerate(cell_barcodes):
         if cell_barcode in whitelist:
             # if the barcode is already whitelisted, no need to add
@@ -385,7 +402,7 @@ def find_true_to_false_map(barcode_tree, cell_barcodes, whitelist, collapsing_th
         candidates = [white_cell for d, white_cell in barcode_tree.find(cell_barcode, collapsing_threshold) if d > 0]
         if len(candidates) == 1:
             white_cell_str = candidates[0]
-            true_to_false[white_cell_str].add(cell_barcode)
+            true_to_false[white_cell_str].append(cell_barcode)
         elif len(candidates) == 0:
             # the cell doesnt match to any whitelisted barcode,
             # hence we have to drop it

@@ -62,6 +62,7 @@ def parse_whitelist_csv(filename, barcode_length, collapsing_threshold):
 
     Returns:
         set: The set of white-listed barcodes.
+        int: Collasping threshold
 
     """
     STRIP_CHARS = '"0123456789- \t\n'
@@ -128,7 +129,7 @@ def parse_tags_csv(filename):
         tags = {}
         for row in csv_reader:
             tags[row[0].strip()] = row[1].strip()
-    return tags
+    return(tags)
 
 
 def check_tags(tags, maximum_distance):
@@ -305,4 +306,4 @@ def get_read_paths(read1_path, read2_path):
     if len(read1_path) != len(read2_path):
         sys.exit('Unequal number of read1 ({}) and read2({}) files provided'
                  '\n Exiting'.format(len(read1_path),len(read2_path)))
-    return _read1_path, _read2_path
+    return(_read1_path, _read2_path)

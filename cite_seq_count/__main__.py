@@ -288,7 +288,7 @@ def main():
     
     for read1_path, read2_path in zip(read1_paths, read2_paths):
         if args.first_n:
-            n_lines = args.first_n*4
+            n_lines = (args.first_n*4)/number_of_samples
         else:
             n_lines = preprocessing.get_n_lines(read1_path)
         n_reads += int(n_lines/4)
@@ -401,7 +401,6 @@ def main():
                     umis_per_cell=umis_per_cell,
                     whitelist=whitelist,
                     collapsing_threshold=args.bc_threshold,
-                    n_threads=n_threads,
                     ab_map=ordered_tags_map)
 
     # If given, use whitelist for top cells

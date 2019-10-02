@@ -56,6 +56,8 @@ def write_unmapped(merged_no_match, top_unknowns, outfolder, filename):
     Args:
         merged_no_match (Counter): Counter of unmapped sequences
         top_unknowns (int): Number of unmapped sequences to output
+        outfolder (string): Path of the output folder
+        filename (string): Name of the output file
     """
     
     top_unmapped = merged_no_match.most_common(top_unknowns)
