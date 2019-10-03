@@ -122,6 +122,31 @@ Barcodes from 1 to 16 and UMI from 17 to 26, then this is the input you need:
 
 `--umi_collapsing_dist N_ERRORS`, default `2`
 
+* [Optional] Deactivate UMI correction.
+
+`--no_umi_correction`
+
+### Cells
+
+You have to choose either the number of cells you expect or give it a list of cell barcodes to retrieve.
+
+* [Required] How many cells you expect in your run.
+* [Optional] If a whitelist is provided.
+
+`-cells EXPECTED_CELLS, --expected_cells EXPECTED_CELLS`
+
+* [Optional] Whitelist of cell barcodes provided as a csv file. CITE-seq-Count will search for those barcodes in the data and correct other barcodes based on this list. Will force the output to provide all the barcodes from the whitelist. Please see the [guidelines](Guidelines.md) for information regarding specific chemistries.
+
+`-wl WHITELIST, --whitelist WHITELIST`
+
+
+Example:
+```
+ATGCTAGTGCTA
+GCTAGTCAGGAT
+CGACTGCTAACG
+```
+
 
 ### FILTERING
 
@@ -167,23 +192,6 @@ TTCAATTTC ATGCTAGCTAAAAAAAAAAAA
 
 
 ### OUTPUT
-You have to choose either the number of cells you expect or give it a list of cell barcodes to retrieve.
-
-* [Required] Number of expected cells from your run. This will reduce the size of the output matrix. It will be used for cell barcode correction as well.
-
-`-cells CELLS, --expected_cells CELLS`
-
-* [Optional] If you have a whitelist of barcodes produced by the cDNA data, you are using a well-plate based protocol or a platform reference, you can use this list to only extract TAGS matching those barcodes. Typically using the cell list from the mRNA data of the same experiment. This is highly recommended as knowing the true cells helps for cell barcode correction.
-
-`-wl WHITELIST, --whitelist WHITELIST`
-
-Example:
-```
-ATGCTAGTGCTA
-GCTAGTCAGGAT
-CGACTGCTAACG
-```
-
 * [Required] Path to the result folder that will contain both read and umi mtx results as well as a `run_report.yaml` and potential unmapped tags.
 
 `-o OUTFOLDER, --output OUTFOLDER`, default `Results`
@@ -203,7 +211,7 @@ CGACTGCTAACG
 
 `-T N_THREADS, --threads N_THREADS`, default `Number of available cores`
 
-* [Optional] Output file for unmapped tags.
+* [Optional] Output file for unmapped tags. Can be useful to troubelshoot an experiment with low mapping percentage or high "uncorrected cells".
 
 `-u OUTFILE, --unmapped-tags OUTFILE`, default `unmapped.csv`
 
