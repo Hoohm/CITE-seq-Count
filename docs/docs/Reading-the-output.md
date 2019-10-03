@@ -11,12 +11,12 @@ For CITE-seq-Count, the output looks like this:
 OUTFOLDER/
 -- umi_count/
 -- -- matrix.mtx.gz
--- -- features.gz
--- -- barcodes.mtx.gz
+-- -- features.tsv.gz
+-- -- barcodes.tsv.gz
 -- read_count/
 -- -- matrix.mtx.gz
--- -- features.gz
--- -- barcodes.mtx.gz
+-- -- features.tsv.gz
+-- -- barcodes.tsv.gz
 -- unmapped.csv
 -- run_report.yaml
 ```
@@ -24,8 +24,8 @@ OUTFOLDER/
 File descriptions
 -------------------
 
-* `features.mtx.gz` contains the feature names, in this context our tags.
-* `matrix.mtx.gz` contains the cell barcodes.
+* `features.tsv.gz` contains the feature names, in this context our tags.
+* `barcodes.tsv.gz` contains the cell barcodes.
 * `matrix.mtx.gz` contains the actual values.
 read_count and umi_count contain respectively the read counts and the collapsed umi counts. For analysis you should use the umi data. The read_count can be used to check if you have an overamplification or oversequencing issue with your protocol.
 * `unmapped.csv` contains the top N tags that haven't been mapped.
