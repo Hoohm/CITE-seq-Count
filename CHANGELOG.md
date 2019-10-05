@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [1.4.3] - XX.03.2019
+## [1.4.3] - 05.10.2019
 ### Added
   - Support for multiple files as input. This allows you to not merge different lanes before
     running CITE-seq-Count. Thanks to @arkal for the contribution on this! #79
