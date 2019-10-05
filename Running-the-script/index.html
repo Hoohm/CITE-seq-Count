@@ -79,6 +79,8 @@
         
             <li><a class="toctree-l3" href="#barcoding">BARCODING</a></li>
         
+            <li><a class="toctree-l3" href="#cells">Cells</a></li>
+        
             <li><a class="toctree-l3" href="#filtering">FILTERING</a></li>
         
             <li><a class="toctree-l3" href="#output">OUTPUT</a></li>
@@ -96,6 +98,11 @@
             <li class="toctree-l1">
 		
     <a class="" href="../Reading-the-output/">Reading the output</a>
+	    </li>
+          
+            <li class="toctree-l1">
+		
+    <a class="" href="../Guidelines/">Guidelines</a>
 	    </li>
           
         </ul>
@@ -229,6 +236,27 @@ Barcodes from 1 to 16 and UMI from 17 to 26, then this is the input you need:</p
 <li>[Optional] How many errors are allowed between two umi within the same cell and TAG to collapse.</li>
 </ul>
 <p><code>--umi_collapsing_dist N_ERRORS</code>, default <code>2</code></p>
+<ul>
+<li>[Optional] Deactivate UMI correction.</li>
+</ul>
+<p><code>--no_umi_correction</code></p>
+<h3 id="cells">Cells</h3>
+<p>You have to choose either the number of cells you expect or give it a list of cell barcodes to retrieve.</p>
+<ul>
+<li>[Required] How many cells you expect in your run.</li>
+<li>[Optional] If a whitelist is provided.</li>
+</ul>
+<p><code>-cells EXPECTED_CELLS, --expected_cells EXPECTED_CELLS</code></p>
+<ul>
+<li>[Optional] Whitelist of cell barcodes provided as a csv file. CITE-seq-Count will search for those barcodes in the data and correct other barcodes based on this list. Will force the output to provide all the barcodes from the whitelist. Please see the <a href="../Guidelines/">guidelines</a> for information regarding specific chemistries.</li>
+</ul>
+<p><code>-wl WHITELIST, --whitelist WHITELIST</code></p>
+<p>Example:</p>
+<pre><code>ATGCTAGTGCTA
+GCTAGTCAGGAT
+CGACTGCTAACG
+</code></pre>
+
 <h3 id="filtering">FILTERING</h3>
 <p>Filtering for structure of the antibody barcode as well as maximum errors.</p>
 <ul>
@@ -261,21 +289,6 @@ TTCAATTTC ATGCTAGCTAAAAAAAAAAAA
 </code></pre>
 
 <h3 id="output">OUTPUT</h3>
-<p>You have to choose either the number of cells you expect or give it a list of cell barcodes to retrieve.</p>
-<ul>
-<li>[Required] Number of expected cells from your run. This will reduce the size of the output matrix. It will be used for cell barcode correction as well.</li>
-</ul>
-<p><code>-cells CELLS, --expected_cells CELLS</code></p>
-<ul>
-<li>[Optional] If you have a whitelist of barcodes produced by the cDNA data, you are using a well-plate based protocol or a platform reference, you can use this list to only extract TAGS matching those barcodes. Typically using the cell list from the mRNA data of the same experiment. This is highly recommended as knowing the true cells helps for cell barcode correction.</li>
-</ul>
-<p><code>-wl WHITELIST, --whitelist WHITELIST</code></p>
-<p>Example:</p>
-<pre><code>ATGCTAGTGCTA
-GCTAGTCAGGAT
-CGACTGCTAACG
-</code></pre>
-
 <ul>
 <li>[Required] Path to the result folder that will contain both read and umi mtx results as well as a <code>run_report.yaml</code> and potential unmapped tags.</li>
 </ul>
@@ -294,7 +307,7 @@ CGACTGCTAACG
 </ul>
 <p><code>-T N_THREADS, --threads N_THREADS</code>, default <code>Number of available cores</code></p>
 <ul>
-<li>[Optional] Output file for unmapped tags.</li>
+<li>[Optional] Output file for unmapped tags. Can be useful to troubelshoot an experiment with low mapping percentage or high "uncorrected cells".</li>
 </ul>
 <p><code>-u OUTFILE, --unmapped-tags OUTFILE</code>, default <code>unmapped.csv</code></p>
 <ul>

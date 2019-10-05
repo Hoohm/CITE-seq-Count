@@ -8,7 +8,7 @@
   
   
   <link rel="shortcut icon" href="../img/favicon.ico">
-  <title>Installation - Cite-seq-Count</title>
+  <title>Guidelines - Cite-seq-Count</title>
   <link href='https://fonts.googleapis.com/css?family=Lato:400,700|Roboto+Slab:400,700|Inconsolata:400,700' rel='stylesheet' type='text/css'>
 
   <link rel="stylesheet" href="../css/theme.css" type="text/css" />
@@ -17,8 +17,8 @@
   
   <script>
     // Current page data
-    var mkdocs_page_name = "Installation";
-    var mkdocs_page_input_path = "Installation.md";
+    var mkdocs_page_name = "Guidelines";
+    var mkdocs_page_input_path = "Guidelines.md";
     var mkdocs_page_url = null;
   </script>
   
@@ -53,18 +53,9 @@
     <a class="" href="..">Welcome to CITE-seq-Count's documentation</a>
 	    </li>
           
-            <li class="toctree-l1 current">
+            <li class="toctree-l1">
 		
-    <a class="current" href="./">Installation</a>
-    <ul class="subnav">
-            
-    <li class="toctree-l2"><a href="#installation-with-pip">Installation with pip</a></li>
-    
-
-    <li class="toctree-l2"><a href="#updating">Updating</a></li>
-    
-
-    </ul>
+    <a class="" href="../Installation/">Installation</a>
 	    </li>
           
             <li class="toctree-l1">
@@ -77,9 +68,24 @@
     <a class="" href="../Reading-the-output/">Reading the output</a>
 	    </li>
           
-            <li class="toctree-l1">
+            <li class="toctree-l1 current">
 		
-    <a class="" href="../Guidelines/">Guidelines</a>
+    <a class="current" href="./">Guidelines</a>
+    <ul class="subnav">
+            
+    <li class="toctree-l2"><a href="#guidelines-for-typical-chemistries">Guidelines for typical chemistries</a></li>
+    
+        <ul>
+        
+            <li><a class="toctree-l3" href="#10x-genomics">10x Genomics</a></li>
+        
+        </ul>
+    
+
+    <li class="toctree-l2"><a href="#10xv3">10xV3</a></li>
+    
+
+    </ul>
 	    </li>
           
         </ul>
@@ -104,10 +110,10 @@
     
       
     
-    <li>Installation</li>
+    <li>Guidelines</li>
     <li class="wy-breadcrumbs-aside">
       
-        <a href="https://github.com/Hoohm/citeseqcount/edit/master/docs/Installation.md"
+        <a href="https://github.com/Hoohm/citeseqcount/edit/master/docs/Guidelines.md"
           class="icon icon-github"> Edit on GitHub</a>
       
     </li>
@@ -117,14 +123,13 @@
           <div role="main">
             <div class="section">
               
-                <h2 id="installation-with-pip">Installation with pip</h2>
-<p><code>CITE-seq-Count</code> is stored on pypi. You can install it using the following command:</p>
-<pre><code>pip install CITE-seq-Count==1.4.3
-</code></pre>
-
-<h2 id="updating">Updating</h2>
-<pre><code>pip install CITE-seq-Count --upgrade
-</code></pre>
+                <h2 id="guidelines-for-typical-chemistries">Guidelines for typical chemistries</h2>
+<h3 id="10x-genomics">10x Genomics</h3>
+<h2 id="10xv3">10xV3</h2>
+<p>10x genomics V3 chemistry for feature barcoding is using a mapping between RNA cell barcodes and Protein cell barcodes.
+You can find this mapping <a href="https://github.com/10XGenomics/cellranger/blob/master/lib/python/cellranger/barcodes/translation/3M-february-2018.txt.gz">here</a></p>
+<p>Since the list is composed of ~7M cells instead of the ~3M described in the technologie, using the whitelist of V3 as an input is unwise.
+I suggest running CITE-seq-Count with using the <code>-cells</code> argument instead.</p>
               
             </div>
           </div>
@@ -132,10 +137,8 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="../Running-the-script/" class="btn btn-neutral float-right" title="Running the script">Next <span class="icon icon-circle-arrow-right"></span></a>
       
-      
-        <a href=".." class="btn btn-neutral" title="Welcome to CITE-seq-Count's documentation"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../Reading-the-output/" class="btn btn-neutral" title="Reading the output"><span class="icon icon-circle-arrow-left"></span> Previous</a>
       
     </div>
   
@@ -163,10 +166,8 @@
           <a href="https://github.com/Hoohm/citeseqcount/" class="fa fa-github" style="float: left; color: #fcfcfc"> GitHub</a>
       
       
-        <span><a href=".." style="color: #fcfcfc;">&laquo; Previous</a></span>
+        <span><a href="../Reading-the-output/" style="color: #fcfcfc;">&laquo; Previous</a></span>
       
-      
-        <span style="margin-left: 15px"><a href="../Running-the-script/" style="color: #fcfcfc">Next &raquo;</a></span>
       
     </span>
 </div>
