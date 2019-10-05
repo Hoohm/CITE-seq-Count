@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [1.4.3] - 05.10.2019
+### Added
+  - Support for multiple files as input. This allows you to not merge different lanes before
+    running CITE-seq-Count. Thanks to @arkal for the contribution on this! #79
+  - UMI correction for UMI clusters of 1 UMI is now skipped, increases performance.
+
+### Changed
+  - Cell barcode whitelist is now based on reads instead of UMIs. Hopefully fixing issues #35,#37,#48,#49,#69
+  - Added a low filter for UMI correction not trying to correct unique UMIs. Small improvement on performance.
+  - Corrected typo from `--no_umi_correctio` to `--no_umi_correction`. Thanks for the catch @ChristophH. #72
+
 
 ## [1.4.2] - 11.03.2019
 ### Added

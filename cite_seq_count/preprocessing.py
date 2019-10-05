@@ -58,9 +58,11 @@ def parse_whitelist_csv(filename, barcode_length, collapsing_threshold):
     Args:
         filename (str): Whitelist barcode file.
         barcode_length (int): Length of the expected barcodes.
+        collapsing_threshold (int): Maximum distance to collapse cell barcodes.
 
     Returns:
         set: The set of white-listed barcodes.
+        int: Collasping threshold
 
     """
     STRIP_CHARS = '"0123456789- \t\n'
@@ -72,7 +74,9 @@ def parse_whitelist_csv(filename, barcode_length, collapsing_threshold):
     for cell_barcode in whitelist:
         if not cell_pattern.match(cell_barcode):
             sys.exit('This barcode {} is not only composed of ATGC bases.'.format(cell_barcode))
-    collapsing_threshold=test_cell_distances(whitelist, collapsing_threshold)
+    #collapsing_threshold=test_cell_distances(whitelist, collapsing_threshold)
+    if len(whitelist) == 0:
+        sys.exit('Please check cell barcode indexes -cbs, -cbl because none of the given whitelist is valid.')
     return(set(whitelist), collapsing_threshold)
 
 
@@ -92,7 +96,8 @@ def test_cell_distances(whitelist, collapsing_threshold):
     ok = False
     while not ok:
         print('Testing cell barcode collapsing threshold of {}'.format(collapsing_threshold))
-        for comb in combinations(whitelist, 2):
+        all_comb = combinations(whitelist, 2)
+        for comb in all_comb:
             if Levenshtein.hamming(comb[0], comb[1]) <= collapsing_threshold:
                 collapsing_threshold -= 1
                 print('Value is too high, reducing it by 1')
@@ -124,7 +129,7 @@ def parse_tags_csv(filename):
         tags = {}
         for row in csv_reader:
             tags[row[0].strip()] = row[1].strip()
-    return tags
+    return(tags)
 
 
 def check_tags(tags, maximum_distance):
@@ -279,6 +284,26 @@ def get_n_lines(file_path):
     with gzip.open(file_path, "rt",encoding="utf-8",errors='ignore') as f:
         n_lines = sum(bl.count("\n") for bl in blocks(f))
     if n_lines %4 !=0:
-        sys.exit('{}\'s number of lines is not a multiple of 4. The file might be corrupted.\n Exiting')
+        sys.exit('{}\'s number of lines is not a multiple of 4. The file '
+                 'might be corrupted.\n Exiting'.format(file_path))
     return(n_lines)
 
+
+def get_read_paths(read1_path, read2_path):
+    """
+    Splits up 2 comma-separated strings of input files into list of files
+    to process. Ensures both lists are equal in length.
+
+    Args:
+        read1_path (string): Comma-separated paths to read1.fq
+        read2_path (string): Comma-separated paths to read2.fq
+    Returns:
+        _read1_path (list(string)): list of paths to read1.fq
+        _read2_path (list(string)): list of paths to read2.fq
+    """
+    _read1_path = read1_path.split(',')
+    _read2_path = read2_path.split(',')
+    if len(read1_path) != len(read2_path):
+        sys.exit('Unequal number of read1 ({}) and read2({}) files provided'
+                 '\n Exiting'.format(len(read1_path),len(read2_path)))
+    return(_read1_path, _read2_path)
