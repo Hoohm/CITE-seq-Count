@@ -153,14 +153,21 @@ def check_tags(tags, maximum_distance):
 
     """
     ordered_tags = OrderedDict()
-    for tag in sorted(tags, key=len, reverse=True):
-        ordered_tags[tag] = tags[tag] + '-' + tag
+    for i,tag_seq in enumerate(sorted(tags, key=len, reverse=True)):
+        ordered_tags[tags[tag_seq]] = {}
+        ordered_tags[tags[tag_seq]]['id'] = i
+        ordered_tags[tags[tag_seq]]['sequence'] = tag_seq
+    ordered_tags['unmapped'] = {}
+    ordered_tags['unmapped']['id'] = i + 1
+    ordered_tags['unmapped']['sequence'] = 'UNKNOWN'
     # If only one TAG is provided, then no distances to compare.
     if (len(tags) == 1):
+        ordered_tags['unmapped'] = {}
+        ordered_tags['unmapped']['id'] = 2
         return(ordered_tags)
     
     offending_pairs = []
-    for a, b in combinations(ordered_tags.keys(), 2):
+    for a, b in combinations(tags.keys(), 2):
         distance = Levenshtein.distance(a, b)
         if (distance <= (maximum_distance - 1)):
             offending_pairs.append([a, b, distance])
@@ -183,6 +190,7 @@ def check_tags(tags, maximum_distance):
                 .format(tag1=pair[0], tag2=pair[1], distance=pair[2])
             )
         sys.exit('Exiting the application.\n')
+
     return(ordered_tags)
 
 

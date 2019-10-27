@@ -247,7 +247,7 @@ def main():
 
     # Load TAGs/ABs.
     ab_map = preprocessing.parse_tags_csv(args.tags)
-    ab_map = preprocessing.check_tags(ab_map, args.max_error)
+    ordered_tags_map = preprocessing.check_tags(ab_map, args.max_error)
 
     # Identify input file(s)
     read1_paths, read2_paths = preprocessing.get_read_paths(args.read1_path, args.read2_path)
@@ -280,13 +280,14 @@ def main():
     reads_per_cell = Counter()
     merged_no_match = Counter()
     number_of_samples = len(read1_paths)
-    n_reads = 0
+
     
     #Print a statement if multiple files are run.
     if number_of_samples != 1:
         print('Detected {} files to run on.'.format(number_of_samples))
     
     for read1_path, read2_path in zip(read1_paths, read2_paths):
+        n_reads = 0
         if args.first_n:
             n_lines = (args.first_n*4)/number_of_samples
         else:
@@ -366,10 +367,10 @@ def main():
                 else:
                     # Explicitly save the counter to that tag
                     final_results[cell_barcode][tag] = _final_results[cell_barcode][tag]
-    ordered_tags_map = OrderedDict()
-    for i,tag in enumerate(ab_map.values()):
-        ordered_tags_map[tag] = i
-    ordered_tags_map['unmapped'] = i + 1
+    # ordered_tags_map = OrderedDict()
+    # for i,tag in enumerate(ab_map.values()):
+    #     ordered_tags_map[tag] = i
+    # ordered_tags_map['unmapped'] = i + 1
 
     # Correct cell barcodes
     if(len(umis_per_cell) <= args.expected_cells):
