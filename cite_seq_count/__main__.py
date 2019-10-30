@@ -280,7 +280,7 @@ def main():
     reads_per_cell = Counter()
     merged_no_match = Counter()
     number_of_samples = len(read1_paths)
-
+    total_reads = 0
     
     #Print a statement if multiple files are run.
     if number_of_samples != 1:
@@ -293,6 +293,7 @@ def main():
         else:
             n_lines = preprocessing.get_n_lines(read1_path)
         n_reads += int(n_lines/4)
+        total_reads += n_reads
         n_threads = args.n_threads
         print('Started mapping')
         print('Processing {:,} reads'.format(n_reads))
@@ -313,7 +314,6 @@ def main():
                     start_trim=args.start_trim,
                     maximum_distance=args.max_error,
                     sliding_window=args.sliding_window)
-            print('Mapping done')
             _umis_per_cell = Counter()
             _reads_per_cell = Counter()
             for cell_barcode, counts in _final_results.items():
@@ -344,7 +344,6 @@ def main():
                     error_callback=sys.stderr)
             p.close()
             p.join()
-            print('Mapping done')
             print('Merging results')
 
             (
@@ -355,6 +354,7 @@ def main():
             ) = processing.merge_results(parallel_results=parallel_results)
             del(parallel_results)
 
+        print('Mapping done, merging the different lanes')
         # Update the overall counts dicts
         umis_per_cell.update(_umis_per_cell)
         reads_per_cell.update(_reads_per_cell)
@@ -367,10 +367,6 @@ def main():
                 else:
                     # Explicitly save the counter to that tag
                     final_results[cell_barcode][tag] = _final_results[cell_barcode][tag]
-    # ordered_tags_map = OrderedDict()
-    # for i,tag in enumerate(ab_map.values()):
-    #     ordered_tags_map[tag] = i
-    # ordered_tags_map['unmapped'] = i + 1
 
     # Correct cell barcodes
     if(len(umis_per_cell) <= args.expected_cells):
@@ -421,8 +417,8 @@ def main():
         top_cells_tuple = umis_per_cell.most_common(args.expected_cells)
         top_cells = set([pair[0] for pair in top_cells_tuple])
 
+    
     #UMI correction
-
     if args.no_umi_correction:
         #Don't correct
         umis_corrected = 0
@@ -439,27 +435,28 @@ def main():
             top_cells=top_cells,
             max_umis=20000)
 
-    #Remove aberrant cells from the top cells
-    for cell_barcode in aberrant_cells:
-        top_cells.remove(cell_barcode)
+    if len(aberrant_cells) > 0:
+        #Remove aberrant cells from the top cells
+        for cell_barcode in aberrant_cells:
+            top_cells.remove(cell_barcode)
 
-    #Create sparse aberrant cells matrix
-    (
-    umi_aberrant_matrix,
-    read_aberrant_matrix
-    ) = processing.generate_sparse_matrices(
-        final_results=final_results,
-        ordered_tags_map=ordered_tags_map,
-        top_cells=aberrant_cells)
-    
-    #Write uncorrected cells to dense output
-    io.write_dense(
-            sparse_matrix=umi_aberrant_matrix,
-            index=list(ordered_tags_map.keys()),
-            columns=aberrant_cells,
-            outfolder=os.path.join(args.outfolder,'uncorrected_cells'),
-            filename='dense_umis.tsv')
-    
+        #Create sparse aberrant cells matrix
+        (
+        umi_aberrant_matrix,
+        read_aberrant_matrix
+        ) = processing.generate_sparse_matrices(
+            final_results=final_results,
+            ordered_tags_map=ordered_tags_map,
+            top_cells=aberrant_cells)
+        
+        #Write uncorrected cells to dense output
+        io.write_dense(
+                sparse_matrix=umi_aberrant_matrix,
+                index=list(ordered_tags_map.keys()),
+                columns=aberrant_cells,
+                outfolder=os.path.join(args.outfolder,'uncorrected_cells'),
+                filename='dense_umis.tsv')
+        
     #Create sparse matrices for results
     (
         umi_results_matrix,
@@ -494,7 +491,7 @@ def main():
     
     #Create report and write it to disk
     create_report(
-        n_reads=n_reads,
+        n_reads=total_reads,
         reads_per_cell=reads_per_cell,
         no_match=merged_no_match,
         version=version,
