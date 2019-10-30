@@ -434,7 +434,7 @@ def generate_sparse_matrices(final_results, ordered_tags_map, top_cells):
     for i,cell_barcode in enumerate(top_cells):
         for j,TAG in enumerate(final_results[cell_barcode]):
             if final_results[cell_barcode][TAG]:
-                umi_results_matrix[ordered_tags_map[TAG],i] = len(final_results[cell_barcode][TAG])
-                read_results_matrix[ordered_tags_map[TAG],i] = sum(final_results[cell_barcode][TAG].values())
+                umi_results_matrix[ordered_tags_map[TAG]['id'],i] = len(final_results[cell_barcode][TAG])
+                read_results_matrix[ordered_tags_map[TAG]['id'],i] = sum(final_results[cell_barcode][TAG].values())
     return(umi_results_matrix, read_results_matrix)
 
