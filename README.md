@@ -5,7 +5,7 @@ A python package that allows to count antibody TAGS from a [CITE-seq](https://ww
 
 IMPORTANT NEWS
 ------------------------------------------
-There was a major bug in version 1.3.4 of CITE-seq-Count. The results where in read counts and not in UMI counts.
+There was a major bug in version 1.3.4 of CITE-seq-Count. The results were in read counts and not in UMI counts.
 
 This is fixed in version 1.4.0 or above. Please rerun your data as this might provide a cleaner result for your data.
 
