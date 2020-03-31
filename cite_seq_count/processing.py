@@ -394,7 +394,7 @@ def find_true_to_false_map(barcode_tree, cell_barcodes, whitelist, collapsing_th
         true_to_false (defaultdict(list)): Contains the mapping between the fake and real barcodes. The key is the real one.
     """
     true_to_false = defaultdict(list)
-    for i, cell_barcode in enumerate(cell_barcodes):
+    for cell_barcode in cell_barcodes:
         if cell_barcode in whitelist:
             # if the barcode is already whitelisted, no need to add
             continue
