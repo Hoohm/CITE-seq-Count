@@ -14,6 +14,7 @@ from argparse import RawTextHelpFormatter
 from collections import OrderedDict
 from collections import Counter
 from collections import defaultdict
+from collections import namedtuple
 
 from multiprocess import cpu_count
 from multiprocess import Pool
@@ -248,7 +249,7 @@ def main():
     # Load TAGs/ABs.
     ab_map = preprocessing.parse_tags_csv(args.tags)
     ordered_tags_map = preprocessing.check_tags(ab_map, args.max_error)
-
+    named_tuples_tags_map = preprocessing.convert_to_named_tuple(ordered_tags=ordered_tags_map)
     # Identify input file(s)
     read1_paths, read2_paths = preprocessing.get_read_paths(args.read1_path, args.read2_path)
 
@@ -388,7 +389,7 @@ def main():
                     umis_per_cell=umis_per_cell,
                     expected_cells=args.expected_cells,
                     collapsing_threshold=args.bc_threshold,
-                    ab_map=ordered_tags_map)
+                    ab_map=named_tuples_tags_map)
         else:
             (
                 final_results,
@@ -398,7 +399,7 @@ def main():
                     umis_per_cell=umis_per_cell,
                     whitelist=whitelist,
                     collapsing_threshold=args.bc_threshold,
-                    ab_map=ordered_tags_map)
+                    ab_map=named_tuples_tags_map)
 
     # If given, use whitelist for top cells
     if whitelist:
@@ -409,7 +410,7 @@ def main():
                 continue
             else:
                 final_results[missing_cell] = dict()
-                for TAG in ordered_tags_map:
+                for TAG in named_tuples_tags_map:
                     final_results[missing_cell][TAG] = Counter()
                 top_cells.add(missing_cell)
     else:

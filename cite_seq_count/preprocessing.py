@@ -6,6 +6,7 @@ import Levenshtein
 
 from math import floor
 from collections import OrderedDict
+from collections import namedtuple
 from itertools import combinations
 from itertools import islice 
 
@@ -193,6 +194,17 @@ def check_tags(tags, maximum_distance):
 
     return(ordered_tags)
 
+def sanitize_name(string):
+    return(string.replace('-', '_'))
+
+def convert_to_named_tuple(ordered_tags):
+    #all_tags = namedtuple('all_tags', [sanitize_name(tag) for tag in ordered_tags.keys()])
+    tag = namedtuple('tag', ['name','sequence'])
+    tag_list = []
+    for index, tag_name in enumerate(ordered_tags):
+        tag_list.append(tag(name=tag_name, sequence=ordered_tags[tag_name]['sequence']))
+        #all_tags[index+1]=ordered_tags[tag_name]['sequence']
+    return(tag_list)
 
 def get_read_length(filename):
     """Check wether SEQUENCE lengths are consistent in a FASTQ file and return
