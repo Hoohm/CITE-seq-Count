@@ -442,6 +442,12 @@ def main():
     for cell_barcode in aberrant_cells:
         top_cells.remove(cell_barcode)
 
+    ########
+    # todo: Create two functions:
+    # 1: Select top barcode for each cell/UMI combination
+    # 2: Reverse the structure to the old one: final_results[cell_barcode][TAG][umi]
+    ########
+
     #Create sparse aberrant cells matrix
     (
     umi_aberrant_matrix,
