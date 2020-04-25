@@ -34,7 +34,12 @@ def get_args():
         description=("This script counts matching antibody tags from paired fastq "
                      "files. Version {}".format(version)),
     )
-
+    # Allows to switch to the mode where we only keep the most common occurence of
+    # of a cell_barcode/umi/tag combination. Deals with cell_barcode/umi hoping
+    parser.add_argument('--mode',
+                help="Select which mode to run on",
+                required=False, default='normal',
+                choices=['normal','most_common_tag'])
     # REQUIRED INPUTS group.
     inputs = parser.add_argument_group('Inputs',
                                        description="Required input files.")
@@ -447,11 +452,26 @@ def main():
     # 1: Select top barcode for each cell/UMI combination
     # 2: Reverse the structure to the old one: final_results[cell_barcode][TAG][umi]
     ########
-
+    # At this point the data is final_results[CELL_BARCODE][UMI][TAG]
+    final_results_restored = {}
+    if args.mode == 'most_common_tag':
+        # Only restore results for cells we care about
+        for cell_barcode in top_cells:
+            final_results_restored[cell_barcode] = {}
+            for UMI in final_results[cell_barcode].keys():
+                most_common = final_results[cell_barcode][UMI].most_common(2)
+                if len(most_common) > 1:
+                    print(most_common)
+                else:
+                    tag = most_common[0][0]
+                    count = most_common[0][1]
+                    final_results_restored[cell_barcode][tag] = Counter()
+                    final_results_restored[cell_barcode][tag][UMI] = count
+    final_results = final_results_restored
     #Create sparse aberrant cells matrix
     (
     umi_aberrant_matrix,
-    read_aberrant_matrix
+    _
     ) = processing.generate_sparse_matrices(
         final_results=final_results,
         ordered_tags_map=ordered_tags_map,

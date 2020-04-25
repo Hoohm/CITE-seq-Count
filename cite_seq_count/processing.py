@@ -152,10 +152,13 @@ def map_reads(read1_path, read2_path, tags, barcode_slice,
             else:
                 best_match = find_best_match(TAG_seq, tags, maximum_distance)
             
-            results[cell_barcode][best_match][UMI] += 1
-
-            # TODO: Christian Use the version below here.
-            # results[cell_barcode][UMI][best_match] += 1
+            
+            if False:
+                results[cell_barcode][best_match][UMI] += 1
+                
+            else:
+                # TODO: Christian Use the version below here.
+                results[cell_barcode][UMI][best_match] += 1
             
             if(best_match == 'unmapped'):
                 no_match[TAG_seq] += 1 
