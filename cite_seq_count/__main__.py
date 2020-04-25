@@ -459,14 +459,13 @@ def main():
         for cell_barcode in top_cells:
             final_results_restored[cell_barcode] = {}
             for UMI in final_results[cell_barcode].keys():
-                most_common = final_results[cell_barcode][UMI].most_common(2)
+                most_common = final_results[cell_barcode][UMI].most_common(10)
                 if len(most_common) > 1:
-                    print(most_common)
-                else:
-                    tag = most_common[0][0]
-                    count = most_common[0][1]
-                    final_results_restored[cell_barcode][tag] = Counter()
-                    final_results_restored[cell_barcode][tag][UMI] = count
+                    print('{},{},{}'.format(cell_barcode, UMI.decode(), '/'.join('-'.join([i[0], str(i[1])]) for i in most_common)))
+                tag = most_common[0][0]
+                count = most_common[0][1]
+                final_results_restored[cell_barcode][tag] = Counter()
+                final_results_restored[cell_barcode][tag][UMI] = count
     final_results = final_results_restored
     #Create sparse aberrant cells matrix
     (
