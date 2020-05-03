@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [1.5.0] - XXXX
+### Added
+  - `CITE-se-Count` is now Compatible with trimmed data. There is a new `too_short` category in the `run_report.yaml`
+    that will let you know how much you lost due to reads being too short. Will not work well with the `--sliding_window` option
+    because any read that is trimmed even by one base will be discarded.
+  - UMI correction is now also parallelized and will use the threads proposed.
+### Changed
+  - The `features.csv` now has different columns for the tag name and the tag sequence. This keeps the relevant information
+    in the output files as well as simplifies reading the mtx format when processing the data.
+  - The mapping step has been changed. It will first write the reads to files and then read in the chunks.
+    This should solve the io bottleneck from before.
+
+
 ## [1.4.3] - 05.10.2019
 ### Added
   - Support for multiple files as input. This allows you to not merge different lanes before
