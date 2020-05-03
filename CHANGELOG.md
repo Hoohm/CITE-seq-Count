@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
     in the output files as well as simplifies reading the mtx format when processing the data.
   - The mapping step has been changed. It will first write the reads to files and then read in the chunks.
     This should solve the io bottleneck from before.
+  - There are new options now for parallel computing. `--chunk_size` Determines how many reads will be read per chunk.
 
 
 ## [1.4.3] - 05.10.2019
