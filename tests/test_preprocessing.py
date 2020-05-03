@@ -36,15 +36,16 @@ def data():
         'ACTGTCTAACGGGTCAGTGC':'CITE_LEN_20_2',
         'TATCACATCGGTGGATCCAT':'CITE_LEN_20_3'}
     pytest.correct_ordered_tags = OrderedDict({
-        'TGTGACGTATTGCTAGCTAG':'CITE_LEN_20_1-TGTGACGTATTGCTAGCTAG',
-        'ACTGTCTAACGGGTCAGTGC':'CITE_LEN_20_2-ACTGTCTAACGGGTCAGTGC',
-        'TATCACATCGGTGGATCCAT':'CITE_LEN_20_3-TATCACATCGGTGGATCCAT',
-        'TCGATAATGCGAGTACAA':'CITE_LEN_18_1-TCGATAATGCGAGTACAA',
-        'GAGGCTGAGCTAGCTAGT':'CITE_LEN_18_2-GAGGCTGAGCTAGCTAGT',
-        'GGCTGATGCTGACTGCTA':'CITE_LEN_18_3-GGCTGATGCTGACTGCTA',
-        'AGGACCATCCAA':'CITE_LEN_12_1-AGGACCATCCAA',
-        'ACATGTTACCGT':'CITE_LEN_12_2-ACATGTTACCGT',
-        'AGCTTACTATCC':'CITE_LEN_12_3-AGCTTACTATCC'})
+        'CITE_LEN_20_1':{'id':0,'sequence':'TGTGACGTATTGCTAGCTAG'},
+        'CITE_LEN_20_2':{'id':1,'sequence':'ACTGTCTAACGGGTCAGTGC'},
+        'CITE_LEN_20_3':{'id':2,'sequence':'TATCACATCGGTGGATCCAT'},
+        'CITE_LEN_18_1':{'id':3,'sequence':'TCGATAATGCGAGTACAA'},
+        'CITE_LEN_18_2':{'id':4,'sequence':'GAGGCTGAGCTAGCTAGT'},
+        'CITE_LEN_18_3':{'id':5,'sequence':'GGCTGATGCTGACTGCTA'},
+        'CITE_LEN_12_1':{'id':6,'sequence':'AGGACCATCCAA'},
+        'CITE_LEN_12_2':{'id':7,'sequence':'ACATGTTACCGT'},
+        'CITE_LEN_12_3':{'id':8,'sequence':'AGCTTACTATCC'},
+        'unmapped':{'id':9, 'sequence': 'UNKNOWN'}})
     pytest.barcode_slice = slice(0, 16)
     pytest.umi_slice = slice(16, 26)
     pytest.barcode_umi_length = 26
@@ -59,7 +60,10 @@ def test_parse_tags_csv(data):
 
 @pytest.mark.dependency(depends=['test_parse_tags_csv'])
 def test_check_tags(data):
-    assert preprocessing.check_tags(pytest.correct_tags, 5) == pytest.correct_ordered_tags
+    tags = preprocessing.check_tags(pytest.correct_tags, 5)[0]
+    for name in tags.keys():
+        assert tags[name] == pytest.correct_ordered_tags[name]
+    
 
 @pytest.mark.dependency(depends=['test_check_tags'])
 def test_check_distance_too_big_between_tags(data):

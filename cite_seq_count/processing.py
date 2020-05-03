@@ -112,7 +112,7 @@ def map_reads(mapping_input):
         no_match (Counter): A counter with unmapped sequences.
     """
     # Initiate values
-    (filename, tags, barcode_slice, umi_slice, debug, maximum_distance, sliding_window) = mapping_input
+    (filename, tags, debug, maximum_distance, sliding_window) = mapping_input
     print('Started mapping in child process {}'.format(os.getpid()))
     results = {}
     no_match = Counter()
@@ -123,8 +123,10 @@ def map_reads(mapping_input):
     with open(filename, 'r') as input_file:
         reads = csv.reader(input_file)
         for read in reads:
-            read1 = read[0]
-            read2 = read[1]
+            cell_barcode = read[0]
+            # This change in bytes is required by umi_tools for umi correction
+            UMI = bytes(read[1], 'ascii')
+            read2 = read[2]
             if n % 1000000 == 0:
                 print("Processed 1,000,000 reads in {}. Total "
                     "reads: {:,} in child {}".format(
@@ -135,10 +137,6 @@ def map_reads(mapping_input):
                 sys.stdout.flush()
                 t = time.time()
 
-            # Get cell and umi barcodes.
-            cell_barcode = read1[barcode_slice]
-            # This change in bytes is required by umi_tools for umi correction
-            UMI = bytes(read1[umi_slice], 'ascii')
 
             if cell_barcode not in results:
                 results[cell_barcode] = defaultdict(Counter)

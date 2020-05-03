@@ -9,45 +9,6 @@ from collections import OrderedDict
 from collections import namedtuple
 from itertools import combinations
 from itertools import islice 
-
-def get_indexes(start_index, chunk_size, nth):
-    """
-    Creates indexes from a reference index, a chunk size an nth number
-
-    Args:
-        start_index (int): first position
-        chunk_size (int): Chunk size
-        nth (int): The nth number
-    
-    Returns:
-        list: First and last position of indexes
-    """
-    start_index = nth * chunk_size
-    stop_index = chunk_size + nth * chunk_size
-    return([start_index,stop_index])
-
-
-def chunk_reads(n_reads, n):
-    """
-    Creates a list of indexes for the islice iterator from the map_reads function.
-
-    Args:
-        n_reads (int): Number of reads to split
-        n (int): How many buckets for the split.
-    Returns:
-        indexes (list(list)): Each entry contains the first and the last index for a read.
-    """
-    indexes=list()
-    if n_reads % n == 0:
-        chunk_size = int(n_reads/n)
-        rest = 0
-    else:
-        chunk_size = floor(n_reads/n)
-        rest = n_reads - (n*chunk_size)
-    for i in range(0,n):
-        indexes.append(get_indexes(i, chunk_size, i))
-    indexes[-1][1] += rest
-    return(indexes)
     
 
 def parse_whitelist_csv(filename, barcode_length, collapsing_threshold):
@@ -156,7 +117,7 @@ def check_tags(tags, maximum_distance):
     """
     ordered_tags = OrderedDict()
     longest_tag_len = 0
-    for i,tag_seq in enumerate(sorted(tags, key=len, reverse=True)):
+    for i, tag_seq in enumerate(sorted(tags, key=len, reverse=True)):
         ordered_tags[tags[tag_seq]] = {}
         ordered_tags[tags[tag_seq]]['id'] = i
         ordered_tags[tags[tag_seq]]['sequence'] = tag_seq

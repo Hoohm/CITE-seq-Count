@@ -11,16 +11,10 @@ import logging
 import gzip
 
 from itertools import islice
-from argparse import ArgumentParser
-from argparse import RawTextHelpFormatter
-from collections import OrderedDict
-from collections import Counter
-from collections import defaultdict
-from collections import namedtuple
+from argparse import ArgumentParser, ArgumentTypeError, RawTextHelpFormatter
 
+from collections import OrderedDict, Counter, defaultdict, namedtuple
 from multiprocess import cpu_count, Pool, Queue, JoinableQueue, Process
-
-
 
 from cite_seq_count import preprocessing
 from cite_seq_count import processing
@@ -28,6 +22,17 @@ from cite_seq_count import io
 from cite_seq_count import secondsToText
 
 version = pkg_resources.require("cite_seq_count")[0].version
+
+def chunk_size_limit(arg):
+    """Validates chunk_size limits"""
+    try:
+        f = int(arg)
+    except ValueError:    
+        raise ArgumentTypeError("Must be am int")
+    if f < 1 or f > 2147483647:
+        raise ArgumentTypeError("Argument must be < " + str(2147483647) + "and > " + str(1))
+    return f
+
 
 def get_args():
     """
@@ -88,6 +93,7 @@ def get_args():
     barcodes.add_argument('--bc_collapsing_dist', dest='bc_threshold',
                           required=False, type=int, default=1,
                           help="threshold for cellular barcode collapsing.")
+    # Cells group
     cells = parser.add_argument_group(
         'Cells',
         description=("Expected number of cells and potential whitelist")
@@ -139,11 +145,15 @@ def get_args():
     parallel.add_argument('-T', '--threads', required=False, type=int,
                         dest='n_threads', default=cpu_count(),
                         help="How many threads are to be used for running the program")
-    parallel.add_argument('-C', '--chunk_size', required=False, type=int,
-                        dest='chunk_size', default=1000000,
-                        help="How many reads shuold be sent to a child process at a time")
+    parallel.add_argument('-C', '--chunk_size', required=False, type=chunk_size_limit,
+                        dest='chunk_size',
+                        help="How many reads should be sent to a child process at a time")
+    parallel.add_argument('--temp_path', required=False, type=str,
+                        dest='temp_path', default="",
+                        help="Temp folder for chunk creation specification. Useful when using a cluster with a scratch folder")
+    
 
-
+    # Global group
     parser.add_argument('-n', '--first_n', required=False, type=int,
                         dest='first_n', default=float('inf'),
                         help="Select N reads to run on instead of all.")
@@ -165,12 +175,11 @@ def get_args():
     return parser
 
 
-def create_report(n_reads, reads_per_cell, no_match, version, start_time, ordered_tags_map, umis_corrected, bcs_corrected, bad_cells, args):
+def create_report(total_reads, reads_per_cell, no_match, version, start_time, ordered_tags_map, umis_corrected, bcs_corrected, bad_cells, R1_too_short, R2_too_short, args):
     """
     Creates a report with details about the run in a yaml format.
-
     Args:
-        n_reads (int): Number of reads that have been processed.
+        total_reads (int): Number of reads that have been processed.
         reads_matrix (scipy.sparse.dok_matrix): A sparse matrix continining read counts.
         no_match (Counter): Counter of unmapped tags.
         version (string): CITE-seq-Count package version.
@@ -179,9 +188,11 @@ def create_report(n_reads, reads_per_cell, no_match, version, start_time, ordere
 
     """
     total_unmapped = sum(no_match.values())
-    total_mapped = sum(reads_per_cell.values()) - total_unmapped
-    mapped_perc = round((total_mapped/n_reads)*100)
-    unmapped_perc = round((total_unmapped/n_reads)*100)
+    total_mapped = total_reads - total_unmapped
+    total_too_short = total_reads - total_unmapped - total_mapped
+    too_short_perc = round((total_too_short/total_reads)*100)
+    mapped_perc = round((total_mapped/total_reads)*100)
+    unmapped_perc = round((total_unmapped/total_reads)*100)
     
     with open(os.path.join(args.outfolder, 'run_report.yaml'), 'w') as report_file:
         report_file.write(
@@ -191,6 +202,9 @@ CITE-seq-Count Version: {}
 Reads processed: {}
 Percentage mapped: {}
 Percentage unmapped: {}
+Percentage too short: {}
+\tR1_too_short: {}
+\tR2_too_short: {}
 Uncorrected cells: {}
 Correction:
 \tCell barcodes collapsing threshold: {}
@@ -213,9 +227,12 @@ Run parameters:
             datetime.datetime.today().strftime('%Y-%m-%d'),
             secondsToText.secondsToText(time.time()-start_time),
             version,
-            n_reads,
+            int(total_reads),
             mapped_perc,
             unmapped_perc,
+            too_short_perc,
+            R1_too_short,
+            R2_too_short,
             len(bad_cells),
             args.bc_threshold,
             bcs_corrected,
@@ -249,6 +266,8 @@ def main():
 
     # Parse arguments.
     args = parser.parse_args()
+    temp_path = os.path.abspath(args.temp_path)
+    assert os.access(temp_path, os.W_OK)
     if args.whitelist:
         print('Loading whitelist')
         (whitelist, args.bc_threshold) = preprocessing.parse_whitelist_csv(
@@ -280,7 +299,7 @@ def main():
         (
             barcode_slice,
             umi_slice,
-            barcode_umi_length
+            _
         ) = preprocessing.check_barcodes_lengths(
                 read1_lengths[-1],
                 args.cb_first,
@@ -315,13 +334,18 @@ def main():
     #output_queue = Queue()
 
     #read_struct = namedtuple('read_struct', ['r1', 'r2'])
-    mapping_input = namedtuple('mapping_input', ['filename', 'tags', 'barcode_slice', 'umi_slice', 'debug', 'maximum_distance', 'sliding_window'])
+    mapping_input = namedtuple('mapping_input', ['filename', 'tags', 'debug', 'maximum_distance', 'sliding_window'])
 
     print('Writing chunks to disk')
     reads_count = 0
-    read_list = []
     num_chunks = 0
-    chunk_size = round(total_reads/args.n_threads) + 1
+    if args.chunk_size:
+        chunk_size = args.chunk_size
+    else:
+        chunk_size = round(total_reads/args.n_threads) + 1
+    temp_files = []
+    R1_too_short = 0
+    R2_too_short = 0
     for read1_path, read2_path in zip(read1_paths, read2_paths):
         print('Reading reads from files: {}, {}'.format(read1_path, read2_path))
         with gzip.open(read1_path, 'rt') as textfile1, \
@@ -329,19 +353,29 @@ def main():
         
             # Read all 2nd lines from 4 line chunks. If first_n not None read only 4 times the given amount.
             secondlines = islice(zip(textfile1, textfile2), 1, None, 4)
-            temp_filename = 'temp_{}'.format(num_chunks)
+            temp_filename = os.path.join(temp_path, 'temp_{}'.format(num_chunks))
             chunked_file_object = open(temp_filename, 'w')
+            temp_files.append(os.path.abspath(temp_filename))
             for read1, read2 in secondlines:
-                read1 = read1.strip()[0:args.umi_last]
-                read2 = read2.strip()[args.start_trim:R2_max_length]
-                chunked_file_object.write('{},{}\n'.format(read1, read2))
+                
+                read1 = read1.strip()
+                if len(read1) < args.umi_last:
+                    R1_too_short += 1
+                    # The entire read is skipped
+                    continue
+                read1_sliced = read1[0:args.umi_last]
+                if len(read2) < R2_max_length:
+                    R2_too_short += 1
+                    # The entire read is skipped
+                    continue
+                
+                read2_sliced = read2[args.start_trim:R2_max_length]
+                chunked_file_object.write('{},{},{}\n'.format(read1_sliced[barcode_slice], read1_sliced[umi_slice], read2_sliced))
                 reads_count += 1
                 if reads_count % chunk_size == 0:
                     input_queue.append(mapping_input(
                         filename=temp_filename,
                         tags=named_tuples_tags_map,
-                        barcode_slice=barcode_slice,
-                        umi_slice=umi_slice,
                         debug=args.debug,
                         maximum_distance=args.max_error,
                         sliding_window=args.sliding_window))
@@ -349,14 +383,13 @@ def main():
                     chunked_file_object.close()
                     temp_filename = 'temp_{}'.format(num_chunks)
                     chunked_file_object = open(temp_filename, 'w')
+                    temp_files.append(os.path.abspath(temp_filename))
                 if reads_count >= args.first_n:
                     break
             
             input_queue.append(mapping_input(
                         filename=temp_filename,
                         tags=named_tuples_tags_map,
-                        barcode_slice=barcode_slice,
-                        umi_slice=umi_slice,
                         debug=args.debug,
                         maximum_distance=args.max_error,
                         sliding_window=args.sliding_window))
@@ -385,6 +418,10 @@ def main():
     ) = processing.merge_results(parallel_results=parallel_results[0])
     
     del(parallel_results)
+    
+    # Delete temp_files
+    for file_path in temp_files:
+        os.remove(file_path)
 
 
     # Correct cell barcodes
@@ -499,7 +536,7 @@ def main():
         #Create sparse aberrant cells matrix
         (
         umi_aberrant_matrix,
-        read_aberrant_matrix
+        _
         ) = processing.generate_sparse_matrices(
             final_results=final_results,
             ordered_tags_map=ordered_tags_map,
@@ -547,7 +584,7 @@ def main():
     
     #Create report and write it to disk
     create_report(
-        n_reads=total_reads,
+        total_reads=total_reads,
         reads_per_cell=reads_per_cell,
         no_match=merged_no_match,
         version=version,
@@ -556,6 +593,8 @@ def main():
         umis_corrected=umis_corrected,
         bcs_corrected=bcs_corrected,
         bad_cells=aberrant_cells,
+        R1_too_short=R1_too_short,
+        R2_too_short=R2_too_short,
         args=args)
     
     #Write dense matrix to disk if requested

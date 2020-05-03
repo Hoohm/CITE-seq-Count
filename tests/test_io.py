@@ -12,10 +12,10 @@ def data():
     pytest.sparse_matrix = test_matrix
     pytest.top_cells = set(['ACTGTTTTATTGGCCT','TTCATAAGGTAGGGAT'])
     pytest.ordered_tags_map = OrderedDict({
-        'test3-CGTCGTAGCTGATCGTAGCTGAC':0,
-        'test2-CGTACGTAGCCTAGC':1,
-        'test1-CGTAGCTCG': 3,
-        'unmapped': 4
+        'test3':{'id':0, 'sequence': 'CGTA'},
+        'test2':{'id':1, 'sequence': 'CGTA'},
+        'test1': {'id':3, 'sequence': 'CGTA'},
+        'unmapped': {'id':4, 'sequence': 'CGTA'}
         })
     pytest.data_type = 'umi'
     pytest.outfolder = 'tests/test_data/'
