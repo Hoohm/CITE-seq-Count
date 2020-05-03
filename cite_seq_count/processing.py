@@ -33,7 +33,7 @@ def find_best_match(TAG_seq, tags, maximum_distance):
     If no matches found returns 'unmapped'.
     We add 1
     Args:
-        TAG_seq (string): Sequence from R1 already start trimmed
+        TAG_seq (string): Sequence from R2 already start trimmed
         tags (dict): A dictionary with the TAGs as keys and TAG Names as values.
         maximum_distance (int): Maximum distance given by the user.
 
@@ -54,16 +54,17 @@ def find_best_match(TAG_seq, tags, maximum_distance):
     return(best_match)
 
 
-def find_best_match_shift(TAG_seq, tags, maximum_distance):
+def find_best_match_shift(TAG_seq, tags):
     """
     Find the best match from the list of tags with sliding window.
+    Only works with exact match.
 
     Compares the Levenshtein distance between tags and the trimmed sequences.
     The tag and the sequence must have the same length.
     If no matches found returns 'unmapped'.
     We add 1
     Args:
-        TAG_seq (string): Sequence from R1 already start trimmed
+        TAG_seq (string): Sequence from R2 already start trimmed
         tags (dict): A dictionary with the TAGs as keys and TAG Names as values.
         maximum_distance (int): Maximum distance given by the user.
 
@@ -71,19 +72,9 @@ def find_best_match_shift(TAG_seq, tags, maximum_distance):
         best_match (string): The TAG name that will be used for counting.
     """
     best_match = 'unmapped'
-    best_score = maximum_distance
-    shifts = range(0,len(TAG_seq) - len(max(tags,key=len)))
-
-    for shift in shifts:
-        for tag, name in tags.items():
-            score = Levenshtein.hamming(tag, TAG_seq[shift:len(tag)+shift])
-            if score == 0:
-                #Best possible match
-                return(name)
-            elif score <= best_score:
-                best_score = score
-                best_match = name
-                return(best_match)
+    for tag in tags:
+        if tag.sequence in TAG_seq:
+            return(tag.name)
     return(best_match)
 
 
@@ -142,7 +133,7 @@ def map_reads(mapping_input):
                 results[cell_barcode] = defaultdict(Counter)
             
             if(sliding_window):
-                best_match = find_best_match_shift(read2, tags, maximum_distance)
+                best_match = find_best_match_shift(read2, tags)
             else:
                 best_match = find_best_match(read2, tags, maximum_distance)
             
@@ -153,12 +144,17 @@ def map_reads(mapping_input):
             
             if debug:
                 print(
-                    "\nline:{0}\n"
-                    "cell_barcode:{1}\tUMI:{2}\tTAG_seq:{3}\n"
-                    "line length:{4}\tcell barcode length:{5}\tUMI length:{6}\tTAG sequence length:{7}\n"
-                    "Best match is: {8}"
-                    .format(read1 + read2, cell_barcode, UMI, read2,
-                            len(read1 + read2), len(cell_barcode), len(UMI), len(read2), best_match
+                    "cell_barcode:{0}\tUMI:{1}\tTAG_seq:{2}\n"
+                    "cell barcode length:{3}\tUMI length:{4}\tTAG sequence length:{5}\n"
+                    "Best match is: {6}\n"
+                    .format(
+                        cell_barcode,
+                        UMI,
+                        read2,
+                        len(cell_barcode),
+                        len(UMI),
+                        len(read2),
+                        best_match
                     )
                 )
                 sys.stdout.flush()
@@ -202,6 +198,11 @@ def merge_results(parallel_results):
     return(merged_results, umis_per_cell, reads_per_cell, merged_no_match)
 
 
+def check_unmapped(no_match, total_reads, start_trim):
+    """Check if the number of unmapped is higher than 99%"""
+    if sum(no_match.values())/total_reads > float(0.99):
+        exit("""More than 99 percent of your data is unmapped.\nPlease check that your --start_trim {} parameter is correct and that your tags file is properly formatted""".format(start_trim))
+        
 def correct_umis(umi_correction_input):
     """
     Corrects umi barcodes within same cell/tag groups.
@@ -319,7 +320,7 @@ def correct_cells(final_results, reads_per_cell, umis_per_cell, collapsing_thres
         corrected_umis (int): How many umis have been corrected.
     """
     print('Looking for a whitelist')
-    cell_whitelist, true_to_false = whitelist_methods.getCellWhitelist(
+    _, true_to_false = whitelist_methods.getCellWhitelist(
         cell_barcode_counts=reads_per_cell,
         expect_cells=expected_cells,
         cell_number=expected_cells,

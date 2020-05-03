@@ -7,8 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [1.5.0] - XXXX
 ### Added
   - `CITE-se-Count` is now Compatible with trimmed data. There is a new `too_short` category in the `run_report.yaml`
-    that will let you know how much you lost due to reads being too short. Will not work well with the `--sliding_window` option
-    because any read that is trimmed even by one base will be discarded.
+    that will let you know how much you lost due to reads being too short.
   - UMI correction is now also parallelized and will use the threads proposed.
 ### Changed
   - The `features.csv` now has different columns for the tag name and the tag sequence. This keeps the relevant information
@@ -16,6 +15,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   - The mapping step has been changed. It will first write the reads to files and then read in the chunks.
     This should solve the io bottleneck from before.
   - There are new options now for parallel computing. `--chunk_size` Determines how many reads will be read per chunk.
+  - `--sliding-window` now only checks for exact matches.
 
 
 ## [1.4.3] - 05.10.2019

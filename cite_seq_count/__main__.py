@@ -307,14 +307,14 @@ def main():
                 args.umi_first, args.umi_last)
     
     # Ensure all files have the same input length
-    if len(set(read1_lengths)) != 1:
-        sys.exit('Input barcode fastqs (read1) do not all have same length.\nExiting')
-    if len(set(read2_lengths)) != 1:
-        sys.exit('Input barcode fastqs (read2) do not all have same length.\nExiting')
+    #if len(set(read1_lengths)) != 1:
+        #sys.exit('Input barcode fastqs (read1) do not all have same length.\nExiting')
+    #if len(set(read2_lengths)) != 1:
+        #sys.exit('Input barcode fastqs (read2) do not all have same length.\nExiting')
 
     # Define R2_lenght to reduce amount of data to transfer to childrens
     if args.sliding_window:
-        R2_max_length = read2_lengths[1]
+        R2_max_length = read2_lengths[0]
     else:
         R2_max_length = longest_tag_len
     # Initialize the counts dicts that will be generated from each input fastq pair
@@ -327,13 +327,7 @@ def main():
     #Print a statement if multiple files are run.
     if number_of_samples != 1:
         print('Detected {} files to run on.'.format(number_of_samples))
-    
-    
-
     input_queue = []
-    #output_queue = Queue()
-
-    #read_struct = namedtuple('read_struct', ['r1', 'r2'])
     mapping_input = namedtuple('mapping_input', ['filename', 'tags', 'debug', 'maximum_distance', 'sliding_window'])
 
     print('Writing chunks to disk')
@@ -350,8 +344,6 @@ def main():
         print('Reading reads from files: {}, {}'.format(read1_path, read2_path))
         with gzip.open(read1_path, 'rt') as textfile1, \
              gzip.open(read2_path, 'rt') as textfile2:
-        
-            # Read all 2nd lines from 4 line chunks. If first_n not None read only 4 times the given amount.
             secondlines = islice(zip(textfile1, textfile2), 1, None, 4)
             temp_filename = os.path.join(temp_path, 'temp_{}'.format(num_chunks))
             chunked_file_object = open(temp_filename, 'w')
@@ -369,7 +361,7 @@ def main():
                     # The entire read is skipped
                     continue
                 
-                read2_sliced = read2[args.start_trim:R2_max_length]
+                read2_sliced = read2[args.start_trim:(R2_max_length + args.start_trim)]
                 chunked_file_object.write('{},{},{}\n'.format(read1_sliced[barcode_slice], read1_sliced[umi_slice], read2_sliced))
                 reads_count += 1
                 if reads_count % chunk_size == 0:
@@ -385,6 +377,7 @@ def main():
                     chunked_file_object = open(temp_filename, 'w')
                     temp_files.append(os.path.abspath(temp_filename))
                 if reads_count >= args.first_n:
+                    total_reads = args.first_n
                     break
             
             input_queue.append(mapping_input(
@@ -406,8 +399,6 @@ def main():
     if len(errors) != 0:
         for error in errors:
             print(error)
-    
-
 
     print('Merging results')
     (
@@ -419,6 +410,9 @@ def main():
     
     del(parallel_results)
     
+    # Check if 99% of the reads are unmapped.
+    processing.check_unmapped(no_match=merged_no_match, total_reads=total_reads, start_trim=args.start_trim)
+
     # Delete temp_files
     for file_path in temp_files:
         os.remove(file_path)
