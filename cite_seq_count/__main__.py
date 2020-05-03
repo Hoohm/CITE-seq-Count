@@ -8,15 +8,13 @@ import os
 import datetime
 import pkg_resources
 import logging
+import gzip
 
-from argparse import ArgumentParser
-from argparse import RawTextHelpFormatter
-from collections import OrderedDict
-from collections import Counter
-from collections import defaultdict
+from itertools import islice
+from argparse import ArgumentParser, ArgumentTypeError, RawTextHelpFormatter
 
-from multiprocess import cpu_count
-from multiprocess import Pool
+from collections import OrderedDict, Counter, defaultdict, namedtuple
+from multiprocess import cpu_count, Pool, Queue, JoinableQueue, Process
 
 from cite_seq_count import preprocessing
 from cite_seq_count import processing
@@ -24,6 +22,17 @@ from cite_seq_count import io
 from cite_seq_count import secondsToText
 
 version = pkg_resources.require("cite_seq_count")[0].version
+
+def chunk_size_limit(arg):
+    """Validates chunk_size limits"""
+    try:
+        f = int(arg)
+    except ValueError:    
+        raise ArgumentTypeError("Must be am int")
+    if f < 1 or f > 2147483647:
+        raise ArgumentTypeError("Argument must be < " + str(2147483647) + "and > " + str(1))
+    return f
+
 
 def get_args():
     """
@@ -84,6 +93,7 @@ def get_args():
     barcodes.add_argument('--bc_collapsing_dist', dest='bc_threshold',
                           required=False, type=int, default=1,
                           help="threshold for cellular barcode collapsing.")
+    # Cells group
     cells = parser.add_argument_group(
         'Cells',
         description=("Expected number of cells and potential whitelist")
@@ -126,13 +136,26 @@ def get_args():
         help=("Allow for a sliding window when aligning.")
     )
         
-
+    # Parallel group.
+    parallel = parser.add_argument_group(
+        'Parallelization options',
+        description=("Options for performance on parallelization")
+    )
     # Remaining arguments.
-    parser.add_argument('-T', '--threads', required=False, type=int,
+    parallel.add_argument('-T', '--threads', required=False, type=int,
                         dest='n_threads', default=cpu_count(),
                         help="How many threads are to be used for running the program")
+    parallel.add_argument('-C', '--chunk_size', required=False, type=chunk_size_limit,
+                        dest='chunk_size',
+                        help="How many reads should be sent to a child process at a time")
+    parallel.add_argument('--temp_path', required=False, type=str,
+                        dest='temp_path', default="",
+                        help="Temp folder for chunk creation specification. Useful when using a cluster with a scratch folder")
+    
+
+    # Global group
     parser.add_argument('-n', '--first_n', required=False, type=int,
-                        dest='first_n', default=None,
+                        dest='first_n', default=float('inf'),
                         help="Select N reads to run on instead of all.")
     parser.add_argument('-o', '--output', required=False, type=str, default='Results',
                         dest='outfolder', help="Results will be written to this folder")
@@ -152,12 +175,11 @@ def get_args():
     return parser
 
 
-def create_report(n_reads, reads_per_cell, no_match, version, start_time, ordered_tags_map, umis_corrected, bcs_corrected, bad_cells, args):
+def create_report(total_reads, reads_per_cell, no_match, version, start_time, ordered_tags_map, umis_corrected, bcs_corrected, bad_cells, R1_too_short, R2_too_short, args):
     """
     Creates a report with details about the run in a yaml format.
-
     Args:
-        n_reads (int): Number of reads that have been processed.
+        total_reads (int): Number of reads that have been processed.
         reads_matrix (scipy.sparse.dok_matrix): A sparse matrix continining read counts.
         no_match (Counter): Counter of unmapped tags.
         version (string): CITE-seq-Count package version.
@@ -166,9 +188,11 @@ def create_report(n_reads, reads_per_cell, no_match, version, start_time, ordere
 
     """
     total_unmapped = sum(no_match.values())
-    total_mapped = sum(reads_per_cell.values()) - total_unmapped
-    mapped_perc = round((total_mapped/n_reads)*100)
-    unmapped_perc = round((total_unmapped/n_reads)*100)
+    total_mapped = total_reads - total_unmapped
+    total_too_short = total_reads - total_unmapped - total_mapped
+    too_short_perc = round((total_too_short/total_reads)*100)
+    mapped_perc = round((total_mapped/total_reads)*100)
+    unmapped_perc = round((total_unmapped/total_reads)*100)
     
     with open(os.path.join(args.outfolder, 'run_report.yaml'), 'w') as report_file:
         report_file.write(
@@ -178,6 +202,9 @@ CITE-seq-Count Version: {}
 Reads processed: {}
 Percentage mapped: {}
 Percentage unmapped: {}
+Percentage too short: {}
+\tR1_too_short: {}
+\tR2_too_short: {}
 Uncorrected cells: {}
 Correction:
 \tCell barcodes collapsing threshold: {}
@@ -200,9 +227,12 @@ Run parameters:
             datetime.datetime.today().strftime('%Y-%m-%d'),
             secondsToText.secondsToText(time.time()-start_time),
             version,
-            n_reads,
+            int(total_reads),
             mapped_perc,
             unmapped_perc,
+            too_short_perc,
+            R1_too_short,
+            R2_too_short,
             len(bad_cells),
             args.bc_threshold,
             bcs_corrected,
@@ -236,6 +266,8 @@ def main():
 
     # Parse arguments.
     args = parser.parse_args()
+    temp_path = os.path.abspath(args.temp_path)
+    assert os.access(temp_path, os.W_OK)
     if args.whitelist:
         print('Loading whitelist')
         (whitelist, args.bc_threshold) = preprocessing.parse_whitelist_csv(
@@ -247,8 +279,8 @@ def main():
 
     # Load TAGs/ABs.
     ab_map = preprocessing.parse_tags_csv(args.tags)
-    ordered_tags_map = preprocessing.check_tags(ab_map, args.max_error)
-
+    ordered_tags_map, longest_tag_len = preprocessing.check_tags(ab_map, args.max_error)
+    named_tuples_tags_map = preprocessing.convert_to_named_tuple(ordered_tags=ordered_tags_map)
     # Identify input file(s)
     read1_paths, read2_paths = preprocessing.get_read_paths(args.read1_path, args.read2_path)
 
@@ -256,7 +288,10 @@ def main():
     # one of the inputs is not valid.
     read1_lengths = []
     read2_lengths = []
+    total_reads = 0
     for read1_path, read2_path in zip(read1_paths, read2_paths):
+        n_lines = preprocessing.get_n_lines(read1_path)
+        total_reads += n_lines/4
         # Get reads length. So far, there is no validation for Read2.
         read1_lengths.append(preprocessing.get_read_length(read1_path))
         read2_lengths.append(preprocessing.get_read_length(read2_path))
@@ -264,114 +299,135 @@ def main():
         (
             barcode_slice,
             umi_slice,
-            barcode_umi_length
+            _
         ) = preprocessing.check_barcodes_lengths(
                 read1_lengths[-1],
                 args.cb_first,
                 args.cb_last,
                 args.umi_first, args.umi_last)
+    
     # Ensure all files have the same input length
-    #if len(set(read1_lengths)) != 1:
-    #    sys.exit('Input barcode fastqs (read1) do not all have same length.\nExiting')
+    if len(set(read1_lengths)) != 1:
+        sys.exit('Input barcode fastqs (read1) do not all have same length.\nExiting')
+    if len(set(read2_lengths)) != 1:
+        sys.exit('Input barcode fastqs (read2) do not all have same length.\nExiting')
 
+    # Define R2_lenght to reduce amount of data to transfer to childrens
+    if args.sliding_window:
+        R2_max_length = read2_lengths[1]
+    else:
+        R2_max_length = longest_tag_len
     # Initialize the counts dicts that will be generated from each input fastq pair
     final_results = defaultdict(lambda: defaultdict(Counter))
     umis_per_cell = Counter()
     reads_per_cell = Counter()
     merged_no_match = Counter()
     number_of_samples = len(read1_paths)
-    total_reads = 0
     
     #Print a statement if multiple files are run.
     if number_of_samples != 1:
         print('Detected {} files to run on.'.format(number_of_samples))
     
+    
+
+    input_queue = []
+    #output_queue = Queue()
+
+    #read_struct = namedtuple('read_struct', ['r1', 'r2'])
+    mapping_input = namedtuple('mapping_input', ['filename', 'tags', 'debug', 'maximum_distance', 'sliding_window'])
+
+    print('Writing chunks to disk')
+    reads_count = 0
+    num_chunks = 0
+    if args.chunk_size:
+        chunk_size = args.chunk_size
+    else:
+        chunk_size = round(total_reads/args.n_threads) + 1
+    temp_files = []
+    R1_too_short = 0
+    R2_too_short = 0
     for read1_path, read2_path in zip(read1_paths, read2_paths):
-        n_reads = 0
-        if args.first_n:
-            n_lines = (args.first_n*4)/number_of_samples
-        else:
-            n_lines = preprocessing.get_n_lines(read1_path)
-        n_reads += int(n_lines/4)
-        total_reads += n_reads
-        n_threads = args.n_threads
-        print('Started mapping')
-        print('Processing {:,} reads'.format(n_reads))
-        #Run with one process
-        if n_threads <= 1 or n_reads < 1000001:
-            print('CITE-seq-Count is running with one core.')
-            (
-                _final_results,
-                _merged_no_match) = processing.map_reads(
-                    read1_path=read1_path,
-                    read2_path=read2_path,
-                    tags=ab_map,
-                    barcode_slice=barcode_slice,
-                    umi_slice=umi_slice,
-                    indexes=[0,n_reads],
-                    whitelist=whitelist,
-                    debug=args.debug,
-                    start_trim=args.start_trim,
-                    maximum_distance=args.max_error,
-                    sliding_window=args.sliding_window)
-            _umis_per_cell = Counter()
-            _reads_per_cell = Counter()
-            for cell_barcode, counts in _final_results.items():
-                _umis_per_cell[cell_barcode] = sum([len(counts[UMI]) for UMI in counts])
-                _reads_per_cell[cell_barcode] = sum([sum(counts[UMI].values()) for UMI in counts])
-        else:
-            # Run with multiple processes
-            print('CITE-seq-Count is running with {} cores.'.format(n_threads))
-            p = Pool(processes=n_threads)
-            chunk_indexes = preprocessing.chunk_reads(n_reads, n_threads)
-            parallel_results = []
+        print('Reading reads from files: {}, {}'.format(read1_path, read2_path))
+        with gzip.open(read1_path, 'rt') as textfile1, \
+             gzip.open(read2_path, 'rt') as textfile2:
+        
+            # Read all 2nd lines from 4 line chunks. If first_n not None read only 4 times the given amount.
+            secondlines = islice(zip(textfile1, textfile2), 1, None, 4)
+            temp_filename = os.path.join(temp_path, 'temp_{}'.format(num_chunks))
+            chunked_file_object = open(temp_filename, 'w')
+            temp_files.append(os.path.abspath(temp_filename))
+            for read1, read2 in secondlines:
+                
+                read1 = read1.strip()
+                if len(read1) < args.umi_last:
+                    R1_too_short += 1
+                    # The entire read is skipped
+                    continue
+                read1_sliced = read1[0:args.umi_last]
+                if len(read2) < R2_max_length:
+                    R2_too_short += 1
+                    # The entire read is skipped
+                    continue
+                
+                read2_sliced = read2[args.start_trim:R2_max_length]
+                chunked_file_object.write('{},{},{}\n'.format(read1_sliced[barcode_slice], read1_sliced[umi_slice], read2_sliced))
+                reads_count += 1
+                if reads_count % chunk_size == 0:
+                    input_queue.append(mapping_input(
+                        filename=temp_filename,
+                        tags=named_tuples_tags_map,
+                        debug=args.debug,
+                        maximum_distance=args.max_error,
+                        sliding_window=args.sliding_window))
+                    num_chunks +=1
+                    chunked_file_object.close()
+                    temp_filename = 'temp_{}'.format(num_chunks)
+                    chunked_file_object = open(temp_filename, 'w')
+                    temp_files.append(os.path.abspath(temp_filename))
+                if reads_count >= args.first_n:
+                    break
+            
+            input_queue.append(mapping_input(
+                        filename=temp_filename,
+                        tags=named_tuples_tags_map,
+                        debug=args.debug,
+                        maximum_distance=args.max_error,
+                        sliding_window=args.sliding_window))
+            chunked_file_object.close()
+                    
+    print('Started mapping')
+    parallel_results = []
+    pool = Pool(processes=args.n_threads)
+    errors = []
+    mapping = pool.map_async(processing.map_reads, input_queue, callback=parallel_results.append, error_callback=errors.append)
+    mapping.wait()
+    pool.close()
+    pool.join()
+    if len(errors) != 0:
+        for error in errors:
+            print(error)
+    
 
-            for indexes in chunk_indexes:
-               p.apply_async(processing.map_reads,
-                    args=(
-                        read1_path,
-                        read2_path,
-                        ab_map,
-                        barcode_slice,
-                        umi_slice,
-                        indexes,
-                        whitelist,
-                        args.debug,
-                        args.start_trim,
-                        args.max_error,
-                        args.sliding_window),
-                    callback=parallel_results.append,
-                    error_callback=sys.stderr)
-            p.close()
-            p.join()
-            print('Merging results')
 
-            (
-                _final_results,
-                _umis_per_cell,
-                _reads_per_cell,
-                _merged_no_match
-            ) = processing.merge_results(parallel_results=parallel_results)
-            del(parallel_results)
+    print('Merging results')
+    (
+        final_results,
+        umis_per_cell,
+        reads_per_cell,
+        merged_no_match
+    ) = processing.merge_results(parallel_results=parallel_results[0])
+    
+    del(parallel_results)
+    
+    # Delete temp_files
+    for file_path in temp_files:
+        os.remove(file_path)
 
-        print('Mapping done, merging the different lanes')
-        # Update the overall counts dicts
-        umis_per_cell.update(_umis_per_cell)
-        reads_per_cell.update(_reads_per_cell)
-        merged_no_match.update(_merged_no_match)
-        for cell_barcode in _final_results:
-            for tag in _final_results[cell_barcode]:
-                if tag in final_results[cell_barcode]:
-                    # Counter + Counter = Counter
-                    final_results[cell_barcode][tag] += _final_results[cell_barcode][tag]
-                else:
-                    # Explicitly save the counter to that tag
-                    final_results[cell_barcode][tag] = _final_results[cell_barcode][tag]
 
     # Correct cell barcodes
     if(len(umis_per_cell) <= args.expected_cells):
         print("Number of expected cells, {}, is higher " \
-            "than number of cells found {}.\nNot performing" \
+            "than number of cells found {}.\nNot performing " \
             "cell barcode correction" \
             "".format(args.expected_cells, len(umis_per_cell)))
         bcs_corrected = 0
@@ -388,7 +444,7 @@ def main():
                     umis_per_cell=umis_per_cell,
                     expected_cells=args.expected_cells,
                     collapsing_threshold=args.bc_threshold,
-                    ab_map=ordered_tags_map)
+                    ab_map=named_tuples_tags_map)
         else:
             (
                 final_results,
@@ -398,7 +454,7 @@ def main():
                     umis_per_cell=umis_per_cell,
                     whitelist=whitelist,
                     collapsing_threshold=args.bc_threshold,
-                    ab_map=ordered_tags_map)
+                    ab_map=named_tuples_tags_map)
 
     # If given, use whitelist for top cells
     if whitelist:
@@ -409,7 +465,7 @@ def main():
                 continue
             else:
                 final_results[missing_cell] = dict()
-                for TAG in ordered_tags_map:
+                for TAG in named_tuples_tags_map:
                     final_results[missing_cell][TAG] = Counter()
                 top_cells.add(missing_cell)
     else:
@@ -425,15 +481,52 @@ def main():
         aberrant_cells = set()
     else:
         #Correct UMIS
-        (
-            final_results,
-            umis_corrected,
-            aberrant_cells
-        ) = processing.correct_umis(
-            final_results=final_results,
-            collapsing_threshold=args.umi_threshold,
-            top_cells=top_cells,
-            max_umis=20000)
+        input_queue = []
+        
+        umi_correction_input = namedtuple('umi_correction_input', ['cells','collapsing_threshold','max_umis'])
+        cells = {}
+        n_cells = 0
+        num_chunks = 0
+
+        cell_batch_size = round(len(top_cells)/args.n_threads)+1
+        for cell in top_cells:
+            cells[cell] = final_results[cell]
+            n_cells += 1
+            if n_cells % cell_batch_size == 0:
+                input_queue.append(umi_correction_input(
+                    cells=cells,
+                    collapsing_threshold=args.umi_threshold,
+                    max_umis=20000))
+                cells = {}
+                num_chunks += 1
+        input_queue.append(umi_correction_input(
+                cells=cells,
+                collapsing_threshold=args.umi_threshold,
+                max_umis=20000))
+            
+        pool = Pool(processes=args.n_threads)
+        errors = []
+        parallel_results = []
+        correct_umis = pool.map_async(processing.correct_umis, input_queue, callback=parallel_results.append, error_callback=errors.append)
+        
+        correct_umis.wait()
+        pool.close()
+        pool.join()
+        
+        if len(errors) != 0:
+            for error in errors:
+                print(error)
+        
+        
+        final_results = {}
+        umis_corrected = 0
+        aberrant_cells = set()
+        
+        for chunk in parallel_results[0]:
+            (temp_results, temp_umis, temp_aberrant_cells) = chunk
+            final_results.update(temp_results)
+            umis_corrected += temp_umis
+            aberrant_cells.update(temp_aberrant_cells)
 
     if len(aberrant_cells) > 0:
         #Remove aberrant cells from the top cells
@@ -443,7 +536,7 @@ def main():
         #Create sparse aberrant cells matrix
         (
         umi_aberrant_matrix,
-        read_aberrant_matrix
+        _
         ) = processing.generate_sparse_matrices(
             final_results=final_results,
             ordered_tags_map=ordered_tags_map,
@@ -491,7 +584,7 @@ def main():
     
     #Create report and write it to disk
     create_report(
-        n_reads=total_reads,
+        total_reads=total_reads,
         reads_per_cell=reads_per_cell,
         no_match=merged_no_match,
         version=version,
@@ -500,6 +593,8 @@ def main():
         umis_corrected=umis_corrected,
         bcs_corrected=bcs_corrected,
         bad_cells=aberrant_cells,
+        R1_too_short=R1_too_short,
+        R2_too_short=R2_too_short,
         args=args)
     
     #Write dense matrix to disk if requested

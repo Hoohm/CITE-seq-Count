@@ -5,9 +5,11 @@ import os
 import Levenshtein
 import regex
 import pybktree
+import csv
 
 from collections import Counter
 from collections import defaultdict
+from collections import namedtuple
 from multiprocess import Pool
 
 from itertools import islice
@@ -40,14 +42,14 @@ def find_best_match(TAG_seq, tags, maximum_distance):
     """
     best_match = 'unmapped'
     best_score = maximum_distance
-    for tag, name in tags.items():
-        score = Levenshtein.hamming(tag, TAG_seq[:len(tag)])
+    for tag in tags:
+        score = Levenshtein.hamming(tag.sequence, TAG_seq[:len(tag.sequence)])
         if score == 0:
             #Best possible match
-            return(name)
+            return(tag.name)
         elif score <= best_score:
             best_score = score
-            best_match = name
+            best_match = tag.name
             return(best_match)
     return(best_match)
 
@@ -85,9 +87,7 @@ def find_best_match_shift(TAG_seq, tags, maximum_distance):
     return(best_match)
 
 
-def map_reads(read1_path, read2_path, tags, barcode_slice,
-                umi_slice, indexes, whitelist, debug,
-                start_trim, maximum_distance, sliding_window):
+def map_reads(mapping_input):
     """Read through R1/R2 files and generate a islice starting at a specific index.
 
     It reads both Read1 and Read2 files, creating a dict based on cell barcode.
@@ -102,7 +102,6 @@ def map_reads(read1_path, read2_path, tags, barcode_slice,
         umi_slice (slice): A slice for extracting the UMI portion from the
             sequence.
         indexes (list): Pair of first and last index for islice
-        whitelist (set): The set of white-listed barcodes.
         debug (bool): Print debug messages. Default is False.
         start_trim (int): Number of bases to trim at the start.
         maximum_distance (int): Maximum distance given by the user.
@@ -113,20 +112,21 @@ def map_reads(read1_path, read2_path, tags, barcode_slice,
         no_match (Counter): A counter with unmapped sequences.
     """
     # Initiate values
+    (filename, tags, debug, maximum_distance, sliding_window) = mapping_input
+    print('Started mapping in child process {}'.format(os.getpid()))
     results = {}
     no_match = Counter()
     n = 1
     t = time.time()
-    with gzip.open(read1_path, 'rt') as textfile1, \
-         gzip.open(read2_path, 'rt') as textfile2:
-        
-        # Read all 2nd lines from 4 line chunks. If first_n not None read only 4 times the given amount.
-        secondlines = islice(zip(textfile1, textfile2), indexes[0]*4+1, indexes[1]*4+1, 4)
-        for read1, read2 in secondlines:
-            read1 = read1.strip()
-            read2 = read2.strip()
-            
-            # Progress info
+    
+    # Progress info
+    with open(filename, 'r') as input_file:
+        reads = csv.reader(input_file)
+        for read in reads:
+            cell_barcode = read[0]
+            # This change in bytes is required by umi_tools for umi correction
+            UMI = bytes(read[1], 'ascii')
+            read2 = read[2]
             if n % 1000000 == 0:
                 print("Processed 1,000,000 reads in {}. Total "
                     "reads: {:,} in child {}".format(
@@ -137,25 +137,19 @@ def map_reads(read1_path, read2_path, tags, barcode_slice,
                 sys.stdout.flush()
                 t = time.time()
 
-            # Get cell and umi barcodes.
-            cell_barcode = read1[barcode_slice]
-            # This change in bytes is required by umi_tools for umi correction
-            UMI = bytes(read1[umi_slice], 'ascii')
-            # Trim potential starting sequences
-            TAG_seq = read2[start_trim:]
 
             if cell_barcode not in results:
                 results[cell_barcode] = defaultdict(Counter)
             
             if(sliding_window):
-                best_match = find_best_match_shift(TAG_seq, tags, maximum_distance)
+                best_match = find_best_match_shift(read2, tags, maximum_distance)
             else:
-                best_match = find_best_match(TAG_seq, tags, maximum_distance)
+                best_match = find_best_match(read2, tags, maximum_distance)
             
             results[cell_barcode][best_match][UMI] += 1
             
             if(best_match == 'unmapped'):
-                no_match[TAG_seq] += 1 
+                no_match[read2] += 1 
             
             if debug:
                 print(
@@ -163,14 +157,15 @@ def map_reads(read1_path, read2_path, tags, barcode_slice,
                     "cell_barcode:{1}\tUMI:{2}\tTAG_seq:{3}\n"
                     "line length:{4}\tcell barcode length:{5}\tUMI length:{6}\tTAG sequence length:{7}\n"
                     "Best match is: {8}"
-                    .format(read1 + read2, cell_barcode, UMI, TAG_seq,
-                            len(read1 + read2), len(cell_barcode), len(UMI), len(TAG_seq), best_match
+                    .format(read1 + read2, cell_barcode, UMI, read2,
+                            len(read1 + read2), len(cell_barcode), len(UMI), len(read2), best_match
                     )
                 )
                 sys.stdout.flush()
             n += 1
-    print("Mapping done for process {}. Processed {:,} reads".format(os.getpid(), n - 1))
-    sys.stdout.flush()
+        print("Mapping done for process {}. Processed {:,} reads".format(os.getpid(), n - 1))
+        sys.stdout.flush()
+        
     return(results, no_match)
 
 
@@ -207,7 +202,7 @@ def merge_results(parallel_results):
     return(merged_results, umis_per_cell, reads_per_cell, merged_no_match)
 
 
-def correct_umis(final_results, collapsing_threshold, top_cells, max_umis):
+def correct_umis(umi_correction_input):
     """
     Corrects umi barcodes within same cell/tag groups.
     
@@ -222,10 +217,15 @@ def correct_umis(final_results, collapsing_threshold, top_cells, max_umis):
         corrected_umis (int): How many umis have been corrected.
         aberrant_umi_count_cells (set): Set of uncorrected cells.
     """
-    print('Correcting umis')
+
+    
+    
+    (final_results, collapsing_threshold, max_umis) = umi_correction_input
+    print('Started umi correction in child process {} working on {} cells'.format(os.getpid(), len(final_results)))
     corrected_umis = 0
-    aberrant_umi_count_cells = set()
-    for cell_barcode in top_cells:
+    aberrant_cells = set()
+    cells = final_results.keys()
+    for cell_barcode in cells:
         for TAG in final_results[cell_barcode]:
             n_umis = len(final_results[cell_barcode][TAG])
             if n_umis > 1 and n_umis <= max_umis:
@@ -237,8 +237,9 @@ def correct_umis(final_results, collapsing_threshold, top_cells, max_umis):
                 final_results[cell_barcode][TAG] = new_res
                 corrected_umis += temp_corrected_umis
             elif n_umis > max_umis:
-                aberrant_umi_count_cells.add(cell_barcode)
-    return(final_results, corrected_umis, aberrant_umi_count_cells)
+                aberrant_cells.add(cell_barcode)
+    print('Finished correcting umis in child {}'.format(os.getpid()))
+    return(final_results, corrected_umis, aberrant_cells)
 
 
 def update_umi_counts(UMIclusters, cell_tag_counts):
