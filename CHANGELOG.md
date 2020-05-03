@@ -7,15 +7,18 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [1.5.0] - XXXX
 ### Added
   - `CITE-se-Count` is now Compatible with trimmed data. There is a new `too_short` category in the `run_report.yaml`
-    that will let you know how much you lost due to reads being too short.
+    that will let you know how much you lost due to reads being too short. #123
   - UMI correction is now also parallelized and will use the threads proposed.
+  - Added a check at the end of the mapping. If more than 99% of the reads are unmapped, CITE-seq-Count will exit.
+
 ### Changed
   - The `features.csv` now has different columns for the tag name and the tag sequence. This keeps the relevant information
     in the output files as well as simplifies reading the mtx format when processing the data.
   - The mapping step has been changed. It will first write the reads to files and then read in the chunks.
     This should solve the io bottleneck from before.
-  - There are new options now for parallel computing. `--chunk_size` Determines how many reads will be read per chunk.
+  - There are new options now for parallel computing. `--chunk_size` Determines how many reads will be read per chunk. #99
   - `--sliding-window` now only checks for exact matches.
+  - Added cython dependency based on issue #117
 
 
 ## [1.4.3] - 05.10.2019

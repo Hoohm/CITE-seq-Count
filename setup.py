@@ -29,7 +29,8 @@ setuptools.setup(
           'pytest==4.1.0',
           'pytest-dependency==0.4.0',
           'pandas>=0.23.4',
-          'pybktree==1.1'
+          'pybktree==1.1',
+          'cython>=0.29.17'
       ],
       python_requires='>=3.6'
 )

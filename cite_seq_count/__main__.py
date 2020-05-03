@@ -419,36 +419,40 @@ def main():
 
 
     # Correct cell barcodes
-    if(len(umis_per_cell) <= args.expected_cells):
-        print("Number of expected cells, {}, is higher " \
-            "than number of cells found {}.\nNot performing " \
-            "cell barcode correction" \
-            "".format(args.expected_cells, len(umis_per_cell)))
-        bcs_corrected = 0
-    else:
-        print('Correcting cell barcodes')
-        if not whitelist:
-            (
-                final_results,
-                umis_per_cell,
-                bcs_corrected
-            ) = processing.correct_cells(
-                    final_results=final_results,
-                    reads_per_cell=reads_per_cell,
-                    umis_per_cell=umis_per_cell,
-                    expected_cells=args.expected_cells,
-                    collapsing_threshold=args.bc_threshold,
-                    ab_map=named_tuples_tags_map)
+    if args.bc_threshold != 0:
+        if(len(umis_per_cell) <= args.expected_cells):
+            print("Number of expected cells, {}, is higher " \
+                "than number of cells found {}.\nNot performing " \
+                "cell barcode correction" \
+                "".format(args.expected_cells, len(umis_per_cell)))
+            bcs_corrected = 0
         else:
-            (
-                final_results,
-                umis_per_cell,
-                bcs_corrected) = processing.correct_cells_whitelist(
-                    final_results=final_results,
-                    umis_per_cell=umis_per_cell,
-                    whitelist=whitelist,
-                    collapsing_threshold=args.bc_threshold,
-                    ab_map=named_tuples_tags_map)
+            print('Correcting cell barcodes')
+            if not whitelist:
+                (
+                    final_results,
+                    umis_per_cell,
+                    bcs_corrected
+                ) = processing.correct_cells(
+                        final_results=final_results,
+                        reads_per_cell=reads_per_cell,
+                        umis_per_cell=umis_per_cell,
+                        expected_cells=args.expected_cells,
+                        collapsing_threshold=args.bc_threshold,
+                        ab_map=named_tuples_tags_map)
+            else:
+                (
+                    final_results,
+                    umis_per_cell,
+                    bcs_corrected) = processing.correct_cells_whitelist(
+                        final_results=final_results,
+                        umis_per_cell=umis_per_cell,
+                        whitelist=whitelist,
+                        collapsing_threshold=args.bc_threshold,
+                        ab_map=named_tuples_tags_map)
+    else:
+        print('Skipping cell barcode correction')
+        bcs_corrected = 0
 
     # If given, use whitelist for top cells
     if whitelist:
