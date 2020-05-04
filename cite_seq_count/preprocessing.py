@@ -185,15 +185,15 @@ def get_read_length(filename):
     """
     with gzip.open(filename, 'r') as fastq_file:
         secondlines = islice(fastq_file, 1, 1000, 4)
-        temp_length = len(next(secondlines).rstrip())
+        #temp_length = len(next(secondlines).rstrip())
         for sequence in secondlines:
             read_length = len(sequence.rstrip())
-            if (temp_length != read_length):
-                sys.exit(
-                    '[ERROR] Sequence length in {} is not consistent. Please, trim all '
-                    'sequences at the same length.\n'
-                    'Exiting the application.\n'.format(filename)
-                )
+            # if (temp_length != read_length):
+            #     sys.exit(
+            #         '[ERROR] Sequence length in {} is not consistent. Please, trim all '
+            #         'sequences at the same length.\n'
+            #         'Exiting the application.\n'.format(filename)
+            #     )
     return(read_length)
 
 
