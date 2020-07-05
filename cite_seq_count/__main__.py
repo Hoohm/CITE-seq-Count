@@ -18,6 +18,7 @@ from multiprocess import cpu_count, Pool, Queue, JoinableQueue, Process
 
 from cite_seq_count import preprocessing
 from cite_seq_count import processing
+from cite_seq_count import database
 from cite_seq_count import io
 from cite_seq_count import secondsToText
 
@@ -38,12 +39,13 @@ def get_args():
     """
     Get args.
     """
+    
     parser = ArgumentParser(
         prog='CITE-seq-Count', formatter_class=RawTextHelpFormatter,
         description=("This script counts matching antibody tags from paired fastq "
                      "files. Version {}".format(version)),
     )
-
+    
     # REQUIRED INPUTS group.
     inputs = parser.add_argument_group('Inputs',
                                        description="Required input files.")
@@ -61,30 +63,31 @@ def get_args():
               "\tATGCGA,First_tag_name\n"
               "\tGTCATG,Second_tag_name")
     )
-
-    # BARCODES group.
+        # BARCODES group.
     barcodes = parser.add_argument_group(
         'Barcodes',
         description=("Positions of the cellular barcodes and UMI. If your "
-                     "cellular barcodes and UMI\n are positioned as follows:\n"
-                     "\tBarcodes from 1 to 16 and UMI from 17 to 26\n"
-                     "then this is the input you need:\n"
-                     "\t-cbf 1 -cbl 16 -umif 17 -umil 26")
+                    "cellular barcodes and UMI\n are positioned as follows:\n"
+                    "\tBarcodes from 1 to 16 and UMI from 17 to 26\n"
+                    "then this is the input you need:\n"
+                    "\t-cbf 1 -cbl 16 -umif 17 -umil 26")
     )
-    barcodes.add_argument('-cbf', '--cell_barcode_first_base', dest='cb_first',
-                          required=True, type=int,
-                          help=("Postion of the first base of your cell "
-                                "barcodes."))
-    barcodes.add_argument('-cbl', '--cell_barcode_last_base', dest='cb_last',
-                          required=True, type=int,
-                          help=("Postion of the last base of your cell "
-                                "barcodes."))
-    barcodes.add_argument('-umif', '--umi_first_base', dest='umi_first',
-                          required=True, type=int,
-                          help="Postion of the first base of your UMI.")
-    barcodes.add_argument('-umil', '--umi_last_base', dest='umi_last',
-                          required=True, type=int,
-                          help="Postion of the last base of your UMI.")
+    barcodes.add_argument('--chemistry', type=str, required=False, default=False)
+    if '--chemistry' not in sys.argv:
+        barcodes.add_argument('-cbf', '--cell_barcode_first_base', dest='cb_first',
+                            required=True, type=int,
+                            help=("Postion of the first base of your cell "
+                                    "barcodes."))
+        barcodes.add_argument('-cbl', '--cell_barcode_last_base', dest='cb_last',
+                            required=True, type=int,
+                            help=("Postion of the last base of your cell "
+                                    "barcodes."))
+        barcodes.add_argument('-umif', '--umi_first_base', dest='umi_first',
+                            required=True, type=int,
+                            help="Postion of the first base of your UMI.")
+        barcodes.add_argument('-umil', '--umi_last_base', dest='umi_last',
+                            required=True, type=int,
+                            help="Postion of the last base of your UMI.")
     barcodes.add_argument('--umi_collapsing_dist', dest='umi_threshold',
                           required=False, type=int, default=2,
                           help="threshold for umi collapsing.")
@@ -112,6 +115,15 @@ def get_args():
                       "Or 10X-style:\n"
                       "\tATGCTAGTGCTA-1\n\tGCTAGTCAGGAT-1\n\tCGACTGCTAACG-1\n")
     )
+    if '--chemistry' not in sys.argv:
+        cells.add_argument('--translation', required=False, type=str,
+            help="A csv file containing the mapping between two sets of cell barcode list.\n"
+                    "A required header such as the reference is named whitelist. Example:\n\n"
+                    "\twhitelist,feature_barcoding_map\n"
+                    "\tAAACCCAAGAAACACT,AAACCCATCAAACACT\n"
+                    "\tAAACCCAAGAAACCAT,AAACCCATCAAACCAT\n"
+                    "\nThe output matrix will possess both cell barcode IDs"
+            )
 
     # FILTERS group.
     filters = parser.add_argument_group(
@@ -175,7 +187,7 @@ def get_args():
     return parser
 
 
-def create_report(total_reads, reads_per_cell, no_match, version, start_time, ordered_tags_map, umis_corrected, bcs_corrected, bad_cells, R1_too_short, R2_too_short, args):
+def create_report(total_reads, reads_per_cell, no_match, version, start_time, ordered_tags_map, umis_corrected, bcs_corrected, bad_cells, R1_too_short, R2_too_short, args, chemistry_def):
     """
     Creates a report with details about the run in a yaml format.
     Args:
@@ -243,10 +255,10 @@ Run parameters:
             args.cb_first,
             args.cb_last,
             args.umi_first,
-            args.umi_last,
+            chemistry_def.umi_end,
             args.expected_cells,
             args.max_error,
-            args.start_trim))
+            chemistry_def.R2_start_trim))
 
 def main():
     #Create logger and stream handler
@@ -277,6 +289,12 @@ def main():
     else:
         whitelist = False
 
+    # Get chemistry defs
+    if args.chemistry:
+
+        chemistry_def = database.get_chemistry_definition(args.chemistry)
+    else:
+        chemistry_def = database.create_chemistry_definition(args)
     # Load TAGs/ABs.
     ab_map = preprocessing.parse_tags_csv(args.tags)
     ordered_tags_map, longest_tag_len = preprocessing.check_tags(ab_map, args.max_error)
@@ -289,6 +307,7 @@ def main():
     read1_lengths = []
     read2_lengths = []
     total_reads = 0
+    
     for read1_path, read2_path in zip(read1_paths, read2_paths):
         n_lines = preprocessing.get_n_lines(read1_path)
         total_reads += n_lines/4
@@ -302,9 +321,10 @@ def main():
             _
         ) = preprocessing.check_barcodes_lengths(
                 read1_lengths[-1],
-                args.cb_first,
-                args.cb_last,
-                args.umi_first, args.umi_last)
+                chemistry_def.barcode_start,
+                chemistry_def.barcode_end,
+                chemistry_def.umi_start,
+                chemistry_def.umi_end)
     
     # Ensure all files have the same input length
     #if len(set(read1_lengths)) != 1:
@@ -351,17 +371,17 @@ def main():
             for read1, read2 in secondlines:
                 
                 read1 = read1.strip()
-                if len(read1) < args.umi_last:
+                if len(read1) < chemistry_def.umi_end:
                     R1_too_short += 1
                     # The entire read is skipped
                     continue
-                read1_sliced = read1[0:args.umi_last]
+                read1_sliced = read1[0:chemistry_def.umi_end]
                 if len(read2) < R2_max_length:
                     R2_too_short += 1
                     # The entire read is skipped
                     continue
                 
-                read2_sliced = read2[args.start_trim:(R2_max_length + args.start_trim)]
+                read2_sliced = read2[chemistry_def.R2_start_trim:(R2_max_length + chemistry_def.R2_start_trim)]
                 chunked_file_object.write('{},{},{}\n'.format(read1_sliced[barcode_slice], read1_sliced[umi_slice], read2_sliced))
                 reads_count += 1
                 if reads_count % chunk_size == 0:
@@ -411,7 +431,7 @@ def main():
     del(parallel_results)
     
     # Check if 99% of the reads are unmapped.
-    processing.check_unmapped(no_match=merged_no_match, total_reads=total_reads, start_trim=args.start_trim)
+    processing.check_unmapped(no_match=merged_no_match, total_reads=total_reads, start_trim=chemistry_def.R2_start_trim)
 
     # Delete temp_files
     for file_path in temp_files:
@@ -486,7 +506,7 @@ def main():
         n_cells = 0
         num_chunks = 0
 
-        cell_batch_size = round(len(top_cells)/args.n_threads)+1
+        cell_batch_size = round(len(top_cells)/args.n_threads) + 1
         for cell in top_cells:
             cells[cell] = final_results[cell]
             n_cells += 1
@@ -593,7 +613,8 @@ def main():
         bad_cells=aberrant_cells,
         R1_too_short=R1_too_short,
         R2_too_short=R2_too_short,
-        args=args)
+        args=args,
+        chemistry_def=chemistry_def)
     
     #Write dense matrix to disk if requested
     if args.dense:
