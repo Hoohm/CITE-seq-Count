@@ -6,10 +6,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [1.5.0] - XXXX
 ### Added
-  - `CITE-se-Count` is now Compatible with trimmed data. There is a new `too_short` category in the `run_report.yaml`
+  - `CITE-seq-Count` is now Compatible with trimmed data. There is a new `too_short` category in the `run_report.yaml`
     that will let you know how much you lost due to reads being too short. #123
   - UMI correction is now also parallelized and will use the threads proposed.
   - Added a check at the end of the mapping. If more than 99% of the reads are unmapped, CITE-seq-Count will exit.
+  - (BETA) New functionnality that will fetch the chemistry definition from a remote repo to simplify usage and reduce human errors.
 
 ### Changed
   - The `features.csv` now has different columns for the tag name and the tag sequence. This keeps the relevant information
