@@ -12,7 +12,7 @@ from itertools import combinations
 from itertools import islice
 
 
-def parse_whitelist_csv(filename, barcode_length, collapsing_threshold):
+def parse_whitelist_csv(csv_reader, barcode_length, collapsing_threshold):
     """Reads white-listed barcodes from a CSV file.
 
     The function accepts plain barcodes or even 10X style barcodes with the
@@ -30,22 +30,12 @@ def parse_whitelist_csv(filename, barcode_length, collapsing_threshold):
     """
     STRIP_CHARS = '"0123456789- \t\n'
     cell_pattern = regex.compile(r"[ATGC]{{{}}}".format(barcode_length))
-    if filename.endswith("gz"):
-        with gzip.open(filename.name, mode="r") as csv_file:
-            csv_reader = csv.reader(csv_file)
-            whitelist = [
-                row[0].strip(STRIP_CHARS)
-                for row in csv_reader
-                if (len(row[0].strip(STRIP_CHARS)) == barcode_length)
-            ]
-    else:
-        with open(filename, mode="r") as csv_file:
-            csv_reader = csv.reader(csv_file)
-            whitelist = [
-                row[0].strip(STRIP_CHARS)
-                for row in csv_reader
-                if (len(row[0].strip(STRIP_CHARS)) == barcode_length)
-            ]
+
+    whitelist = [
+        row[0].strip(STRIP_CHARS)
+        for row in csv_reader
+        if (len(row[0].strip(STRIP_CHARS)) == barcode_length)
+    ]
 
     for cell_barcode in whitelist:
         if not cell_pattern.match(cell_barcode):
@@ -84,6 +74,7 @@ def test_cell_distances(whitelist, collapsing_threshold):
         )
         all_comb = combinations(whitelist, 2)
         for comb in all_comb:
+            # pylint: disable=no-member
             if Levenshtein.hamming(comb[0], comb[1]) <= collapsing_threshold:
                 collapsing_threshold -= 1
                 print("Value is too high, reducing it by 1")
@@ -159,6 +150,7 @@ def check_tags(tags, maximum_distance):
 
     offending_pairs = []
     for a, b in combinations(tags.keys(), 2):
+        # pylint: disable=no-member
         distance = Levenshtein.distance(a, b)
         if distance <= (maximum_distance - 1):
             offending_pairs.append([a, b, distance])

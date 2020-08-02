@@ -4,10 +4,13 @@ import sys
 import os
 import gzip
 import io
+import csv
 
 from collections import namedtuple
 
 from dataclasses import dataclass
+
+from cite_seq_count import preprocessing
 
 GLOBAL_LINK_RAW = "https://raw.githubusercontent.com/Hoohm/scg_lib_structs/10xv3_totalseq_b/chemistries/"
 GLOBAL_LINK_GITHUB = "https://github.com/Hoohm/scg_lib_structs/raw/10xv3_totalseq_b/"
@@ -86,7 +89,7 @@ def get_chemistry_definition(chemistry_short_name, url=CHEMISTRY_DEFINITIONS):
     return chemistry_def
 
 
-def getstream(file):
+def get_csv_reader(file):
     if file.startswith("http://") or file.startswith("https://"):
         response = requests.get(file)
         response.raise_for_status()
@@ -96,16 +99,51 @@ def getstream(file):
             text = gzip.decompress(content).decode("utf-8")
         else:
             text = response.text
-        f = io.StringIO(text)
-        return text
+        reader = csv.reader(io.StringIO(text))
 
     elif file.endswith(".gz"):
         f = gzip.open(file, mode="rt")
-
+        reader = csv.reader(f)
     else:
         f = open(file, encoding="UTF-8")
-    return f
+        reader = csv.reader(f)
+
+    return reader
 
 
 def create_chemistry_definition(args):
+    chemistry_def = Chemistry(
+        name="custom",
+        cell_barcode_start=args.cb_first,
+        cell_barcode_end=args.cb_last,
+        umi_barcode_start=args.umi_first,
+        umi_barcode_end=args.umi_last,
+        R2_trim_start=args.start_trim,
+        whitelist_path=args.whitelist,
+        mapping_required=args.translation,
+    )
     return chemistry_def
+
+
+def setup_chemistry(args):
+    if args.chemistry:
+        chemistry_def = get_chemistry_definition(args.chemistry)
+        (whitelist, args.bc_threshold) = preprocessing.parse_whitelist_csv(
+            csv_reader=get_csv_reader(chemistry_def.whitelist_path),
+            barcode_length=chemistry_def.cell_barcode_end
+            - chemistry_def.cell_barcode_start
+            + 1,
+            collapsing_threshold=args.bc_threshold,
+        )
+    else:
+        chemistry_def = create_chemistry_definition(args)
+        if args.whitelist:
+            print("Loading whitelist")
+            (whitelist, args.bc_threshold) = preprocessing.parse_whitelist_csv(
+                csv_reader=get_csv_reader(args.whitelist),
+                barcode_length=args.cb_last - args.cb_first + 1,
+                collapsing_threshold=args.bc_threshold,
+            )
+        else:
+            whitelist = False
+    return (whitelist, chemistry_def)

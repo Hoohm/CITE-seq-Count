@@ -10,6 +10,8 @@ import csv
 from collections import Counter
 from collections import defaultdict
 from collections import namedtuple
+
+# pylint: disable=no-name-in-module
 from multiprocess import Pool
 
 from itertools import islice
@@ -43,6 +45,7 @@ def find_best_match(TAG_seq, tags, maximum_distance):
     best_match = "unmapped"
     best_score = maximum_distance
     for tag in tags:
+        # pylint: disable=no-member
         score = Levenshtein.hamming(tag.sequence, TAG_seq[: len(tag.sequence)])
         if score == 0:
             # Best possible match
@@ -378,6 +381,7 @@ def correct_cells_whitelist(
         umis_per_cell (Counter): Updated UMI counts after correction.
         corrected_barcodes (int): How many umis have been corrected.
     """
+    # pylint: disable=no-member
     barcode_tree = pybktree.BKTree(Levenshtein.hamming, whitelist)
     print("Generated barcode tree from whitelist")
     cell_barcodes = list(final_results.keys())
@@ -459,7 +463,7 @@ def generate_sparse_matrices(final_results, ordered_tags_map, top_cells):
         (len(ordered_tags_map), len(top_cells)), dtype=int32
     )
     for i, cell_barcode in enumerate(top_cells):
-        for j, TAG in enumerate(final_results[cell_barcode]):
+        for TAG in final_results[cell_barcode]:
             if final_results[cell_barcode][TAG]:
                 umi_results_matrix[ordered_tags_map[TAG]["id"], i] = len(
                     final_results[cell_barcode][TAG]
@@ -468,4 +472,3 @@ def generate_sparse_matrices(final_results, ordered_tags_map, top_cells):
                     final_results[cell_barcode][TAG].values()
                 )
     return (umi_results_matrix, read_results_matrix)
-

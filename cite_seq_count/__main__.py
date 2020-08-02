@@ -3,415 +3,25 @@
 Author: Patrick Roelli
 """
 import sys
-import time
 import os
-import datetime
-import pkg_resources
 import logging
 import gzip
 import requests
+import time
 
 from itertools import islice
-from argparse import ArgumentParser, ArgumentTypeError, RawTextHelpFormatter
 
 from collections import OrderedDict, Counter, defaultdict, namedtuple
-from multiprocess import cpu_count, Pool, Queue, JoinableQueue, Process
-from tempfile import NamedTemporaryFile
+
+# pylint: disable=no-name-in-module
+from multiprocess import Pool, Queue, JoinableQueue, Process
 
 from cite_seq_count import preprocessing
 from cite_seq_count import processing
-from cite_seq_count import database
+from cite_seq_count import chemistry
 from cite_seq_count import io
 from cite_seq_count import secondsToText
-
-version = pkg_resources.require("cite_seq_count")[0].version
-
-
-def chunk_size_limit(arg):
-    """Validates chunk_size limits"""
-    max_size = 2147483647
-    try:
-        f = int(arg)
-    except ValueError:
-        raise ArgumentTypeError("Must be am int")
-    if f < 1 or f > max_size:
-        raise ArgumentTypeError(
-            "Argument must be < " + str(max_size) + "and > " + str(1)
-        )
-    return f
-
-
-def get_args():
-    """
-    Get args.
-    """
-
-    parser = ArgumentParser(
-        prog="CITE-seq-Count",
-        formatter_class=RawTextHelpFormatter,
-        description=(
-            "This script counts matching antibody tags from paired fastq "
-            "files. Version {}".format(version)
-        ),
-    )
-
-    # REQUIRED INPUTS group.
-    inputs = parser.add_argument_group("Inputs", description="Required input files.")
-    inputs.add_argument(
-        "-R1",
-        "--read1",
-        dest="read1_path",
-        required=True,
-        help=(
-            "The path of Read1 in gz format, or a comma-separated list of paths to all Read1 files in"
-            " gz format (E.g. A1.fq.gz,B1.fq,gz,..."
-        ),
-    )
-    inputs.add_argument(
-        "-R2",
-        "--read2",
-        dest="read2_path",
-        required=True,
-        help=(
-            "The path of Read2 in gz format, or a comma-separated list of paths to all Read2 files in"
-            " gz format (E.g. A2.fq.gz,B2.fq,gz,..."
-        ),
-    )
-    inputs.add_argument(
-        "-t",
-        "--tags",
-        dest="tags",
-        required=True,
-        help=(
-            "The path to the csv file containing the antibody\n"
-            "barcodes as well as their respective names.\n\n"
-            "Example of an antibody barcode file structure:\n\n"
-            "\tATGCGA,First_tag_name\n"
-            "\tGTCATG,Second_tag_name"
-        ),
-    )
-    # BARCODES group.
-    barcodes = parser.add_argument_group(
-        "Barcodes",
-        description=(
-            "Positions of the cellular barcodes and UMI. If your "
-            "cellular barcodes and UMI\n are positioned as follows:\n"
-            "\tBarcodes from 1 to 16 and UMI from 17 to 26\n"
-            "then this is the input you need:\n"
-            "\t-cbf 1 -cbl 16 -umif 17 -umil 26"
-        ),
-    )
-    barcodes.add_argument("--chemistry", type=str, required=False, default=False)
-    if "--chemistry" not in sys.argv:
-        barcodes.add_argument(
-            "-cbf",
-            "--cell_barcode_first_base",
-            dest="cb_first",
-            required=True,
-            type=int,
-            help=("Postion of the first base of your cell " "barcodes."),
-        )
-        barcodes.add_argument(
-            "-cbl",
-            "--cell_barcode_last_base",
-            dest="cb_last",
-            required=True,
-            type=int,
-            help=("Postion of the last base of your cell " "barcodes."),
-        )
-        barcodes.add_argument(
-            "-umif",
-            "--umi_first_base",
-            dest="umi_first",
-            required=True,
-            type=int,
-            help="Postion of the first base of your UMI.",
-        )
-        barcodes.add_argument(
-            "-umil",
-            "--umi_last_base",
-            dest="umi_last",
-            required=True,
-            type=int,
-            help="Postion of the last base of your UMI.",
-        )
-    barcodes.add_argument(
-        "--umi_collapsing_dist",
-        dest="umi_threshold",
-        required=False,
-        type=int,
-        default=2,
-        help="threshold for umi collapsing.",
-    )
-    barcodes.add_argument(
-        "--no_umi_correction",
-        required=False,
-        action="store_true",
-        default=False,
-        dest="no_umi_correction",
-        help="Deactivate UMI collapsing",
-    )
-    barcodes.add_argument(
-        "--bc_collapsing_dist",
-        dest="bc_threshold",
-        required=False,
-        type=int,
-        default=1,
-        help="threshold for cellular barcode collapsing.",
-    )
-    # Cells group
-    cells = parser.add_argument_group(
-        "Cells", description=("Expected number of cells and potential whitelist")
-    )
-
-    cells.add_argument(
-        "-cells",
-        "--expected_cells",
-        dest="expected_cells",
-        required=True,
-        type=int,
-        help=("Number of expected cells from your run."),
-        default=0,
-    )
-    if "--chemistry" not in sys.argv:
-        cells.add_argument(
-            "-wl",
-            "--whitelist",
-            dest="whitelist",
-            required=False,
-            type=str,
-            help=(
-                "A csv file containning a whitelist of barcodes produced"
-                " by the mRNA data.\n\n"
-                "\tExample:\n"
-                "\tATGCTAGTGCTA\n\tGCTAGTCAGGAT\n\tCGACTGCTAACG\n\n"
-                "Or 10X-style:\n"
-                "\tATGCTAGTGCTA-1\n\tGCTAGTCAGGAT-1\n\tCGACTGCTAACG-1\n"
-            ),
-        )
-
-        cells.add_argument(
-            "--translation",
-            required=False,
-            type=str,
-            help="A csv file containing the mapping between two sets of cell barcode list.\n"
-            "A required header such as the reference is named whitelist. Example:\n\n"
-            "\twhitelist,trasnlation\n"
-            "\tAAACCCAAGAAACACT,AAACCCATCAAACACT\n"
-            "\tAAACCCAAGAAACCAT,AAACCCATCAAACCAT\n"
-            "\nThe output matrix will possess both cell barcode IDs",
-        )
-
-    # FILTERS group.
-    filters = parser.add_argument_group(
-        "TAG filters", description=("Filtering and trimming for read2.")
-    )
-    filters.add_argument(
-        "--max-errors",
-        dest="max_error",
-        required=False,
-        type=int,
-        default=2,
-        help=("Maximum Levenshtein distance allowed for antibody barcodes."),
-    )
-
-    filters.add_argument(
-        "-trim",
-        "--start-trim",
-        dest="start_trim",
-        required=False,
-        type=int,
-        default=0,
-        help=("Number of bases to discard from read2."),
-    )
-
-    filters.add_argument(
-        "--sliding-window",
-        dest="sliding_window",
-        required=False,
-        default=False,
-        action="store_true",
-        help=("Allow for a sliding window when aligning."),
-    )
-
-    # Parallel group.
-    parallel = parser.add_argument_group(
-        "Parallelization options",
-        description=("Options for performance on parallelization"),
-    )
-    # Remaining arguments.
-    parallel.add_argument(
-        "-T",
-        "--threads",
-        required=False,
-        type=int,
-        dest="n_threads",
-        default=cpu_count(),
-        help="How many threads are to be used for running the program",
-    )
-    parallel.add_argument(
-        "-C",
-        "--chunk_size",
-        required=False,
-        type=chunk_size_limit,
-        dest="chunk_size",
-        help="How many reads should be sent to a child process at a time",
-    )
-    parallel.add_argument(
-        "--temp_path",
-        required=False,
-        type=str,
-        dest="temp_path",
-        default="",
-        help="Temp folder for chunk creation specification. Useful when using a cluster with a scratch folder",
-    )
-
-    # Global group
-    parser.add_argument(
-        "-n",
-        "--first_n",
-        required=False,
-        type=int,
-        dest="first_n",
-        default=float("inf"),
-        help="Select N reads to run on instead of all.",
-    )
-    parser.add_argument(
-        "-o",
-        "--output",
-        required=False,
-        type=str,
-        default="Results",
-        dest="outfolder",
-        help="Results will be written to this folder",
-    )
-    parser.add_argument(
-        "--dense",
-        required=False,
-        action="store_true",
-        default=False,
-        dest="dense",
-        help="Add a dense output to the results folder",
-    )
-    parser.add_argument(
-        "-u",
-        "--unmapped-tags",
-        required=False,
-        type=str,
-        dest="unmapped_file",
-        default="unmapped.csv",
-        help="Write table of unknown TAGs to file.",
-    )
-    parser.add_argument(
-        "-ut",
-        "--unknown-top-tags",
-        required=False,
-        dest="unknowns_top",
-        type=int,
-        default=100,
-        help="Top n unmapped TAGs.",
-    )
-    parser.add_argument(
-        "--debug", action="store_true", help="Print extra information for debugging."
-    )
-    parser.add_argument(
-        "--version",
-        action="version",
-        version="CITE-seq-Count v{}".format(version),
-        help="Print version number.",
-    )
-    # Finally! Too many options XD
-    return parser
-
-
-def create_report(
-    total_reads,
-    reads_per_cell,
-    no_match,
-    version,
-    start_time,
-    ordered_tags_map,
-    umis_corrected,
-    bcs_corrected,
-    bad_cells,
-    R1_too_short,
-    R2_too_short,
-    args,
-    chemistry_def,
-):
-    """
-    Creates a report with details about the run in a yaml format.
-    Args:
-        total_reads (int): Number of reads that have been processed.
-        reads_matrix (scipy.sparse.dok_matrix): A sparse matrix continining read counts.
-        no_match (Counter): Counter of unmapped tags.
-        version (string): CITE-seq-Count package version.
-        start_time (time): Start time of the run.
-        args (arg_parse): Arguments provided by the user.
-
-    """
-    total_unmapped = sum(no_match.values())
-    total_mapped = total_reads - total_unmapped
-    total_too_short = total_reads - total_unmapped - total_mapped
-    too_short_perc = round((total_too_short / total_reads) * 100)
-    mapped_perc = round((total_mapped / total_reads) * 100)
-    unmapped_perc = round((total_unmapped / total_reads) * 100)
-
-    with open(os.path.join(args.outfolder, "run_report.yaml"), "w") as report_file:
-        report_file.write(
-            """Date: {}
-Running time: {}
-CITE-seq-Count Version: {}
-Reads processed: {}
-Percentage mapped: {}
-Percentage unmapped: {}
-Percentage too short: {}
-\tR1_too_short: {}
-\tR2_too_short: {}
-Uncorrected cells: {}
-Correction:
-\tCell barcodes collapsing threshold: {}
-\tCell barcodes corrected: {}
-\tUMI collapsing threshold: {}
-\tUMIs corrected: {}
-Run parameters:
-\tRead1_paths: {}
-\tRead2_paths: {}
-\tCell barcode:
-\t\tFirst position: {}
-\t\tLast position: {}
-\tUMI barcode:
-\t\tFirst position: {}
-\t\tLast position: {}
-\tExpected cells: {}
-\tTags max errors: {}
-\tStart trim: {}
-""".format(
-                datetime.datetime.today().strftime("%Y-%m-%d"),
-                secondsToText.secondsToText(time.time() - start_time),
-                version,
-                int(total_reads),
-                mapped_perc,
-                unmapped_perc,
-                too_short_perc,
-                R1_too_short,
-                R2_too_short,
-                len(bad_cells),
-                args.bc_threshold,
-                bcs_corrected,
-                args.umi_threshold,
-                umis_corrected,
-                args.read1_path,
-                args.read2_path,
-                args.cb_first,
-                args.cb_last,
-                args.umi_first,
-                chemistry_def.umi_barcode_end,
-                args.expected_cells,
-                args.max_error,
-                chemistry_def.R2_trim_start,
-            )
-        )
+from cite_seq_count import argsparser
 
 
 def main():
@@ -427,7 +37,7 @@ def main():
     logger.addHandler(ch)
 
     start_time = time.time()
-    parser = get_args()
+    parser = argsparser.get_args()
     if not sys.argv[1:]:
         parser.print_help(file=sys.stderr)
         sys.exit(2)
@@ -438,31 +48,7 @@ def main():
     assert os.access(temp_path, os.W_OK)
 
     # Get chemistry defs
-    if args.chemistry:
-        chemistry_def = database.get_chemistry_definition(args.chemistry)
-        with requests.get(chemistry_def.whitelist_path) as r:
-            r.raise_for_status()
-            ###### TODO deal with the download of the whitelist from remote
-            with NamedTemporaryFile() as temp_local_whitelist:
-                temp_local_whitelist.write(r.content)
-                (whitelist, args.bc_threshold) = preprocessing.parse_whitelist_csv(
-                    filename=temp_local_whitelist,
-                    barcode_length=chemistry_def.cell_barcode_end
-                    - chemistry_def.cell_barcode_start
-                    + 1,
-                    collapsing_threshold=args.bc_threshold,
-                )
-    else:
-        chemistry_def = database.create_chemistry_definition(args)
-        if args.whitelist:
-            print("Loading whitelist")
-            (whitelist, args.bc_threshold) = preprocessing.parse_whitelist_csv(
-                filename=args.whitelist,
-                barcode_length=args.cb_last - args.cb_first + 1,
-                collapsing_threshold=args.bc_threshold,
-            )
-        else:
-            whitelist = False
+    (whitelist, chemistry_def) = chemistry.setup_chemistry(args)
 
     # Load TAGs/ABs.
     ab_map = preprocessing.parse_tags_csv(args.tags)
@@ -815,11 +401,11 @@ def main():
     )
 
     # Create report and write it to disk
-    create_report(
+    io.create_report(
         total_reads=total_reads,
         reads_per_cell=reads_per_cell,
         no_match=merged_no_match,
-        version=version,
+        version=argsparser.get_package_version(),
         start_time=start_time,
         ordered_tags_map=ordered_tags_map,
         umis_corrected=umis_corrected,
