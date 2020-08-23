@@ -251,8 +251,6 @@ def check_barcodes_lengths(read1_length, cb_first, cb_last, umi_first, umi_last)
     barcode_length = cb_last - cb_first + 1
     umi_length = umi_last - umi_first + 1
     barcode_umi_length = barcode_length + umi_length
-    barcode_slice = slice(cb_first - 1, cb_last)
-    umi_slice = slice(umi_first - 1, umi_last)
 
     if barcode_umi_length > read1_length:
         sys.exit(
@@ -268,8 +266,6 @@ def check_barcodes_lengths(read1_length, cb_first, cb_last, umi_first, umi_last)
                 read1_length, barcode_umi_length
             )
         )
-
-    return (barcode_slice, umi_slice, barcode_umi_length)
 
 
 def blocks(files, size=65536):

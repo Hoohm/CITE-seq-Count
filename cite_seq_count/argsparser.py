@@ -24,6 +24,8 @@ def chunk_size_limit(arg):
         raise ArgumentTypeError(
             "Argument must be < " + str(max_size) + "and > " + str(1)
         )
+    else:
+        return False
     return f
 
 

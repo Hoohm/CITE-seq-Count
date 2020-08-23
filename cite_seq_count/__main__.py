@@ -9,8 +9,6 @@ import gzip
 import requests
 import time
 
-from itertools import islice
-
 from collections import OrderedDict, Counter, defaultdict, namedtuple
 
 # pylint: disable=no-name-in-module
@@ -44,8 +42,7 @@ def main():
 
     # Parse arguments.
     args = parser.parse_args()
-    temp_path = os.path.abspath(args.temp_path)
-    assert os.access(temp_path, os.W_OK)
+    assert os.access(args.temp_path, os.W_OK)
 
     # Get chemistry defs
     (whitelist, chemistry_def) = chemistry.setup_chemistry(args)
@@ -74,7 +71,7 @@ def main():
         read1_lengths.append(preprocessing.get_read_length(read1_path))
         read2_lengths.append(preprocessing.get_read_length(read2_path))
         # Check Read1 length against CELL and UMI barcodes length.
-        (barcode_slice, umi_slice, _) = preprocessing.check_barcodes_lengths(
+        preprocessing.check_barcodes_lengths(
             read1_lengths[-1],
             chemistry_def.cell_barcode_start,
             chemistry_def.cell_barcode_end,
@@ -89,100 +86,37 @@ def main():
     # sys.exit('Input barcode fastqs (read2) do not all have same length.\nExiting')
 
     # Define R2_lenght to reduce amount of data to transfer to childrens
-    if args.sliding_window:
-        R2_max_length = read2_lengths[0]
-    else:
-        R2_max_length = longest_tag_len
-    # Initialize the counts dicts that will be generated from each input fastq pair
-    final_results = defaultdict(lambda: defaultdict(Counter))
-    umis_per_cell = Counter()
-    reads_per_cell = Counter()
-    merged_no_match = Counter()
     number_of_samples = len(read1_paths)
 
     # Print a statement if multiple files are run.
     if number_of_samples != 1:
         print("Detected {} files to run on.".format(number_of_samples))
-    input_queue = []
-    mapping_input = namedtuple(
-        "mapping_input",
-        ["filename", "tags", "debug", "maximum_distance", "sliding_window"],
-    )
 
-    print("Writing chunks to disk")
-    reads_count = 0
-    num_chunks = 0
-    if args.chunk_size:
-        chunk_size = args.chunk_size
+    if args.sliding_window:
+        R2_max_length = read2_lengths[0]
     else:
-        chunk_size = round(total_reads / args.n_threads) + 1
-    temp_files = []
-    R1_too_short = 0
-    R2_too_short = 0
-    for read1_path, read2_path in zip(read1_paths, read2_paths):
-        print("Reading reads from files: {}, {}".format(read1_path, read2_path))
-        with gzip.open(read1_path, "rt") as textfile1, gzip.open(
-            read2_path, "rt"
-        ) as textfile2:
-            secondlines = islice(zip(textfile1, textfile2), 1, None, 4)
-            temp_filename = os.path.join(temp_path, "temp_{}".format(num_chunks))
-            chunked_file_object = open(temp_filename, "w")
-            temp_files.append(os.path.abspath(temp_filename))
-            for read1, read2 in secondlines:
+        R2_max_length = longest_tag_len
 
-                read1 = read1.strip()
-                if len(read1) < chemistry_def.umi_barcode_end:
-                    R1_too_short += 1
-                    # The entire read is skipped
-                    continue
-                read1_sliced = read1[0 : chemistry_def.umi_barcode_end]
-                if len(read2) < R2_max_length:
-                    R2_too_short += 1
-                    # The entire read is skipped
-                    continue
-
-                read2_sliced = read2[
-                    chemistry_def.R2_trim_start : (
-                        R2_max_length + chemistry_def.R2_trim_start
-                    )
-                ]
-                chunked_file_object.write(
-                    "{},{},{}\n".format(
-                        read1_sliced[barcode_slice],
-                        read1_sliced[umi_slice],
-                        read2_sliced,
-                    )
-                )
-                reads_count += 1
-                if reads_count % chunk_size == 0:
-                    input_queue.append(
-                        mapping_input(
-                            filename=temp_filename,
-                            tags=named_tuples_tags_map,
-                            debug=args.debug,
-                            maximum_distance=args.max_error,
-                            sliding_window=args.sliding_window,
-                        )
-                    )
-                    num_chunks += 1
-                    chunked_file_object.close()
-                    temp_filename = "temp_{}".format(num_chunks)
-                    chunked_file_object = open(temp_filename, "w")
-                    temp_files.append(os.path.abspath(temp_filename))
-                if reads_count >= args.first_n:
-                    total_reads = args.first_n
-                    break
-
-            input_queue.append(
-                mapping_input(
-                    filename=temp_filename,
-                    tags=named_tuples_tags_map,
-                    debug=args.debug,
-                    maximum_distance=args.max_error,
-                    sliding_window=args.sliding_window,
-                )
-            )
-            chunked_file_object.close()
+    (
+        input_queue,
+        temp_files,
+        R1_too_short,
+        R2_too_short,
+        total_reads,
+    ) = io.write_chunks_to_disk(
+        args=args,
+        read1_paths=read1_paths,
+        read2_paths=read2_paths,
+        R2_max_length=R2_max_length,
+        total_reads=total_reads,
+        chemistry_def=chemistry_def,
+        named_tuples_tags_map=named_tuples_tags_map,
+    )
+    # Initialize the counts dicts that will be generated from each input fastq pair
+    final_results = defaultdict(lambda: defaultdict(Counter))
+    umis_per_cell = Counter()
+    reads_per_cell = Counter()
+    merged_no_match = Counter()
 
     print("Started mapping")
     parallel_results = []
@@ -218,6 +152,7 @@ def main():
         start_trim=chemistry_def.R2_trim_start,
     )
     # Delete temp_files
+    exit()
     for file_path in temp_files:
         if os.path.exists(file_path):
             os.remove(file_path)
