@@ -155,7 +155,7 @@ Filtering for structure of the antibody barcode as well as maximum errors.
 
 * [OPTIONAL] Maximum Levenshtein distance allowed. This allows to catch antibody barcodes that might have `--max-error` errors compared to the real barcodes. (was `-hd` in previous versions)
 
-`--max-error MAX_ERROR`, default `3`
+`--max-error MAX_ERROR`, default `2`
 
 Example:
 
