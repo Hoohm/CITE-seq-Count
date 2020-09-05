@@ -241,12 +241,6 @@ def check_barcodes_lengths(read1_length, cb_first, cb_last, umi_first, umi_last)
         cb_last (int): Barcode last base position for Read1.
         umi_first (int): UMI first base position for Read1.
         umi_last (int): UMI last base position for Read1.
-
-    Returns:
-        slice: A `slice` object to extract the Barcode from the sequence string.
-        slice: A `slice` object to extract the UMI from the sequence string.
-        int: The Barcode + UMI length.
-
     """
     barcode_length = cb_last - cb_first + 1
     umi_length = umi_last - umi_first + 1

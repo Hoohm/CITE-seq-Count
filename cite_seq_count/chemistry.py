@@ -31,6 +31,12 @@ class Chemistry:
 
 
 def list_chemistries(url=CHEMISTRY_DEFINITIONS):
+    """
+    List all the available chemistries in the database
+    Args:
+        url (str): The url to the database file
+
+    """
     print("Loading remote file from: {}".format(url))
     with requests.get(url) as r:
         r.raise_for_status()

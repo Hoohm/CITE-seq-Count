@@ -22,7 +22,7 @@ setuptools.setup(
         "scipy>=1.1.0",
         "multiprocess>=0.70.6.1",
         "umi_tools==1.0.0",
-        "pytest==4.1.0",
+        "pytest==6.0.1",
         "pytest-dependency==0.4.0",
         "pandas>=0.23.4",
         "pybktree==1.1",
