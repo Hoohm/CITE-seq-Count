@@ -27,6 +27,7 @@ setuptools.setup(
         "pandas>=0.23.4",
         "pybktree==1.1",
         "cython>=0.29.17",
+        "pooch==1.1.1",
     ],
     python_requires=">=3.7",
 )

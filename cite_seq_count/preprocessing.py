@@ -12,7 +12,7 @@ from itertools import combinations
 from itertools import islice
 
 
-def parse_whitelist_csv(csv_reader, barcode_length, collapsing_threshold):
+def parse_whitelist_csv(filename, barcode_length, collapsing_threshold):
     """Reads white-listed barcodes from a CSV file.
 
     The function accepts plain barcodes or even 10X style barcodes with the
@@ -31,6 +31,12 @@ def parse_whitelist_csv(csv_reader, barcode_length, collapsing_threshold):
     STRIP_CHARS = '"0123456789- \t\n'
     cell_pattern = regex.compile(r"[ATGC]{{{}}}".format(barcode_length))
 
+    if filename.endswith(".gz"):
+        f = gzip.open(filename, mode="rt")
+        csv_reader = csv.reader(f)
+    else:
+        f = open(filename, encoding="UTF-8")
+        csv_reader = csv.reader(f)
     whitelist = [
         row[0].strip(STRIP_CHARS)
         for row in csv_reader
@@ -228,10 +234,6 @@ def get_read_length(filename):
     return read_length
 
 
-def get_chunk_strategy(read1_paths, read2_paths, chunk_size):
-    pass
-
-
 def check_barcodes_lengths(read1_length, cb_first, cb_last, umi_first, umi_last):
     """Check Read1 length against CELL and UMI barcodes length.
 
@@ -293,7 +295,7 @@ def get_n_lines(file_path):
     Returns:
         n_lines (int): Number of lines in the file
     """
-    print("Counting number of reads")
+    print("Counting number of reads in file {}".format(file_path))
     with gzip.open(file_path, "rt", encoding="utf-8", errors="ignore") as f:
         n_lines = sum(bl.count("\n") for bl in blocks(f))
     if n_lines % 4 != 0:

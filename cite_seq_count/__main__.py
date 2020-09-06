@@ -79,18 +79,18 @@ def main():
             chemistry_def.umi_barcode_end,
         )
 
-    # Ensure all files have the same input length
-    # if len(set(read1_lengths)) != 1:
-    # sys.exit('Input barcode fastqs (read1) do not all have same length.\nExiting')
-    # if len(set(read2_lengths)) != 1:
-    # sys.exit('Input barcode fastqs (read2) do not all have same length.\nExiting')
+    # Get all reads or only top N?
+    if args.first_n < float("inf"):
+        n_reads = args.first_n
+    else:
+        n_reads = total_reads
 
     # Define R2_lenght to reduce amount of data to transfer to childrens
     number_of_samples = len(read1_paths)
 
     # Print a statement if multiple files are run.
     if number_of_samples != 1:
-        print("Detected {} files to run on.".format(number_of_samples))
+        print("Detected {} pairs of files to run on.".format(number_of_samples))
 
     if args.sliding_window:
         R2_max_length = read2_lengths[0]
@@ -108,7 +108,7 @@ def main():
         read1_paths=read1_paths,
         read2_paths=read2_paths,
         R2_max_length=R2_max_length,
-        total_reads=total_reads,
+        n_reads_to_chunk=n_reads,
         chemistry_def=chemistry_def,
         named_tuples_tags_map=named_tuples_tags_map,
     )
@@ -148,16 +148,18 @@ def main():
     # Check if 99% of the reads are unmapped.
     processing.check_unmapped(
         no_match=merged_no_match,
+        too_short=R1_too_short + R2_too_short,
         total_reads=total_reads,
         start_trim=chemistry_def.R2_trim_start,
     )
     # Delete temp_files
-    exit()
+    # exit()
     for file_path in temp_files:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-        else:
-            print("Could not find file: {}".format(file_path))
+        os.remove(file_path)
+
+    # Select top cells
+    top_cells_tuple = umis_per_cell.most_common(args.expected_cells * 10)
+    top_cells = set([pair[0] for pair in top_cells_tuple])
 
     # Correct cell barcodes
     if args.bc_threshold != 0:
@@ -192,6 +194,7 @@ def main():
                 ) = processing.correct_cells_whitelist(
                     final_results=final_results,
                     umis_per_cell=umis_per_cell,
+                    top_cells=top_cells,
                     whitelist=whitelist,
                     collapsing_threshold=args.bc_threshold,
                     ab_map=named_tuples_tags_map,
@@ -201,28 +204,37 @@ def main():
         bcs_corrected = 0
 
     # If given, use whitelist for top cells
-    if whitelist:
-        top_cells = whitelist
-        # Add potential missing cell barcodes.
-        for missing_cell in whitelist:
-            if missing_cell in final_results:
-                continue
-            else:
-                final_results[missing_cell] = dict()
-                for TAG in named_tuples_tags_map:
-                    final_results[missing_cell][TAG] = Counter()
-                top_cells.add(missing_cell)
-    else:
-        # Select top cells based on total umis per cell
-        top_cells_tuple = umis_per_cell.most_common(args.expected_cells)
-        top_cells = set([pair[0] for pair in top_cells_tuple])
+    # if whitelist:
+    #     top_cells = whitelist
+    #     # Add potential missing cell barcodes.
+    #     for missing_cell in whitelist:
+    #         if missing_cell in final_results:
+    #             continue
+    #         else:
+    #             final_results[missing_cell] = dict()
+    #             for TAG in named_tuples_tags_map:
+    #                 final_results[missing_cell][TAG.safe_name] = Counter()
+    #             top_cells.add(missing_cell)
+    # else:
+    # Select top cells based on total umis per cell
+
+    # Create sparse matrices for reads results
+    read_results_matrix = processing.generate_sparse_matrices(
+        final_results=final_results,
+        ordered_tags_map=ordered_tags_map,
+        top_cells=top_cells,
+    )
+    # Write reads to file
+    io.write_to_files(
+        sparse_matrix=read_results_matrix,
+        top_cells=top_cells,
+        ordered_tags_map=ordered_tags_map,
+        data_type="read",
+        outfolder=args.outfolder,
+    )
 
     # UMI correction
-    if args.no_umi_correction:
-        # Don't correct
-        umis_corrected = 0
-        aberrant_cells = set()
-    else:
+    if args.umi_threshold != 0:
         # Correct UMIS
         input_queue = []
 
@@ -280,6 +292,10 @@ def main():
             final_results.update(temp_results)
             umis_corrected += temp_umis
             aberrant_cells.update(temp_aberrant_cells)
+    else:
+        # Don't correct
+        umis_corrected = 0
+        aberrant_cells = set()
 
     if len(aberrant_cells) > 0:
         # Remove aberrant cells from the top cells
@@ -302,11 +318,11 @@ def main():
             filename="dense_umis.tsv",
         )
 
-    # Create sparse matrices for results
-    (umi_results_matrix, read_results_matrix) = processing.generate_sparse_matrices(
+    umi_results_matrix = processing.generate_sparse_matrices(
         final_results=final_results,
         ordered_tags_map=ordered_tags_map,
         top_cells=top_cells,
+        umi_counts=True,
     )
 
     # Write umis to file
@@ -315,15 +331,6 @@ def main():
         top_cells=top_cells,
         ordered_tags_map=ordered_tags_map,
         data_type="umi",
-        outfolder=args.outfolder,
-    )
-
-    # Write reads to file
-    io.write_to_files(
-        sparse_matrix=read_results_matrix,
-        top_cells=top_cells,
-        ordered_tags_map=ordered_tags_map,
-        data_type="read",
         outfolder=args.outfolder,
     )
 

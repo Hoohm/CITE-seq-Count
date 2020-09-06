@@ -128,16 +128,8 @@ def get_args():
         dest="umi_threshold",
         required=False,
         type=int,
-        default=2,
+        default=1,
         help="threshold for umi collapsing.",
-    )
-    barcodes.add_argument(
-        "--no_umi_correction",
-        required=False,
-        action="store_true",
-        default=False,
-        dest="no_umi_correction",
-        help="Deactivate UMI collapsing",
     )
     barcodes.add_argument(
         "--bc_collapsing_dist",
@@ -184,7 +176,7 @@ def get_args():
             type=str,
             help="A csv file containing the mapping between two sets of cell barcode list.\n"
             "A required header such as the reference is named whitelist. Example:\n\n"
-            "\twhitelist,trasnlation\n"
+            "\twhitelist,translation\n"
             "\tAAACCCAAGAAACACT,AAACCCATCAAACACT\n"
             "\tAAACCCAAGAAACCAT,AAACCCATCAAACCAT\n"
             "\nThe output matrix will possess both cell barcode IDs",

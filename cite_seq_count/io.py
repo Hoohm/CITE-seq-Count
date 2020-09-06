@@ -105,8 +105,9 @@ def create_report(
 
     """
     total_unmapped = sum(no_match.values())
-    total_mapped = total_reads - total_unmapped
-    total_too_short = total_reads - total_unmapped - total_mapped
+    total_too_short = R1_too_short + R2_too_short
+    total_mapped = total_reads - total_unmapped - total_too_short
+
     too_short_perc = round((total_too_short / total_reads) * 100)
     mapped_perc = round((total_mapped / total_reads) * 100)
     unmapped_perc = round((total_unmapped / total_reads) * 100)
@@ -120,26 +121,26 @@ Reads processed: {}
 Percentage mapped: {}
 Percentage unmapped: {}
 Percentage too short: {}
-\tR1_too_short: {}
-\tR2_too_short: {}
+  R1_too_short: {}
+  R2_too_short: {}
 Uncorrected cells: {}
 Correction:
-\tCell barcodes collapsing threshold: {}
-\tCell barcodes corrected: {}
-\tUMI collapsing threshold: {}
-\tUMIs corrected: {}
+  Cell barcodes collapsing threshold: {}
+  Cell barcodes corrected: {}
+  UMI collapsing threshold: {}
+  UMIs corrected: {}
 Run parameters:
-\tRead1_paths: {}
-\tRead2_paths: {}
-\tCell barcode:
-\t\tFirst position: {}
-\t\tLast position: {}
-\tUMI barcode:
-\t\tFirst position: {}
-\t\tLast position: {}
-\tExpected cells: {}
-\tTags max errors: {}
-\tStart trim: {}
+  Read1_paths: {}
+  Read2_paths: {}
+  Cell barcode:
+    First position: {}
+    Last position: {}
+  UMI barcode:
+    First position: {}
+    Last position: {}
+  Expected cells: {}
+  Tags max errors: {}
+  Start trim: {}
 """.format(
                 datetime.datetime.today().strftime("%Y-%m-%d"),
                 secondsToText.secondsToText(time.time() - start_time),
@@ -157,9 +158,9 @@ Run parameters:
                 umis_corrected,
                 args.read1_path,
                 args.read2_path,
-                args.cb_first,
-                args.cb_last,
-                args.umi_first,
+                chemistry_def.cell_barcode_start,
+                chemistry_def.cell_barcode_end,
+                chemistry_def.umi_barcode_start,
                 chemistry_def.umi_barcode_end,
                 args.expected_cells,
                 args.max_error,
@@ -173,7 +174,7 @@ def write_chunks_to_disk(
     read1_paths,
     read2_paths,
     R2_max_length,
-    total_reads,
+    n_reads_to_chunk,
     chemistry_def,
     named_tuples_tags_map,
 ):
@@ -188,13 +189,16 @@ def write_chunks_to_disk(
 
     num_chunk = 0
     if not args.chunk_size:
-        args.chunk_size = round(total_reads / args.n_threads) + 1
+        chunk_size = round(n_reads_to_chunk / args.n_threads)
+    else:
+        chunk_size = args.chunk_size
     temp_path = os.path.abspath(args.temp_path)
     input_queue = []
     temp_files = []
     R1_too_short = 0
     R2_too_short = 0
     total_reads_written = 0
+    enough_reads = False
 
     barcode_slice = slice(
         chemistry_def.cell_barcode_start - 1, chemistry_def.cell_barcode_end
@@ -204,11 +208,14 @@ def write_chunks_to_disk(
     )
 
     for read1_path, read2_path in zip(read1_paths, read2_paths):
+        if enough_reads:
+            break
         print("Reading reads from files: {}, {}".format(read1_path, read2_path))
         with gzip.open(read1_path, "rt") as textfile1, gzip.open(
             read2_path, "rt"
         ) as textfile2:
             secondlines = islice(zip(textfile1, textfile2), 1, None, 4)
+
             temp_filename = os.path.join(temp_path, "temp_{}".format(num_chunk))
             chunked_file_object = open(temp_filename, "w")
             temp_files.append(os.path.abspath(temp_filename))
@@ -244,7 +251,9 @@ def write_chunks_to_disk(
 
                 reads_written += 1
                 total_reads_written += 1
-                if reads_written % args.chunk_size == 0:
+                if reads_written % chunk_size == 0 and reads_written != 0:
+                    # We have enough reads in this chunk, open a new one
+                    chunked_file_object.close()
                     input_queue.append(
                         mapping_input(
                             filename=temp_filename,
@@ -254,24 +263,18 @@ def write_chunks_to_disk(
                             sliding_window=args.sliding_window,
                         )
                     )
+                    if total_reads_written == n_reads_to_chunk:
+                        enough_reads = True
+                        chunked_file_object.close()
+                        break
                     num_chunk += 1
-                    chunked_file_object.close()
                     temp_filename = "temp_{}".format(num_chunk)
                     chunked_file_object = open(temp_filename, "w")
                     temp_files.append(os.path.abspath(temp_filename))
                     reads_written = 0
-                if total_reads_written >= args.first_n:
-                    total_reads = total_reads_written
+                if total_reads_written == n_reads_to_chunk:
+                    enough_reads = True
+                    chunked_file_object.close()
                     break
 
-            input_queue.append(
-                mapping_input(
-                    filename=temp_filename,
-                    tags=named_tuples_tags_map,
-                    debug=args.debug,
-                    maximum_distance=args.max_error,
-                    sliding_window=args.sliding_window,
-                )
-            )
-            chunked_file_object.close()
-    return input_queue, temp_files, R1_too_short, R2_too_short, total_reads
+    return input_queue, temp_files, R1_too_short, R2_too_short, total_reads_written

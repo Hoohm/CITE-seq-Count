@@ -4,7 +4,9 @@ import sys
 import os
 import gzip
 import io
+import pooch
 import csv
+import json
 
 from collections import namedtuple
 
@@ -15,7 +17,8 @@ from cite_seq_count import preprocessing
 GLOBAL_LINK_RAW = "https://raw.githubusercontent.com/Hoohm/scg_lib_structs/10xv3_totalseq_b/chemistries/"
 GLOBAL_LINK_GITHUB = "https://github.com/Hoohm/scg_lib_structs/raw/10xv3_totalseq_b/"
 GLOBAL_LINK_GITHUB_IO = "https://teichlab.github.io/scg_lib_structs"
-CHEMISTRY_DEFINITIONS = os.path.join(GLOBAL_LINK_RAW, "definitions.json")
+# "https://github.com/Hoohm/scg_lib_structs/raw/10xv3_totalseq_b/chemistries/whitelists/3M-february-2018.csv.gz"
+# CHEMISTRY_DEFINITIONS = os.path.join(GLOBAL_LINK_RAW, "definitions.json")
 
 
 @dataclass
@@ -30,17 +33,40 @@ class Chemistry:
     mapping_required: bool
 
 
-def list_chemistries(url=CHEMISTRY_DEFINITIONS):
+DEFINITIONS_DB = pooch.create(
+    path=pooch.os_cache("cite_seq_count"),
+    base_url=GLOBAL_LINK_RAW,
+    version="0.1.0",
+    env="MYPACKAGE_DATA_DIR",
+    # The cache file registry. A dictionary with all files managed by this
+    # pooch. Keys are the file names (relative to *base_url*) and values
+    # are their respective SHA256 hashes. Files will be downloaded
+    # automatically when needed (see fetch_gravity_data).
+    registry={
+        "definitions.json": "4f2e1cee60446062f0c805b0b51ce12318cac04c64f1c7825037e2c73ff9955e"
+    },
+)
+
+
+def fetch_definitions():
+    """
+    Load some sample gravity data to use in your docs.
+    """
+    fname = DEFINITIONS_DB.fetch("definitions.json")
+    with open(fname, "r") as json_file:
+        data = json_file.read()
+    json_data = json.loads(data)
+    return json_data
+
+
+def list_chemistries(chemistry_defs):
     """
     List all the available chemistries in the database
     Args:
         url (str): The url to the database file
 
     """
-    print("Loading remote file from: {}".format(url))
-    with requests.get(url) as r:
-        r.raise_for_status()
-    all_chemistry_defs = r.json()
+    all_chemistry_defs = fetch_definitions()
     print(
         "Here are all the possible chemistries available at {}".format(
             GLOBAL_LINK_GITHUB_IO
@@ -58,20 +84,23 @@ def list_chemistries(url=CHEMISTRY_DEFINITIONS):
         )
 
 
-def get_chemistry_definition(chemistry_short_name, url=CHEMISTRY_DEFINITIONS):
+def get_chemistry_definition(chemistry_short_name):
     """
     Fetches chemistry definitions from a remote definitions.json and returns the json.
     """
-    print("Loading remote file from: {}".format(url))
-    with requests.get(url) as r:
-        r.raise_for_status()
-    chemistry_defs = r.json().get(chemistry_short_name, False)
-    if not chemistry_defs:
-        sys.exit(
-            "Could not find the chemistry: {}. Please check that it does exist at: {}\nExiting".format(
-                chemistry_short_name, url
-            )
+    chemistry_defs = fetch_definitions()[chemistry_short_name]
+
+    if chemistry_defs["whitelist"]["path"] not in DEFINITIONS_DB.registry:
+        path = pooch.retrieve(
+            url=os.path.join(
+                GLOBAL_LINK_GITHUB, "chemistries", chemistry_defs["whitelist"]["path"]
+            ),
+            known_hash=None,
+            fname=chemistry_defs["whitelist"]["path"],
+            path=DEFINITIONS_DB.abspath,
         )
+    else:
+        path = DEFINITIONS_DB.registry[chemistry_defs["whitelist"]["path"]]
     chemistry_def = Chemistry(
         name=chemistry_short_name,
         cell_barcode_start=chemistry_defs["barcode_structure_indexes"]["cell_barcode"][
@@ -87,34 +116,10 @@ def get_chemistry_definition(chemistry_short_name, url=CHEMISTRY_DEFINITIONS):
             "R1"
         ]["stop"],
         R2_trim_start=chemistry_defs["sequence_structure_indexes"]["R2"]["start"] - 1,
-        whitelist_path=os.path.join(
-            GLOBAL_LINK_GITHUB, "chemistries", chemistry_defs["whitelist"]["path"]
-        ),
+        whitelist_path=path,
         mapping_required=chemistry_defs["whitelist"]["mapping"],
     )
     return chemistry_def
-
-
-def get_csv_reader(file):
-    if file.startswith("http://") or file.startswith("https://"):
-        response = requests.get(file)
-        response.raise_for_status()
-
-        if file.endswith(".gz"):
-            content = response.content
-            text = gzip.decompress(content).decode("utf-8")
-        else:
-            text = response.text
-        reader = csv.reader(io.StringIO(text))
-
-    elif file.endswith(".gz"):
-        f = gzip.open(file, mode="rt")
-        reader = csv.reader(f)
-    else:
-        f = open(file, encoding="UTF-8")
-        reader = csv.reader(f)
-
-    return reader
 
 
 def create_chemistry_definition(args):
@@ -135,7 +140,7 @@ def setup_chemistry(args):
     if args.chemistry:
         chemistry_def = get_chemistry_definition(args.chemistry)
         (whitelist, args.bc_threshold) = preprocessing.parse_whitelist_csv(
-            csv_reader=get_csv_reader(chemistry_def.whitelist_path),
+            filename=chemistry_def.whitelist_path,
             barcode_length=chemistry_def.cell_barcode_end
             - chemistry_def.cell_barcode_start
             + 1,
@@ -146,7 +151,7 @@ def setup_chemistry(args):
         if args.whitelist:
             print("Loading whitelist")
             (whitelist, args.bc_threshold) = preprocessing.parse_whitelist_csv(
-                csv_reader=get_csv_reader(args.whitelist),
+                filename=args.whitelist,
                 barcode_length=args.cb_last - args.cb_first + 1,
                 collapsing_threshold=args.bc_threshold,
             )
