@@ -139,19 +139,24 @@ def check_tags(tags, maximum_distance):
     ordered_tags = OrderedDict()
     longest_tag_len = 0
     for i, tag_seq in enumerate(sorted(tags, key=len, reverse=True)):
-        ordered_tags[tags[tag_seq]] = {}
-        ordered_tags[tags[tag_seq]]["id"] = i
-        ordered_tags[tags[tag_seq]]["sequence"] = tag_seq
+        safe_name = sanitize_name(tags[tag_seq])
+        ordered_tags[safe_name] = {}
+        ordered_tags[safe_name]["id"] = i
+        ordered_tags[safe_name]["sequence"] = tag_seq
+        ordered_tags[safe_name]["feature_name"] = tags[tag_seq]
         if len(tag_seq) > longest_tag_len:
             longest_tag_len = len(tag_seq)
 
     ordered_tags["unmapped"] = {}
     ordered_tags["unmapped"]["id"] = i + 1
     ordered_tags["unmapped"]["sequence"] = "UNKNOWN"
+    ordered_tags["unmapped"]["feature_name"] = "unmapped"
     # If only one TAG is provided, then no distances to compare.
     if len(tags) == 1:
         ordered_tags["unmapped"] = {}
         ordered_tags["unmapped"]["id"] = 2
+        ordered_tags["unmapped"]["sequence"] = "UNKNOWN"
+        ordered_tags["unmapped"]["feature_name"] = "unmapped"
         return (ordered_tags, longest_tag_len)
 
     offending_pairs = []
@@ -199,8 +204,8 @@ def convert_to_named_tuple(ordered_tags):
     for index, tag_name in enumerate(ordered_tags):
         tag_list.append(
             tag(
-                safe_name=sanitize_name(tag_name),
-                name=tag_name,
+                safe_name=tag_name,
+                name=ordered_tags[tag_name]["feature_name"],
                 sequence=ordered_tags[tag_name]["sequence"],
                 id=(index),
             )

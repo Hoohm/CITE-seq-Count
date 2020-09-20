@@ -42,17 +42,17 @@ def find_best_match(TAG_seq, tags, maximum_distance):
     Returns:
         best_match (string): The TAG name that will be used for counting.
     """
-    best_match = "unmapped"
+    best_match = len(tags) - 1
     best_score = maximum_distance
     for tag in tags:
         # pylint: disable=no-member
         score = Levenshtein.hamming(tag.sequence, TAG_seq[: len(tag.sequence)])
         if score == 0:
             # Best possible match
-            return tag.name
+            return tag.id
         elif score <= best_score:
             best_score = score
-            best_match = tag.name
+            best_match = tag.id
             return best_match
     return best_match
 
@@ -221,7 +221,7 @@ def correct_umis(umi_correction_input):
     Args:
         final_results (dict): Dict of dict of Counters with mapping results.
         collapsing_threshold (int): Max distance between umis.
-        top_cells (set): Set of cells to go through.
+        filtered_cells (set): Set of cells to go through.
         max_umis (int): Maximum UMIs to consider for one cluster.
     
     Returns:
@@ -309,7 +309,7 @@ def collapse_cells(true_to_false, umis_per_cell, final_results, ab_map):
         if real_barcode not in final_results:
             final_results[real_barcode] = defaultdict()
             for TAG in ab_map:
-                final_results[real_barcode][TAG.safe_name] = Counter()
+                final_results[real_barcode][TAG.id] = Counter()
         for wrong_barcode in true_to_false[real_barcode]:
             temp = final_results.pop(wrong_barcode)
 
@@ -370,7 +370,7 @@ def correct_cells(
 
 
 def correct_cells_whitelist(
-    final_results, umis_per_cell, whitelist, top_cells, collapsing_threshold, ab_map
+    final_results, umis_per_cell, whitelist, collapsing_threshold, ab_map
 ):
     """
     Corrects cell barcodes.
@@ -391,14 +391,14 @@ def correct_cells_whitelist(
     # pylint: disable=no-member
     barcode_tree = pybktree.BKTree(Levenshtein.hamming, whitelist)
     print("Generated barcode tree from whitelist")
-
+    barcodes = set(final_results.keys())
     print("Finding reference candidates")
-    print("Processing {:,} cell barcodes".format(len(top_cells)))
+    print("Processing {:,} cell barcodes".format(len(barcodes)))
 
     # Run with one process
     true_to_false = find_true_to_false_map(
         barcode_tree=barcode_tree,
-        cell_barcodes=top_cells,
+        cell_barcodes=barcodes,
         whitelist=whitelist,
         collapsing_threshold=collapsing_threshold,
     )
@@ -451,35 +451,37 @@ def find_true_to_false_map(
 
 
 def generate_sparse_matrices(
-    final_results, ordered_tags_map, top_cells, umi_counts=False
+    final_results, ordered_tags, filtered_cells, umi_counts=False
 ):
     """
     Create two sparse matrices with umi and read counts.
 
     Args:
         final_results (dict): Results in a dict of dicts of Counters.
-        ordered_tags_map (dict): Tags in order with indexes as values.
+        ordered_tags (list): Ordered tags in a list of tuples.
 
     Returns:
         results_matrix (scipy.sparse.dok_matrix): UMI counts
 
 
     """
-    print(ordered_tags_map)
+    unmapped_id = len(ordered_tags)
     results_matrix = sparse.dok_matrix(
-        (len(ordered_tags_map) + 1, len(top_cells)), dtype=int32
+        (len(ordered_tags), len(filtered_cells)), dtype=int32
     )
-    for i, cell_barcode in enumerate(top_cells):
-        for TAG in final_results[cell_barcode]:
-            if final_results[cell_barcode][TAG]:
-                if umi_counts:
-                    if TAG == "unmapped":
-                        continue
-                    results_matrix[ordered_tags_map[TAG]["id"], i] = len(
-                        final_results[cell_barcode][TAG]
-                    )
-                else:
-                    results_matrix[ordered_tags_map[TAG]["id"], i] = sum(
-                        final_results[cell_barcode][TAG].values()
-                    )
+    # print(ordered_tags)
+    for i, cell_barcode in enumerate(filtered_cells):
+        if cell_barcode not in final_results:
+            continue
+        for TAG_id in final_results[cell_barcode]:
+            # if TAG_id in final_results[cell_barcode]:
+            if umi_counts:
+
+                if TAG_id == unmapped_id:
+                    continue
+                results_matrix[TAG_id, i] = len(final_results[cell_barcode][TAG_id])
+            else:
+                results_matrix[TAG_id, i] = sum(
+                    final_results[cell_barcode][TAG_id].values()
+                )
     return results_matrix

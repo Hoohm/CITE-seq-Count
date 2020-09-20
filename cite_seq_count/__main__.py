@@ -49,9 +49,11 @@ def main():
 
     # Load TAGs/ABs.
     ab_map = preprocessing.parse_tags_csv(args.tags)
-    ordered_tags_map, longest_tag_len = preprocessing.check_tags(ab_map, args.max_error)
+    named_tuples_tags_map, longest_tag_len = preprocessing.check_tags(
+        ab_map, args.max_error
+    )
     named_tuples_tags_map = preprocessing.convert_to_named_tuple(
-        ordered_tags=ordered_tags_map
+        ordered_tags=named_tuples_tags_map
     )
     # Identify input file(s)
     read1_paths, read2_paths = preprocessing.get_read_paths(
@@ -157,10 +159,6 @@ def main():
     for file_path in temp_files:
         os.remove(file_path)
 
-    # Select top cells
-    top_cells_tuple = umis_per_cell.most_common(args.expected_cells * 10)
-    top_cells = set([pair[0] for pair in top_cells_tuple])
-
     # Correct cell barcodes
     if args.bc_threshold != 0:
         if len(umis_per_cell) <= args.expected_cells:
@@ -194,7 +192,6 @@ def main():
                 ) = processing.correct_cells_whitelist(
                     final_results=final_results,
                     umis_per_cell=umis_per_cell,
-                    top_cells=top_cells,
                     whitelist=whitelist,
                     collapsing_threshold=args.bc_threshold,
                     ab_map=named_tuples_tags_map,
@@ -204,31 +201,37 @@ def main():
         bcs_corrected = 0
 
     # If given, use whitelist for top cells
-    # if whitelist:
-    #     top_cells = whitelist
-    #     # Add potential missing cell barcodes.
-    #     for missing_cell in whitelist:
-    #         if missing_cell in final_results:
-    #             continue
-    #         else:
-    #             final_results[missing_cell] = dict()
-    #             for TAG in named_tuples_tags_map:
-    #                 final_results[missing_cell][TAG.safe_name] = Counter()
-    #             top_cells.add(missing_cell)
-    # else:
-    # Select top cells based on total umis per cell
+    top_cells_tuple = umis_per_cell.most_common(args.expected_cells * 10)
+    if whitelist:
+        # Add potential missing cell barcodes.
+        # for missing_cell in whitelist:
+        #     if missing_cell in final_results:
+        #         continue
+        #     else:
+        #         final_results[missing_cell] = dict()
+        #         for TAG in named_tuples_tags_map:
+        #             final_results[missing_cell][TAG.safe_name] = Counter()
+        #         filtered_cells.add(missing_cell)
+        top_cells = set([pair[0] for pair in top_cells_tuple])
+        filtered_cells = set()
+        for cell in top_cells:
+            if cell in whitelist:
+                filtered_cells.add(cell)
+    else:
+        # Select top cells based on total umis per cell
+        filtered_cells = set([pair[0] for pair in top_cells_tuple])
 
     # Create sparse matrices for reads results
     read_results_matrix = processing.generate_sparse_matrices(
         final_results=final_results,
-        ordered_tags_map=ordered_tags_map,
-        top_cells=top_cells,
+        ordered_tags=named_tuples_tags_map,
+        filtered_cells=filtered_cells,
     )
     # Write reads to file
     io.write_to_files(
         sparse_matrix=read_results_matrix,
-        top_cells=top_cells,
-        ordered_tags_map=ordered_tags_map,
+        filtered_cells=filtered_cells,
+        ordered_tags=named_tuples_tags_map,
         data_type="read",
         outfolder=args.outfolder,
     )
@@ -244,9 +247,9 @@ def main():
         cells = {}
         n_cells = 0
         num_chunks = 0
-
-        cell_batch_size = round(len(top_cells) / args.n_threads) + 1
-        for cell in top_cells:
+        print("preparing UMI correction jobs")
+        cell_batch_size = round(len(filtered_cells) / args.n_threads) + 1
+        for cell in filtered_cells:
             cells[cell] = final_results[cell]
             n_cells += 1
             if n_cells % cell_batch_size == 0:
@@ -300,47 +303,48 @@ def main():
     if len(aberrant_cells) > 0:
         # Remove aberrant cells from the top cells
         for cell_barcode in aberrant_cells:
-            top_cells.remove(cell_barcode)
+            filtered_cells.remove(cell_barcode)
 
         # Create sparse aberrant cells matrix
-        (umi_aberrant_matrix, _) = processing.generate_sparse_matrices(
+        umi_aberrant_matrix = processing.generate_sparse_matrices(
             final_results=final_results,
-            ordered_tags_map=ordered_tags_map,
-            top_cells=aberrant_cells,
+            ordered_tags=named_tuples_tags_map,
+            filtered_cells=aberrant_cells,
         )
 
         # Write uncorrected cells to dense output
         io.write_dense(
             sparse_matrix=umi_aberrant_matrix,
-            index=list(ordered_tags_map.keys()),
+            ordered_tags=named_tuples_tags_map,
             columns=aberrant_cells,
             outfolder=os.path.join(args.outfolder, "uncorrected_cells"),
             filename="dense_umis.tsv",
         )
-
+    named_tuples_tags_map.pop()
     umi_results_matrix = processing.generate_sparse_matrices(
         final_results=final_results,
-        ordered_tags_map=ordered_tags_map,
-        top_cells=top_cells,
+        ordered_tags=named_tuples_tags_map,
+        filtered_cells=filtered_cells,
         umi_counts=True,
     )
 
     # Write umis to file
     io.write_to_files(
         sparse_matrix=umi_results_matrix,
-        top_cells=top_cells,
-        ordered_tags_map=ordered_tags_map,
+        filtered_cells=filtered_cells,
+        ordered_tags=named_tuples_tags_map,
         data_type="umi",
         outfolder=args.outfolder,
     )
 
     # Write unmapped sequences
-    io.write_unmapped(
-        merged_no_match=merged_no_match,
-        top_unknowns=args.unknowns_top,
-        outfolder=args.outfolder,
-        filename=args.unmapped_file,
-    )
+    if len(merged_no_match) > 0:
+        io.write_unmapped(
+            merged_no_match=merged_no_match,
+            top_unknowns=args.unknowns_top,
+            outfolder=args.outfolder,
+            filename=args.unmapped_file,
+        )
 
     # Create report and write it to disk
     io.create_report(
@@ -349,7 +353,7 @@ def main():
         no_match=merged_no_match,
         version=argsparser.get_package_version(),
         start_time=start_time,
-        ordered_tags_map=ordered_tags_map,
+        ordered_tags=named_tuples_tags_map,
         umis_corrected=umis_corrected,
         bcs_corrected=bcs_corrected,
         bad_cells=aberrant_cells,
@@ -364,8 +368,8 @@ def main():
         print("Writing dense format output")
         io.write_dense(
             sparse_matrix=umi_results_matrix,
-            index=list(ordered_tags_map.keys()),
-            columns=top_cells,
+            ordered_tags=named_tuples_tags_map,
+            columns=filtered_cells,
             outfolder=args.outfolder,
             filename="dense_umis.tsv",
         )

@@ -13,13 +13,13 @@ from scipy import io
 from cite_seq_count import secondsToText
 
 
-def write_to_files(sparse_matrix, top_cells, ordered_tags_map, data_type, outfolder):
+def write_to_files(sparse_matrix, filtered_cells, ordered_tags, data_type, outfolder):
     """Write the umi and read sparse matrices to file in gzipped mtx format.
 
     Args:
         sparse_matrix (dok_matrix): Results in a sparse matrix.
-        top_cells (set): Set of cells that are selected for output.
-        ordered_tags_map (dict): Tags in order with indexes as values.
+        filtered_cells (set): Set of cells that are selected for output.
+        ordered_tags (dict): Tags in order with indexes as values.
         data_type (string): A string definning if the data is umi or read based.
         outfolder (string): Path to the output folder.
     """
@@ -27,14 +27,12 @@ def write_to_files(sparse_matrix, top_cells, ordered_tags_map, data_type, outfol
     os.makedirs(prefix, exist_ok=True)
     io.mmwrite(os.path.join(prefix, "matrix.mtx"), sparse_matrix)
     with gzip.open(os.path.join(prefix, "barcodes.tsv.gz"), "wb") as barcode_file:
-        for barcode in top_cells:
+        for barcode in filtered_cells:
             barcode_file.write("{}\n".format(barcode).encode())
     with gzip.open(os.path.join(prefix, "features.tsv.gz"), "wb") as feature_file:
-        for feature in ordered_tags_map:
+        for feature in ordered_tags:
             feature_file.write(
-                "{}\t{}\n".format(
-                    ordered_tags_map[feature]["sequence"], feature
-                ).encode()
+                "{}\t{}\n".format(feature.sequence, feature.name).encode()
             )
     with open(os.path.join(prefix, "matrix.mtx"), "rb") as mtx_in:
         with gzip.open(os.path.join(prefix, "matrix.mtx") + ".gz", "wb") as mtx_gz:
@@ -42,7 +40,7 @@ def write_to_files(sparse_matrix, top_cells, ordered_tags_map, data_type, outfol
     os.remove(os.path.join(prefix, "matrix.mtx"))
 
 
-def write_dense(sparse_matrix, index, columns, outfolder, filename):
+def write_dense(sparse_matrix, ordered_tags, columns, outfolder, filename):
     """
     Writes a dense matrix in a csv format
     
@@ -55,6 +53,9 @@ def write_dense(sparse_matrix, index, columns, outfolder, filename):
     """
     prefix = os.path.join(outfolder)
     os.makedirs(prefix, exist_ok=True)
+    index = []
+    for tag in ordered_tags:
+        index.append(tag.name)
     pandas_dense = pd.DataFrame(sparse_matrix.todense(), columns=columns, index=index)
     pandas_dense.to_csv(os.path.join(outfolder, filename), sep="\t")
 
@@ -84,7 +85,7 @@ def create_report(
     no_match,
     version,
     start_time,
-    ordered_tags_map,
+    ordered_tags,
     umis_corrected,
     bcs_corrected,
     bad_cells,
