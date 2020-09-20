@@ -154,7 +154,7 @@ def map_reads(mapping_input):
                         len(cell_barcode),
                         len(UMI),
                         len(read2),
-                        best_match,
+                        tags[best_match].id,
                     )
                 )
                 sys.stdout.flush()

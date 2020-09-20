@@ -93,6 +93,7 @@ def create_report(
     R2_too_short,
     args,
     chemistry_def,
+    maximum_distance,
 ):
     """
     Creates a report with details about the run in a yaml format.
@@ -164,7 +165,7 @@ Run parameters:
                 chemistry_def.umi_barcode_start,
                 chemistry_def.umi_barcode_end,
                 args.expected_cells,
-                args.max_error,
+                maximum_distance,
                 chemistry_def.R2_trim_start,
             )
         )
@@ -177,7 +178,8 @@ def write_chunks_to_disk(
     R2_max_length,
     n_reads_to_chunk,
     chemistry_def,
-    named_tuples_tags_map,
+    ordered_tags,
+    maximum_distance,
 ):
     """
     """
@@ -258,9 +260,9 @@ def write_chunks_to_disk(
                     input_queue.append(
                         mapping_input(
                             filename=temp_filename,
-                            tags=named_tuples_tags_map,
+                            tags=ordered_tags,
                             debug=args.debug,
-                            maximum_distance=args.max_error,
+                            maximum_distance=maximum_distance,
                             sliding_window=args.sliding_window,
                         )
                     )

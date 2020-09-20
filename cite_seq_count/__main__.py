@@ -49,12 +49,8 @@ def main():
 
     # Load TAGs/ABs.
     ab_map = preprocessing.parse_tags_csv(args.tags)
-    named_tuples_tags_map, longest_tag_len = preprocessing.check_tags(
-        ab_map, args.max_error
-    )
-    named_tuples_tags_map = preprocessing.convert_to_named_tuple(
-        ordered_tags=named_tuples_tags_map
-    )
+    ordered_tags, longest_tag_len = preprocessing.check_tags(ab_map, args.max_error)
+    ordered_tags = preprocessing.convert_to_named_tuple(ordered_tags=ordered_tags)
     # Identify input file(s)
     read1_paths, read2_paths = preprocessing.get_read_paths(
         args.read1_path, args.read2_path
@@ -96,8 +92,10 @@ def main():
 
     if args.sliding_window:
         R2_max_length = read2_lengths[0]
+        maximum_distance = 0
     else:
         R2_max_length = longest_tag_len
+        maximum_distance = args.max_error
 
     (
         input_queue,
@@ -112,7 +110,8 @@ def main():
         R2_max_length=R2_max_length,
         n_reads_to_chunk=n_reads,
         chemistry_def=chemistry_def,
-        named_tuples_tags_map=named_tuples_tags_map,
+        ordered_tags=ordered_tags,
+        maximum_distance=maximum_distance,
     )
     # Initialize the counts dicts that will be generated from each input fastq pair
     final_results = defaultdict(lambda: defaultdict(Counter))
@@ -182,7 +181,7 @@ def main():
                     umis_per_cell=umis_per_cell,
                     expected_cells=args.expected_cells,
                     collapsing_threshold=args.bc_threshold,
-                    ab_map=named_tuples_tags_map,
+                    ab_map=ordered_tags,
                 )
             else:
                 (
@@ -194,7 +193,7 @@ def main():
                     umis_per_cell=umis_per_cell,
                     whitelist=whitelist,
                     collapsing_threshold=args.bc_threshold,
-                    ab_map=named_tuples_tags_map,
+                    ab_map=ordered_tags,
                 )
     else:
         print("Skipping cell barcode correction")
@@ -209,7 +208,7 @@ def main():
         #         continue
         #     else:
         #         final_results[missing_cell] = dict()
-        #         for TAG in named_tuples_tags_map:
+        #         for TAG in ordered_tags:
         #             final_results[missing_cell][TAG.safe_name] = Counter()
         #         filtered_cells.add(missing_cell)
         top_cells = set([pair[0] for pair in top_cells_tuple])
@@ -224,14 +223,14 @@ def main():
     # Create sparse matrices for reads results
     read_results_matrix = processing.generate_sparse_matrices(
         final_results=final_results,
-        ordered_tags=named_tuples_tags_map,
+        ordered_tags=ordered_tags,
         filtered_cells=filtered_cells,
     )
     # Write reads to file
     io.write_to_files(
         sparse_matrix=read_results_matrix,
         filtered_cells=filtered_cells,
-        ordered_tags=named_tuples_tags_map,
+        ordered_tags=ordered_tags,
         data_type="read",
         outfolder=args.outfolder,
     )
@@ -308,22 +307,23 @@ def main():
         # Create sparse aberrant cells matrix
         umi_aberrant_matrix = processing.generate_sparse_matrices(
             final_results=final_results,
-            ordered_tags=named_tuples_tags_map,
+            ordered_tags=ordered_tags,
             filtered_cells=aberrant_cells,
         )
 
         # Write uncorrected cells to dense output
         io.write_dense(
             sparse_matrix=umi_aberrant_matrix,
-            ordered_tags=named_tuples_tags_map,
+            ordered_tags=ordered_tags,
             columns=aberrant_cells,
             outfolder=os.path.join(args.outfolder, "uncorrected_cells"),
             filename="dense_umis.tsv",
         )
-    named_tuples_tags_map.pop()
+    # delete the last element (unmapped)
+    ordered_tags.pop()
     umi_results_matrix = processing.generate_sparse_matrices(
         final_results=final_results,
-        ordered_tags=named_tuples_tags_map,
+        ordered_tags=ordered_tags,
         filtered_cells=filtered_cells,
         umi_counts=True,
     )
@@ -332,7 +332,7 @@ def main():
     io.write_to_files(
         sparse_matrix=umi_results_matrix,
         filtered_cells=filtered_cells,
-        ordered_tags=named_tuples_tags_map,
+        ordered_tags=ordered_tags,
         data_type="umi",
         outfolder=args.outfolder,
     )
@@ -353,7 +353,7 @@ def main():
         no_match=merged_no_match,
         version=argsparser.get_package_version(),
         start_time=start_time,
-        ordered_tags=named_tuples_tags_map,
+        ordered_tags=ordered_tags,
         umis_corrected=umis_corrected,
         bcs_corrected=bcs_corrected,
         bad_cells=aberrant_cells,
@@ -361,6 +361,7 @@ def main():
         R2_too_short=R2_too_short,
         args=args,
         chemistry_def=chemistry_def,
+        maximum_distance=maximum_distance,
     )
 
     # Write dense matrix to disk if requested
@@ -368,7 +369,7 @@ def main():
         print("Writing dense format output")
         io.write_dense(
             sparse_matrix=umi_results_matrix,
-            ordered_tags=named_tuples_tags_map,
+            ordered_tags=ordered_tags,
             columns=filtered_cells,
             outfolder=args.outfolder,
             filename="dense_umis.tsv",
