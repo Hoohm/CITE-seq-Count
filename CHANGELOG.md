@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   - There are new options now for parallel computing. `--chunk_size` Determines how many reads will be read per chunk. #99
   - `--sliding-window` now only checks for exact matches.
   - Added cython dependency based on issue #117
+## [1.4.4] - 10.12.2020
+### Changed
+  - Hotfix linked to the issues like #125 showing that python3.8 and above crash on modified loop.
+  - Fixed bug that checks filenames length instead of number of files.
 
 
 ## [1.4.3] - 05.10.2019

@@ -5,23 +5,20 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="CITE-seq-Count",
-    version="1.4.3",
+    version="1.4.4",
     author="Roelli Patrick",
     author_email="patrick.roelli@gmail.com",
     description="A python package to map reads from CITE-seq or hashing data for single cell experiments",
     url="https://github.com/Hoohm/CITE-seq-Count/",
     packages=setuptools.find_packages(),
-    entry_points={
-          'console_scripts': [
-              'CITE-seq-Count = cite_seq_count.__main__:main'
-          ]
-      },
+    entry_points={"console_scripts": ["CITE-seq-Count = cite_seq_count.__main__:main"]},
     classifiers=(
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ),
     install_requires=[
+<<<<<<< HEAD
           'python-levenshtein>=0.12.0',
           'scipy>=1.1.0',
           'multiprocess>=0.70.6.1',
@@ -33,4 +30,16 @@ setuptools.setup(
           'cython>=0.29.17'
       ],
       python_requires='>=3.6'
+=======
+        "python-levenshtein>=0.12.0",
+        "scipy>=1.1.0",
+        "multiprocess>=0.70.6.1",
+        "umi_tools==1.0.0",
+        "pytest==4.1.0",
+        "pytest-dependency==0.4.0",
+        "pandas>=0.23.4",
+        "pybktree==1.1",
+    ],
+    python_requires=">=3.6",
+>>>>>>> 1.4.4
 )
