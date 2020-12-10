@@ -8,53 +8,8 @@ from math import floor
 from collections import OrderedDict
 from collections import namedtuple
 from itertools import combinations
-<<<<<<< HEAD
-from itertools import islice 
-    
-=======
 from itertools import islice
 
-
-def get_indexes(start_index, chunk_size, nth):
-    """
-    Creates indexes from a reference index, a chunk size an nth number
-
-    Args:
-        start_index (int): first position
-        chunk_size (int): Chunk size
-        nth (int): The nth number
-    
-    Returns:
-        list: First and last position of indexes
-    """
-    start_index = nth * chunk_size
-    stop_index = chunk_size + nth * chunk_size
-    return [start_index, stop_index]
-
-
-def chunk_reads(n_reads, n):
-    """
-    Creates a list of indexes for the islice iterator from the map_reads function.
-
-    Args:
-        n_reads (int): Number of reads to split
-        n (int): How many buckets for the split.
-    Returns:
-        indexes (list(list)): Each entry contains the first and the last index for a read.
-    """
-    indexes = list()
-    if n_reads % n == 0:
-        chunk_size = int(n_reads / n)
-        rest = 0
-    else:
-        chunk_size = floor(n_reads / n)
-        rest = n_reads - (n * chunk_size)
-    for i in range(0, n):
-        indexes.append(get_indexes(i, chunk_size, i))
-    indexes[-1][1] += rest
-    return indexes
-
->>>>>>> 1.4.4
 
 def parse_whitelist_csv(filename, barcode_length, collapsing_threshold):
     """Reads white-listed barcodes from a CSV file.
@@ -174,32 +129,23 @@ def check_tags(tags, maximum_distance):
 
     """
     ordered_tags = OrderedDict()
-<<<<<<< HEAD
     longest_tag_len = 0
     for i, tag_seq in enumerate(sorted(tags, key=len, reverse=True)):
         ordered_tags[tags[tag_seq]] = {}
-        ordered_tags[tags[tag_seq]]['id'] = i
-        ordered_tags[tags[tag_seq]]['sequence'] = tag_seq
+        ordered_tags[tags[tag_seq]]["id"] = i
+        ordered_tags[tags[tag_seq]]["sequence"] = tag_seq
         if len(tag_seq) > longest_tag_len:
             longest_tag_len = len(tag_seq)
-    
-    ordered_tags['unmapped'] = {}
-    ordered_tags['unmapped']['id'] = i + 1
-    ordered_tags['unmapped']['sequence'] = 'UNKNOWN'
-    # If only one TAG is provided, then no distances to compare.
-    if (len(tags) == 1):
-        ordered_tags['unmapped'] = {}
-        ordered_tags['unmapped']['id'] = 2
-        return(ordered_tags, longest_tag_len)
-    
-=======
-    for tag in sorted(tags, key=len, reverse=True):
-        ordered_tags[tag] = tags[tag] + "-" + tag
+
+    ordered_tags["unmapped"] = {}
+    ordered_tags["unmapped"]["id"] = i + 1
+    ordered_tags["unmapped"]["sequence"] = "UNKNOWN"
     # If only one TAG is provided, then no distances to compare.
     if len(tags) == 1:
-        return ordered_tags
+        ordered_tags["unmapped"] = {}
+        ordered_tags["unmapped"]["id"] = 2
+        return (ordered_tags, longest_tag_len)
 
->>>>>>> 1.4.4
     offending_pairs = []
     for a, b in combinations(tags.keys(), 2):
         distance = Levenshtein.distance(a, b)
@@ -228,26 +174,31 @@ def check_tags(tags, maximum_distance):
                     tag1=pair[0], tag2=pair[1], distance=pair[2]
                 )
             )
-<<<<<<< HEAD
-        sys.exit('Exiting the application.\n')
-=======
         sys.exit("Exiting the application.\n")
-    return ordered_tags
->>>>>>> 1.4.4
 
-    return(ordered_tags, longest_tag_len)
+    return (ordered_tags, longest_tag_len)
+
 
 def sanitize_name(string):
-    return(string.replace('-', '_'))
+    return string.replace("-", "_")
+
 
 def convert_to_named_tuple(ordered_tags):
-    #all_tags = namedtuple('all_tags', [sanitize_name(tag) for tag in ordered_tags.keys()])
-    tag = namedtuple('tag', ['safe_name','name','sequence', 'id'])
+    # all_tags = namedtuple('all_tags', [sanitize_name(tag) for tag in ordered_tags.keys()])
+    tag = namedtuple("tag", ["safe_name", "name", "sequence", "id"])
     tag_list = []
     for index, tag_name in enumerate(ordered_tags):
-        tag_list.append(tag(safe_name=sanitize_name(tag_name), name=tag_name, sequence=ordered_tags[tag_name]['sequence'], id=(index)))
-        #all_tags[index+1]=ordered_tags[tag_name]['sequence']
-    return(tag_list)
+        tag_list.append(
+            tag(
+                safe_name=sanitize_name(tag_name),
+                name=tag_name,
+                sequence=ordered_tags[tag_name]["sequence"],
+                id=(index),
+            )
+        )
+        # all_tags[index+1]=ordered_tags[tag_name]['sequence']
+    return tag_list
+
 
 def get_read_length(filename):
     """Check wether SEQUENCE lengths are consistent in a FASTQ file and return
@@ -262,30 +213,21 @@ def get_read_length(filename):
     """
     with gzip.open(filename, "r") as fastq_file:
         secondlines = islice(fastq_file, 1, 1000, 4)
-        #temp_length = len(next(secondlines).rstrip())
+        # temp_length = len(next(secondlines).rstrip())
         for sequence in secondlines:
             read_length = len(sequence.rstrip())
-<<<<<<< HEAD
             # if (temp_length != read_length):
             #     sys.exit(
             #         '[ERROR] Sequence length in {} is not consistent. Please, trim all '
             #         'sequences at the same length.\n'
             #         'Exiting the application.\n'.format(filename)
             #     )
-    return(read_length)
-=======
-            if temp_length != read_length:
-                sys.exit(
-                    "[ERROR] Sequence length in {} is not consistent. Please, trim all "
-                    "sequences at the same length.\n"
-                    "Exiting the application.\n".format(filename)
-                )
     return read_length
->>>>>>> 1.4.4
 
 
 def get_chunk_strategy(read1_paths, read2_paths, chunk_size):
     pass
+
 
 def check_barcodes_lengths(read1_length, cb_first, cb_last, umi_first, umi_last):
     """Check Read1 length against CELL and UMI barcodes length.
