@@ -29,6 +29,7 @@ def parse_whitelist_csv(filename, barcode_length, collapsing_threshold):
 
     """
     STRIP_CHARS = '"0123456789- \t\n'
+<<<<<<< HEAD
     cell_pattern = regex.compile(r"[ATGC]{{{}}}".format(barcode_length))
 
     if filename.endswith(".gz"):
@@ -43,6 +44,16 @@ def parse_whitelist_csv(filename, barcode_length, collapsing_threshold):
         if (len(row[0].strip(STRIP_CHARS)) == barcode_length)
     ]
 
+=======
+    with open(filename, mode="r") as csv_file:
+        csv_reader = csv.reader(csv_file)
+        cell_pattern = regex.compile(r"[ATGC]{{{}}}".format(barcode_length))
+        whitelist = [
+            row[0].strip(STRIP_CHARS)
+            for row in csv_reader
+            if (len(row[0].strip(STRIP_CHARS)) == barcode_length)
+        ]
+>>>>>>> develop
     for cell_barcode in whitelist:
         if not cell_pattern.match(cell_barcode):
             sys.exit(
@@ -139,24 +150,36 @@ def check_tags(tags, maximum_distance):
     ordered_tags = OrderedDict()
     longest_tag_len = 0
     for i, tag_seq in enumerate(sorted(tags, key=len, reverse=True)):
+<<<<<<< HEAD
         safe_name = sanitize_name(tags[tag_seq])
         ordered_tags[safe_name] = {}
         ordered_tags[safe_name]["id"] = i
         ordered_tags[safe_name]["sequence"] = tag_seq
         ordered_tags[safe_name]["feature_name"] = tags[tag_seq]
+=======
+        ordered_tags[tags[tag_seq]] = {}
+        ordered_tags[tags[tag_seq]]["id"] = i
+        ordered_tags[tags[tag_seq]]["sequence"] = tag_seq
+>>>>>>> develop
         if len(tag_seq) > longest_tag_len:
             longest_tag_len = len(tag_seq)
 
     ordered_tags["unmapped"] = {}
     ordered_tags["unmapped"]["id"] = i + 1
     ordered_tags["unmapped"]["sequence"] = "UNKNOWN"
+<<<<<<< HEAD
     ordered_tags["unmapped"]["feature_name"] = "unmapped"
+=======
+>>>>>>> develop
     # If only one TAG is provided, then no distances to compare.
     if len(tags) == 1:
         ordered_tags["unmapped"] = {}
         ordered_tags["unmapped"]["id"] = 2
+<<<<<<< HEAD
         ordered_tags["unmapped"]["sequence"] = "UNKNOWN"
         ordered_tags["unmapped"]["feature_name"] = "unmapped"
+=======
+>>>>>>> develop
         return (ordered_tags, longest_tag_len)
 
     offending_pairs = []
@@ -204,8 +227,13 @@ def convert_to_named_tuple(ordered_tags):
     for index, tag_name in enumerate(ordered_tags):
         tag_list.append(
             tag(
+<<<<<<< HEAD
                 safe_name=tag_name,
                 name=ordered_tags[tag_name]["feature_name"],
+=======
+                safe_name=sanitize_name(tag_name),
+                name=tag_name,
+>>>>>>> develop
                 sequence=ordered_tags[tag_name]["sequence"],
                 id=(index),
             )
@@ -237,6 +265,11 @@ def get_read_length(filename):
             #         'Exiting the application.\n'.format(filename)
             #     )
     return read_length
+<<<<<<< HEAD
+=======
+
+>>>>>>> develop
+
 
 
 def check_barcodes_lengths(read1_length, cb_first, cb_last, umi_first, umi_last):
@@ -267,6 +300,11 @@ def check_barcodes_lengths(read1_length, cb_first, cb_last, umi_first, umi_last)
                 read1_length, barcode_umi_length
             )
         )
+<<<<<<< HEAD
+=======
+
+    return (barcode_slice, umi_slice, barcode_umi_length)
+>>>>>>> develop
 
 
 def blocks(files, size=65536):
@@ -300,7 +338,11 @@ def get_n_lines(file_path):
     Returns:
         n_lines (int): Number of lines in the file
     """
+<<<<<<< HEAD
     print("Counting number of reads in file {}".format(file_path))
+=======
+    print("Counting number of reads")
+>>>>>>> develop
     with gzip.open(file_path, "rt", encoding="utf-8", errors="ignore") as f:
         n_lines = sum(bl.count("\n") for bl in blocks(f))
     if n_lines % 4 != 0:
@@ -328,6 +370,13 @@ def get_read_paths(read1_path, read2_path):
     if len(_read1_path) != len(_read2_path):
         sys.exit(
             "Unequal number of read1 ({}) and read2({}) files provided"
+<<<<<<< HEAD
             "\n Exiting".format(len(read1_path), len(read2_path))
         )
     return (_read1_path, _read2_path)
+=======
+            "\n Exiting".format(len(_read1_path), len(_read2_path))
+        )
+    return (_read1_path, _read2_path)
+
+>>>>>>> develop

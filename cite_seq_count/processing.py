@@ -112,6 +112,10 @@ def map_reads(mapping_input):
     no_match = Counter()
     n = 1
     t = time.time()
+<<<<<<< HEAD
+=======
+
+>>>>>>> develop
     # Progress info
     with open(filename, "r") as input_file:
         reads = csv.reader(input_file)
@@ -251,7 +255,7 @@ def correct_umis(umi_correction_input):
                     final_results[cell_barcode][TAG], collapsing_threshold
                 )
                 (new_res, temp_corrected_umis) = update_umi_counts(
-                    UMIclusters, final_results[cell_barcode].pop(TAG)
+                    UMIclusters, final_results[cell_barcode][TAG]
                 )
                 final_results[cell_barcode][TAG] = new_res
                 corrected_umis += temp_corrected_umis
@@ -476,7 +480,6 @@ def generate_sparse_matrices(
         for TAG_id in final_results[cell_barcode]:
             # if TAG_id in final_results[cell_barcode]:
             if umi_counts:
-
                 if TAG_id == unmapped_id:
                     continue
                 results_matrix[TAG_id, i] = len(final_results[cell_barcode][TAG_id])
