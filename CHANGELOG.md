@@ -11,7 +11,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   - UMI correction is now also parallelized and will use the threads given.
   - Added a check at the end of the mapping. If more than 99% of the reads are unmapped, CITE-seq-Count will exit.
   - (BETA) New functionnality that will fetch the chemistry definition from a remote repo to simplify usage and reduce human errors.
-  - New step just after mapping that will exit if more than 99% of the reads are unmapped.
 
 ### Changed
   - The `features.csv` now has different columns for the tag name and the tag sequence. This keeps the relevant information
@@ -23,9 +22,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   - Added cython dependency based on issue #117
   - The main results dict will now use an `int` as keys reducing memory footprint.
   - Fixed the issue #92 with using `--bc_collapsing_dist 0`.
+  - Fixed issue #122 and now properly checks number of files.
+  - Fixed the error in the documentation pointed by issue #132.
+  - The report is now a proper yaml file. Issue #133
 
   ### Removed
-  - Unmmapped reads are not umi corrected anymore reducing running time and memory usage.
+  - Unmmapped reads are not umi corrected anymore reducing run time and memory usage.
 
 
 ## [1.4.3] - 05.10.2019
