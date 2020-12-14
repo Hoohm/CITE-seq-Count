@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   - Fixed issue #122 and now properly checks number of files.
   - Fixed the error in the documentation pointed by issue #132.
   - The report is now a proper yaml file. Issue #133
+  - Removed distance checking on the whitelist because too slow for long whitelists.
+  - Tags csv file now requires a header with at least "sequence" and "feature_name".
+  - Updated tags file parsing to make it more reliable.
+  - Added new tests to help out contributions.
 
   ### Removed
   - Unmmapped reads are not umi corrected anymore reducing run time and memory usage.

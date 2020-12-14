@@ -50,7 +50,7 @@ def main():
     # Load TAGs/ABs.
     ab_map = preprocessing.parse_tags_csv(args.tags)
     ordered_tags, longest_tag_len = preprocessing.check_tags(ab_map, args.max_error)
-    ordered_tags = preprocessing.convert_to_named_tuple(ordered_tags=ordered_tags)
+    # ordered_tags = preprocessing.convert_to_named_tuple(ordered_tags=ordered_tags)
     # Identify input file(s)
     read1_paths, read2_paths = preprocessing.get_read_paths(
         args.read1_path, args.read2_path

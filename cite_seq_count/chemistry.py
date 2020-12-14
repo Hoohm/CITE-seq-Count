@@ -139,21 +139,19 @@ def create_chemistry_definition(args):
 def setup_chemistry(args):
     if args.chemistry:
         chemistry_def = get_chemistry_definition(args.chemistry)
-        (whitelist, args.bc_threshold) = preprocessing.parse_whitelist_csv(
+        whitelist = preprocessing.parse_whitelist_csv(
             filename=chemistry_def.whitelist_path,
             barcode_length=chemistry_def.cell_barcode_end
             - chemistry_def.cell_barcode_start
             + 1,
-            collapsing_threshold=args.bc_threshold,
         )
     else:
         chemistry_def = create_chemistry_definition(args)
         if args.whitelist:
             print("Loading whitelist")
-            (whitelist, args.bc_threshold) = preprocessing.parse_whitelist_csv(
+            whitelist = preprocessing.parse_whitelist_csv(
                 filename=args.whitelist,
                 barcode_length=args.cb_last - args.cb_first + 1,
-                collapsing_threshold=args.bc_threshold,
             )
         else:
             whitelist = False

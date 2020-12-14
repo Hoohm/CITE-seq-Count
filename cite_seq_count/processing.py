@@ -112,10 +112,6 @@ def map_reads(mapping_input):
     no_match = Counter()
     n = 1
     t = time.time()
-<<<<<<< HEAD
-=======
-
->>>>>>> develop
     # Progress info
     with open(filename, "r") as input_file:
         reads = csv.reader(input_file)

@@ -73,9 +73,11 @@ def get_args():
         help=(
             "The path to the csv file containing the antibody\n"
             "barcodes as well as their respective names.\n\n"
+            "Requires feature_name and sequence in the header\n\n"
             "Example of an antibody barcode file structure:\n\n"
-            "\tATGCGA,First_tag_name\n"
-            "\tGTCATG,Second_tag_name"
+            "\tfeature_name,sequence\n"
+            "\tFirst_tag_name,ATGCGA\n"
+            "\tSecond_tag_name,GTCATG"
         ),
     )
     # BARCODES group.

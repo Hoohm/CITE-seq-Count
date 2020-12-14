@@ -12,7 +12,7 @@ from itertools import combinations
 from itertools import islice
 
 
-def parse_whitelist_csv(filename, barcode_length, collapsing_threshold):
+def parse_whitelist_csv(filename, barcode_length):
     """Reads white-listed barcodes from a CSV file.
 
     The function accepts plain barcodes or even 10X style barcodes with the
@@ -21,11 +21,9 @@ def parse_whitelist_csv(filename, barcode_length, collapsing_threshold):
     Args:
         filename (str): Whitelist barcode file.
         barcode_length (int): Length of the expected barcodes.
-        collapsing_threshold (int): Maximum distance to collapse cell barcodes.
 
     Returns:
         set: The set of white-listed barcodes.
-        int: Collasping threshold
 
     """
     STRIP_CHARS = '"0123456789- \t\n'
@@ -50,52 +48,20 @@ def parse_whitelist_csv(filename, barcode_length, collapsing_threshold):
                     cell_barcode
                 )
             )
-    # collapsing_threshold=test_cell_distances(whitelist, collapsing_threshold)
     if len(whitelist) == 0:
         sys.exit(
             "Please check cell barcode indexes -cbs, -cbl because none of the given whitelist is valid."
         )
-    return (set(whitelist), collapsing_threshold)
-
-
-def test_cell_distances(whitelist, collapsing_threshold):
-    """Tests cell barcode distances to validate provided cell barcode collapsing threshold
-    
-    Function needs the given whitelist as well as the threshold.
-    If the value is too high, it will rerun until an acceptable value is found.
-    
-    Args:
-        whitelist (set): Whitelist barcode set
-        collapsing_threshold (int): Value of threshold
-
-    Returns:
-        collapsing_threshold (int): Valid threshold
-    """
-    ok = False
-    while not ok:
-        print(
-            "Testing cell barcode collapsing threshold of {}".format(
-                collapsing_threshold
-            )
-        )
-        all_comb = combinations(whitelist, 2)
-        for comb in all_comb:
-            # pylint: disable=no-member
-            if Levenshtein.hamming(comb[0], comb[1]) <= collapsing_threshold:
-                collapsing_threshold -= 1
-                print("Value is too high, reducing it by 1")
-                break
-        else:
-            ok = True
-    print("Using {} for cell barcode collapsing threshold".format(collapsing_threshold))
-    return collapsing_threshold
+    return set(whitelist)
 
 
 def parse_tags_csv(filename):
-    """Reads the TAGs from a CSV file.
+    """Reads the TAGs from a CSV file. Checks if sequences are made of ATGC
 
-    The expected file format (no header) is: TAG,TAG_NAME.
+    The expected file format has a header with "sequence" and "feature_name".
+    Order doesn't matter.
     e.g. file content
+        sequence,feature_name
         GTCAACTCTTTAGCG,Hashtag_1
         TGATGGCCTATTGGG,Hashtag_2
         TTCCGCCTCTCTTTG,Hashtag_3
@@ -104,30 +70,46 @@ def parse_tags_csv(filename):
         filename (str): TAGs file.
 
     Returns:
-        dict: A dictionary containing the TAGs and their names.
+        dict: A dictionary containing using sequences as keys and names as values.
 
     """
+    REQUIRED_HEADER = ["sequence", "feature_name"]
+    atgc_test = regex.compile("^[ATGC]{1,}$")
     with open(filename, mode="r") as csv_file:
         csv_reader = csv.reader(csv_file)
         tags = {}
-        for row in csv_reader:
-            tags[row[0].strip()] = row[1].strip()
+        header = next(csv_reader)
+        set_dif = set(REQUIRED_HEADER) - set(header)
+        if len(set_dif) != 0:
+            raise SystemExit(
+                "The header is missing {}. Exiting".format(",".join(list(set_dif)))
+            )
+        sequence_id = header.index("sequence")
+        feature_id = header.index("feature_name")
+        for i, row in enumerate(csv_reader):
+            sequence = row[sequence_id].strip()
+
+            if not regex.match(atgc_test, sequence):
+                raise SystemExit(
+                    "Sequence {} on line {} is not only composed of ATGC. Exiting".format(
+                        sequence, i
+                    )
+                )
+            tags[sequence] = row[feature_id].strip()
     return tags
 
 
 def check_tags(tags, maximum_distance):
     """Evaluates the distance between the TAGs based on the `maximum distance`
     argument provided.
-
-    Additionally, it adds the barcode to the name of the TAG circumventing the
-    need of having to share the mapping of the antibody and the barcode.
     
     The output will have the keys sorted by TAG length (longer first). This
     way, longer barcodes will be evaluated first.
+    Adds unmapped category as well.
 
     Args:
-        tags (dict): A dictionary with the TAGs + TAG Names.
-        maximum_distance (int): The maximum Levenshtein distance allowed
+        tags (dict): A dictionary with TAG sequences as keys and names as values.
+        maximum_distance (int): The minimum Levenshtein distance allowed
             between two TAGs.
 
     Returns:
@@ -136,44 +118,30 @@ def check_tags(tags, maximum_distance):
         int: the length of the longest TAG
 
     """
-    ordered_tags = OrderedDict()
+    tag = namedtuple("tag", ["name", "sequence", "id"])
     longest_tag_len = 0
+    seq_list = []
+    tag_list = []
     for i, tag_seq in enumerate(sorted(tags, key=len, reverse=True)):
         safe_name = sanitize_name(tags[tag_seq])
-        ordered_tags[safe_name] = {}
-        ordered_tags[safe_name]["id"] = i
-        ordered_tags[safe_name]["sequence"] = tag_seq
-        ordered_tags[safe_name]["feature_name"] = tags[tag_seq]
+
+        # for index, tag_name in enumerate(ordered_tags):
+        tag_list.append(tag(name=safe_name, sequence=tag_seq, id=i,))
         if len(tag_seq) > longest_tag_len:
             longest_tag_len = len(tag_seq)
-
-    ordered_tags["unmapped"] = {}
-    ordered_tags["unmapped"]["id"] = i + 1
-    ordered_tags["unmapped"]["sequence"] = "UNKNOWN"
-    ordered_tags["unmapped"]["feature_name"] = "unmapped"
+        seq_list.append(tag_seq)
+    tag_list.append(tag(name="unmapped", sequence="UNKNOWN", id=i + 1,))
     # If only one TAG is provided, then no distances to compare.
     if len(tags) == 1:
-        ordered_tags["unmapped"] = {}
-        ordered_tags["unmapped"]["id"] = 2
-        ordered_tags["unmapped"]["sequence"] = "UNKNOWN"
-        ordered_tags["unmapped"]["feature_name"] = "unmapped"
-        return (ordered_tags, longest_tag_len)
+        return (tag_list, longest_tag_len)
 
+    # Check if the distance is big enoughbetween tags
     offending_pairs = []
-    for a, b in combinations(tags.keys(), 2):
+    for a, b in combinations(seq_list, 2):
         # pylint: disable=no-member
         distance = Levenshtein.distance(a, b)
         if distance <= (maximum_distance - 1):
             offending_pairs.append([a, b, distance])
-    DNA_pattern = regex.compile("^[ATGC]*$")
-    for tag in tags:
-        if not DNA_pattern.match(tag):
-            print(
-                "This tag {} is not only composed of ATGC bases.\nPlease check your tags file".format(
-                    tag
-                )
-            )
-            sys.exit("Exiting the application.\n")
     # If offending pairs are found, print them all.
     if offending_pairs:
         print(
@@ -190,7 +158,7 @@ def check_tags(tags, maximum_distance):
             )
         sys.exit("Exiting the application.\n")
 
-    return (ordered_tags, longest_tag_len)
+    return (tag_list, longest_tag_len)
 
 
 def sanitize_name(string):
@@ -199,12 +167,11 @@ def sanitize_name(string):
 
 def convert_to_named_tuple(ordered_tags):
     # all_tags = namedtuple('all_tags', [sanitize_name(tag) for tag in ordered_tags.keys()])
-    tag = namedtuple("tag", ["safe_name", "name", "sequence", "id"])
+    tag = namedtuple("tag", ["name", "sequence", "id"])
     tag_list = []
     for index, tag_name in enumerate(ordered_tags):
         tag_list.append(
             tag(
-                safe_name=tag_name,
                 name=ordered_tags[tag_name]["feature_name"],
                 sequence=ordered_tags[tag_name]["sequence"],
                 id=(index),
@@ -237,11 +204,6 @@ def get_read_length(filename):
             #         'Exiting the application.\n'.format(filename)
             #     )
     return read_length
-<<<<<<< HEAD
-=======
-
->>>>>>> develop
-
 
 
 def check_barcodes_lengths(read1_length, cb_first, cb_last, umi_first, umi_last):
@@ -259,7 +221,7 @@ def check_barcodes_lengths(read1_length, cb_first, cb_last, umi_first, umi_last)
     barcode_umi_length = barcode_length + umi_length
 
     if barcode_umi_length > read1_length:
-        sys.exit(
+        raise SystemExit(
             "[ERROR] Read1 length is shorter than the option you are using for "
             "Cell and UMI barcodes length. Please, check your options and rerun.\n\n"
             "Exiting the application.\n"

@@ -39,11 +39,12 @@ You can run tags of different length together.
 
 
 ### Antibody barcodes structure:
-```                        
-ATGCGA,First_tag_name
-GTCATG,Second_tag_name
-GCTAGTCGTACGA,Third_tag_name
-GCTAGGTGTCGTA,Forth_tag_name
+```            
+feature_name,sequence            
+First_tag_name,ATGCGA
+Second_tag_name,GTCATG
+Third_tag_name,GCTAGTCGTACGA
+Forth_tag_name,GCTAGGTGTCGTA
 ```
 
 *IMPORTANT*: You need to provide only the variable region of the TAG in the tags.csv. Please refer to the following examples.
