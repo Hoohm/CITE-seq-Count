@@ -175,13 +175,25 @@ def write_chunks_to_disk(
     args,
     read1_paths,
     read2_paths,
-    R2_max_length,
-    n_reads_to_chunk,
+    R2_min_length,
+    n_reads_per_chunk,
     chemistry_def,
     ordered_tags,
     maximum_distance,
 ):
     """
+    Writes chunked files of reads to disk and prepares parallel
+    processing queue parameters.
+
+    Args:
+        args(argparse): All parsed arguments.
+        read1_paths (list): List of R1 fastq.gz paths.
+        read2_paths (list): List of R2 fastq.gz paths.
+        R2_min_length (int):  Minimum length of read2 sequences.
+        n_reads_per_chunk (int): How many reads per chunk.
+        chemistry_def (namedtuple): Hols all the information about the chemistry definition.
+        ordered_tags (list): List of namedtuple tags.
+        maximum_distance (int): Maximum hamming distance for mapping.
     """
     mapping_input = namedtuple(
         "mapping_input",
@@ -192,7 +204,7 @@ def write_chunks_to_disk(
 
     num_chunk = 0
     if not args.chunk_size:
-        chunk_size = round(n_reads_to_chunk / args.n_threads)
+        chunk_size = round(n_reads_per_chunk / args.n_threads)
     else:
         chunk_size = args.chunk_size
     temp_path = os.path.abspath(args.temp_path)
@@ -230,7 +242,7 @@ def write_chunks_to_disk(
                     R1_too_short += 1
                     # The entire read is skipped
                     continue
-                if len(read2) < R2_max_length:
+                if len(read2) < R2_min_length:
                     R2_too_short += 1
                     # The entire read is skipped
                     continue
@@ -241,7 +253,7 @@ def write_chunks_to_disk(
 
                 read2_sliced = read2[
                     chemistry_def.R2_trim_start : (
-                        R2_max_length + chemistry_def.R2_trim_start
+                        R2_min_length + chemistry_def.R2_trim_start
                     )
                 ]
                 chunked_file_object.write(
@@ -266,7 +278,7 @@ def write_chunks_to_disk(
                             sliding_window=args.sliding_window,
                         )
                     )
-                    if total_reads_written == n_reads_to_chunk:
+                    if total_reads_written == n_reads_per_chunk:
                         enough_reads = True
                         chunked_file_object.close()
                         break
@@ -275,7 +287,7 @@ def write_chunks_to_disk(
                     chunked_file_object = open(temp_filename, "w")
                     temp_files.append(os.path.abspath(temp_filename))
                     reads_written = 0
-                if total_reads_written == n_reads_to_chunk:
+                if total_reads_written == n_reads_per_chunk:
                     enough_reads = True
                     chunked_file_object.close()
                     break

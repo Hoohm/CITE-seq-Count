@@ -49,14 +49,13 @@ def parse_whitelist_csv(filename, barcode_length):
                 )
             )
     if len(whitelist) == 0:
-        sys.exit(
-            "Please check cell barcode indexes -cbs, -cbl because none of the given whitelist is valid."
-        )
+        sys.exit("Whitelist is empty.")
     return set(whitelist)
 
 
 def parse_tags_csv(filename):
-    """Reads the TAGs from a CSV file. Checks if sequences are made of ATGC
+    """Reads the TAGs from a CSV file. Checks that the header contains
+    necessary strings and if sequences are made of ATGC
 
     The expected file format has a header with "sequence" and "feature_name".
     Order doesn't matter.
@@ -67,10 +66,10 @@ def parse_tags_csv(filename):
         TTCCGCCTCTCTTTG,Hashtag_3
 
     Args:
-        filename (str): TAGs file.
+        filename (str): TAGs file path.
 
     Returns:
-        dict: A dictionary containing using sequences as keys and names as values.
+        dict: A dictionary using sequences as keys and feature names as values.
 
     """
     REQUIRED_HEADER = ["sequence", "feature_name"]
@@ -113,8 +112,7 @@ def check_tags(tags, maximum_distance):
             between two TAGs.
 
     Returns:
-        OrderedDict: An ordered dictionary containing the TAGs and
-            their names in descendent order based on the length of the TAGs.
+        list: An ordered list of namedtuples
         int: the length of the longest TAG
 
     """
@@ -162,27 +160,21 @@ def check_tags(tags, maximum_distance):
 
 
 def sanitize_name(string):
+    """
+    Transforms special characters that are not compatible with namedtuples
+
+    Args:
+        string(str): a string from a feature name
+    
+    Returns:
+        str: modified string
+    """
     return string.replace("-", "_")
 
 
-def convert_to_named_tuple(ordered_tags):
-    # all_tags = namedtuple('all_tags', [sanitize_name(tag) for tag in ordered_tags.keys()])
-    tag = namedtuple("tag", ["name", "sequence", "id"])
-    tag_list = []
-    for index, tag_name in enumerate(ordered_tags):
-        tag_list.append(
-            tag(
-                name=ordered_tags[tag_name]["feature_name"],
-                sequence=ordered_tags[tag_name]["sequence"],
-                id=(index),
-            )
-        )
-        # all_tags[index+1]=ordered_tags[tag_name]['sequence']
-    return tag_list
-
-
 def get_read_length(filename):
-    """Check wether SEQUENCE lengths are consistent in a FASTQ file and return
+    """Check wether SEQUENCE lengths are consistent in
+    the first 1000 reads from a FASTQ file and return
     the length.
 
     Args:
@@ -194,15 +186,15 @@ def get_read_length(filename):
     """
     with gzip.open(filename, "r") as fastq_file:
         secondlines = islice(fastq_file, 1, 1000, 4)
-        # temp_length = len(next(secondlines).rstrip())
+        temp_length = len(next(secondlines).rstrip())
         for sequence in secondlines:
             read_length = len(sequence.rstrip())
-            # if (temp_length != read_length):
-            #     sys.exit(
-            #         '[ERROR] Sequence length in {} is not consistent. Please, trim all '
-            #         'sequences at the same length.\n'
-            #         'Exiting the application.\n'.format(filename)
-            #     )
+            if temp_length != read_length:
+                sys.exit(
+                    "[ERROR] Sequence length in {} is not consistent. Please, trim all "
+                    "sequences at the same length.\n"
+                    "Exiting the application.\n".format(filename)
+                )
     return read_length
 
 

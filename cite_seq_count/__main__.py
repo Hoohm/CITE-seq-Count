@@ -62,12 +62,12 @@ def main():
     read2_lengths = []
     total_reads = 0
 
-    for read1_path, read2_path in zip(read1_paths, read2_paths):
+    for read1_path in read1_paths:
         n_lines = preprocessing.get_n_lines(read1_path)
         total_reads += n_lines / 4
         # Get reads length. So far, there is no validation for Read2.
         read1_lengths.append(preprocessing.get_read_length(read1_path))
-        read2_lengths.append(preprocessing.get_read_length(read2_path))
+        # read2_lengths.append(preprocessing.get_read_length(read2_path))
         # Check Read1 length against CELL and UMI barcodes length.
         preprocessing.check_barcodes_lengths(
             read1_lengths[-1],
@@ -91,10 +91,10 @@ def main():
         print("Detected {} pairs of files to run on.".format(number_of_samples))
 
     if args.sliding_window:
-        R2_max_length = read2_lengths[0]
+        R2_min_length = read2_lengths[0]
         maximum_distance = 0
     else:
-        R2_max_length = longest_tag_len
+        R2_min_length = longest_tag_len
         maximum_distance = args.max_error
 
     (
@@ -107,7 +107,7 @@ def main():
         args=args,
         read1_paths=read1_paths,
         read2_paths=read2_paths,
-        R2_max_length=R2_max_length,
+        R2_min_length=R2_min_length,
         n_reads_to_chunk=n_reads,
         chemistry_def=chemistry_def,
         ordered_tags=ordered_tags,

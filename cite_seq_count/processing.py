@@ -61,15 +61,12 @@ def find_best_match_shift(TAG_seq, tags):
     """
     Find the best match from the list of tags with sliding window.
     Only works with exact match.
-
-    Compares the Levenshtein distance between tags and the trimmed sequences.
-    The tag and the sequence must have the same length.
+    Just checks if the string is in the sequence.
     If no matches found returns 'unmapped'.
-    We add 1
+    
     Args:
         TAG_seq (string): Sequence from R2 already start trimmed
         tags (dict): A dictionary with the TAGs as keys and TAG Names as values.
-        maximum_distance (int): Maximum distance given by the user.
 
     Returns:
         best_match (string): The TAG name that will be used for counting.
@@ -77,7 +74,7 @@ def find_best_match_shift(TAG_seq, tags):
     best_match = "unmapped"
     for tag in tags:
         if tag.sequence in TAG_seq:
-            return tag.secure_name
+            return tag.name
     return best_match
 
 
@@ -87,19 +84,12 @@ def map_reads(mapping_input):
     It reads both Read1 and Read2 files, creating a dict based on cell barcode.
 
     Args:
-        read1_path (string): Path to R1.fastq.gz
-        read2_path (string): Path to R2.fastq.gz
-        chunk_size (int): The number of lines to process 
-        tags (dict): A dictionary with the TAGs + TAG Names.
-        barcode_slice (slice): A slice for extracting the Barcode portion from the
-            sequence.
-        umi_slice (slice): A slice for extracting the UMI portion from the
-            sequence.
-        indexes (list): Pair of first and last index for islice
-        debug (bool): Print debug messages. Default is False.
-        start_trim (int): Number of bases to trim at the start.
-        maximum_distance (int): Maximum distance given by the user.
-        sliding_window (bool): A bool enabling a sliding window search
+        mapping_input (namedtuple): List of paramters to run in parallel.
+            filename (str): Path to the chunk file
+            tags (list): List of named tuples tags
+            debug (bool): Should debug information be shown or not
+            maximum_distance (int): Maximum distance given by the user
+            sliding_window (bool): A bool enabling a sliding window search
 
     Returns:
         results (dict): A dict of dict of Counters with the mapping results.
@@ -207,7 +197,7 @@ def merge_results(parallel_results):
 def check_unmapped(no_match, too_short, total_reads, start_trim):
     """Check if the number of unmapped is higher than 99%"""
     if (sum(no_match.values()) + too_short) / total_reads > float(0.99):
-        exit(
+        sys.exit(
             """More than 99% of your data is unmapped.\nPlease check that your --start_trim {} parameter is correct and that your tags file is properly formatted""".format(
                 start_trim
             )
