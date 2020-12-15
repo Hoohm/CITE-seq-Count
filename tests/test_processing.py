@@ -1,7 +1,7 @@
 import pytest
 import random
 import copy
-from collections import Counter
+from collections import Counter, namedtuple
 from cite_seq_count import processing
 from cite_seq_count import preprocessing
 
@@ -101,6 +101,17 @@ def data():
     pytest.tags_tuple = preprocessing.check_tags(
         preprocessing.parse_tags_csv("tests/test_data/tags/pass/correct.csv"), 5
     )[0]
+    pytest.mapping_input = namedtuple(
+        "mapping_input",
+        ["filename", "tags", "debug", "maximum_distance", "sliding_window"],
+    )
+    pytest.mappint_input_test = pytest.mapping_input(
+        filename=pytest.file_path,
+        tags=pytest.tags_tuple,
+        debug=pytest.debug,
+        maximum_distance=pytest.maximum_distance,
+        sliding_window=pytest.sliding_window,
+    )
 
 
 @pytest.mark.dependency()
@@ -160,15 +171,8 @@ def test_find_best_match_with_3_distance_reverse(data):
     ]
 )
 def test_classify_reads_multi_process(data):
-    (results, _) = processing.map_reads(
-        (
-            pytest.file_path,
-            pytest.tags_tuple,
-            pytest.debug,
-            pytest.maximum_distance,
-            pytest.sliding_window,
-        )
-    )
+    (results, _) = processing.map_reads(pytest.mappint_input_test)
+    print(results)
     assert len(results) == 2
 
 
