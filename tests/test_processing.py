@@ -63,13 +63,13 @@ def data():
     pytest.file_path = "tests/test_data/fastq/test_csv.csv"
 
     pytest.chunk_size = 800
-    pytest.tags = OrderedDict(
-        {
-            "test2": {"id": 0, "sequence": "CGTACGTAGCCTAGC"},
-            "test1": {"id": 1, "sequence": "CGTAGCTCG"},
-            "unmapped": {"id": 2, "sequence": "UNKNOWN"},
-        }
-    )
+    tag = namedtuple("tag", ["name", "sequence", "id"])
+    pytest.tags = [
+        tag(name="test1", sequence="CGTACGTAGCCTAGC", id=0),
+        tag(name="test2", sequence="CGTAGCTCG", id=1),
+        tag(name="unmapped", sequence="UNKNOWN", id=3),
+    ]
+
     pytest.barcode_slice = slice(0, 16)
     pytest.umi_slice = slice(16, 26)
     pytest.correct_whitelist = set(["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"])
@@ -79,15 +79,15 @@ def data():
     pytest.maximum_distance = 5
     pytest.results = {
         "ACTGTTTTATTGGCCT": {
-            "test1": Counter({b"CATTAGTGGT": 3, b"CATTAGTGGG": 2, b"CATTCGTGGT": 1})
+            0: Counter({b"CATTAGTGGT": 3, b"CATTAGTGGG": 2, b"CATTCGTGGT": 1})
         },
         "TTCATAAGGTAGGGAT": {
-            "test2": Counter({b"TAGCTTAGTA": 3, b"TAGCTTAGTC": 2, b"GCGATGCATA": 1})
+            1: Counter({b"TAGCTTAGTA": 3, b"TAGCTTAGTC": 2, b"GCGATGCATA": 1})
         },
     }
     pytest.corrected_results = {
-        "ACTGTTTTATTGGCCT": {"test1": Counter({b"CATTAGTGGT": 6})},
-        "TTCATAAGGTAGGGAT": {"test2": Counter({b"TAGCTTAGTA": 5, b"GCGATGCATA": 1})},
+        "ACTGTTTTATTGGCCT": {0: Counter({b"CATTAGTGGT": 6})},
+        "TTCATAAGGTAGGGAT": {1: Counter({b"TAGCTTAGTA": 5, b"GCGATGCATA": 1})},
     }
     pytest.umis_per_cell = Counter({"ACTGTTTTATTGGCCT": 1, "TTCATAAGGTAGGGAT": 2})
     pytest.reads_per_cell = Counter({"ACTGTTTTATTGGCCT": 3, "TTCATAAGGTAGGGAT": 6})
@@ -205,17 +205,32 @@ def test_correct_cells(data):
 
 
 @pytest.mark.dependency(depends=["test_correct_umis"])
-def test_generate_sparse_matrices(data):
-    (umi_results_matrix, read_results_matrix) = processing.generate_sparse_matrices(
+def test_generate_sparse_umi_matrices(data):
+    umi_results_matrix = processing.generate_sparse_matrices(
         pytest.corrected_results,
         pytest.tags,
         set(["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"]),
+        umi_counts=True,
     )
     assert umi_results_matrix.shape == (3, 2)
+    total_umis = 0
+    for i in range(umi_results_matrix.shape[0]):
+        for j in range(umi_results_matrix.shape[1]):
+            total_umis += umi_results_matrix[i, j]
+    assert total_umis == 3
+
+
+@pytest.mark.dependency(depends=["test_correct_umis"])
+def test_generate_sparse_read_matrices(data):
+    read_results_matrix = processing.generate_sparse_matrices(
+        pytest.corrected_results,
+        pytest.tags,
+        set(["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"]),
+        umi_counts=False,
+    )
     assert read_results_matrix.shape == (3, 2)
-    read_results_matrix = read_results_matrix.tocsr()
-    total_reads = 0
+    total_umis = 0
     for i in range(read_results_matrix.shape[0]):
         for j in range(read_results_matrix.shape[1]):
-            total_reads += read_results_matrix[i, j]
-    assert total_reads == 12
+            total_umis += read_results_matrix[i, j]
+    assert total_umis == 12
