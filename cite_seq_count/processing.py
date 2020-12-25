@@ -42,7 +42,7 @@ def find_best_match(TAG_seq, tags, maximum_distance):
     Returns:
         best_match (string): The TAG name that will be used for counting.
     """
-    best_match = len(tags) - 1
+    best_match = len(tags)
     best_score = maximum_distance
     for tag in tags:
         # pylint: disable=no-member
@@ -102,6 +102,8 @@ def map_reads(mapping_input):
     no_match = Counter()
     n = 1
     t = time.time()
+    unmapped_id = len(tags) - 1
+    del tags[-1]
     # Progress info
     with open(filename, "r") as input_file:
         reads = csv.reader(input_file)
@@ -130,7 +132,7 @@ def map_reads(mapping_input):
 
             results[cell_barcode][best_match][UMI] += 1
 
-            if best_match == "unmapped":
+            if best_match == unmapped_id:
                 no_match[read2] += 1
 
             if debug:
@@ -144,7 +146,7 @@ def map_reads(mapping_input):
                         len(cell_barcode),
                         len(UMI),
                         len(read2),
-                        tags[best_match].id,
+                        tags[best_match].name,
                     )
                 )
                 sys.stdout.flush()
@@ -455,13 +457,16 @@ def generate_sparse_matrices(
 
 
     """
-    unmapped_id = len(ordered_tags)
+    unmapped_id = len(ordered_tags) - 1
+    if umi_counts:
+        del ordered_tags[-1]
     results_matrix = sparse.dok_matrix(
         (len(ordered_tags), len(filtered_cells)), dtype=int32
     )
     # print(ordered_tags)
+
     for i, cell_barcode in enumerate(filtered_cells):
-        if cell_barcode not in final_results:
+        if cell_barcode not in final_results.keys():
             continue
         for TAG_id in final_results[cell_barcode]:
             # if TAG_id in final_results[cell_barcode]:

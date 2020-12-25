@@ -108,7 +108,7 @@ def main():
         read1_paths=read1_paths,
         read2_paths=read2_paths,
         R2_min_length=R2_min_length,
-        n_reads_to_chunk=n_reads,
+        n_reads_per_chunk=n_reads,
         chemistry_def=chemistry_def,
         ordered_tags=ordered_tags,
         maximum_distance=maximum_distance,
@@ -310,17 +310,16 @@ def main():
             ordered_tags=ordered_tags,
             filtered_cells=aberrant_cells,
         )
-
-        # Write uncorrected cells to dense output
-        io.write_dense(
-            sparse_matrix=umi_aberrant_matrix,
-            ordered_tags=ordered_tags,
-            columns=aberrant_cells,
-            outfolder=os.path.join(args.outfolder, "uncorrected_cells"),
-            filename="dense_umis.tsv",
-        )
+        if len(umi_aberrant_matrix) > 0:
+            # Write uncorrected cells to dense output
+            io.write_dense(
+                sparse_matrix=umi_aberrant_matrix,
+                ordered_tags=ordered_tags,
+                columns=aberrant_cells,
+                outfolder=os.path.join(args.outfolder, "uncorrected_cells"),
+                filename="dense_umis.tsv",
+            )
     # delete the last element (unmapped)
-    ordered_tags.pop()
     umi_results_matrix = processing.generate_sparse_matrices(
         final_results=final_results,
         ordered_tags=ordered_tags,
