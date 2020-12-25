@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   - Tags csv file now requires a header with at least "sequence" and "feature_name".
   - Updated tags file parsing to make it more reliable.
   - Added new tests to help out contributions.
+  - If no clustered cells found, the dense output matrix for that will not be written.
 
   ### Removed
   - Unmmapped reads are not umi corrected anymore reducing run time and memory usage.
