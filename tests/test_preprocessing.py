@@ -13,8 +13,9 @@ def data():
     pytest.passing_csv = "tests/test_data/tags/pass/*.csv"
     pytest.failing_csv = "tests/test_data/tags/fail/*.csv"
 
-    # Test file paths
-    pytest.correct_reference_list_path = "tests/test_data/reference_lists/correct.csv"
+    pytest.passing_reference_list_csv = "tests/test_data/reference_lists/pass/*.csv"
+    pytest.failing_reference_list_csv = "tests/test_data/reference_lists/fail/*.csv"
+
     pytest.correct_tags_path = "tests/test_data/tags/pass/correct.csv"
     pytest.correct_R1_path = "tests/test_data/fastq/correct_R1.fastq.gz"
     pytest.correct_R2_path = "tests/test_data/fastq/correct_R2.fastq.gz"
@@ -56,7 +57,6 @@ def data():
         tag(name="CITE_LEN_12_1", sequence="AGGACCATCCAA", id=6),
         tag(name="CITE_LEN_12_2", sequence="ACATGTTACCGT", id=7),
         tag(name="CITE_LEN_12_3", sequence="AGCTTACTATCC", id=8),
-        tag(name="unmapped", sequence="UNKNOWN", id=9),
     ]
     pytest.barcode_slice = slice(0, 16)
     pytest.umi_slice = slice(16, 26)
@@ -70,15 +70,21 @@ def test_csv_parser(data):
     with pytest.raises(SystemExit):
         failing_files = glob.glob(pytest.failing_csv)
         for file_path in failing_files:
-            print(file_path)
             preprocessing.parse_tags_csv(file_path)
 
 
 @pytest.mark.dependency()
 def test_parse_reference_list_csv(data):
-    assert preprocessing.parse_reference_list_csv(
-        pytest.correct_reference_list_path, 16
-    ).keys() in (pytest.correct_reference_list, 1,)
+    passing_files = glob.glob(pytest.passing_reference_list_csv)
+    for file_path in passing_files:
+        assert preprocessing.parse_reference_list_csv(file_path, 16).keys() in (
+            pytest.correct_reference_list,
+            1,
+        )
+    with pytest.raises(SystemExit):
+        failing_files = glob.glob(pytest.failing_reference_list_csv)
+        for file_path in failing_files:
+            preprocessing.parse_reference_list_csv(file_path, 16)
 
 
 @pytest.mark.dependency()

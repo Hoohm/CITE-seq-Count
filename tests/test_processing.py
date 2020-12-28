@@ -33,7 +33,7 @@ def modify(seq, n, modification_type):
     bases = list("ATGCN")
     positions = list(range(len(seq)))
     seq = list(seq)
-    for i in range(n):
+    for _ in range(n):
         if modification_type == "mutate":
             position = random.choice(positions)
             positions.remove(position)
