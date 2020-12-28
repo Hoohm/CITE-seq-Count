@@ -478,3 +478,49 @@ def generate_sparse_matrices(
                     final_results[cell_barcode][TAG_id].values()
                 )
     return results_matrix
+
+
+def map_data(input_queue, args):
+    """
+    Maps the data given an input_queue
+
+    Args:
+        input_queue (list): List of parameters to run in parallel
+        args (argparse): List of arguments
+    
+    Returns:
+        final_results (dict): final dictionnary with results
+        umis_per_cell (Counter): Counter of UMIs per cell
+        reads_per_cell (Counter): Counter of reads per cell
+        merged_no_match (Counter): Counter of unmapped reads
+    """
+    # Initialize the counts dicts that will be generated from each input fastq pair
+    final_results = defaultdict(lambda: defaultdict(Counter))
+    umis_per_cell = Counter()
+    reads_per_cell = Counter()
+    merged_no_match = Counter()
+
+    print("Started mapping")
+    parallel_results = []
+    pool = Pool(processes=args.n_threads)
+    errors = []
+    mapping = pool.map_async(
+        map_reads,
+        input_queue,
+        callback=parallel_results.append,
+        error_callback=errors.append,
+    )
+    mapping.wait()
+
+    pool.close()
+    pool.join()
+    if len(errors) != 0:
+        for error in errors:
+            print(error)
+
+    print("Merging results")
+    (final_results, umis_per_cell, reads_per_cell, merged_no_match,) = merge_results(
+        parallel_results=parallel_results[0]
+    )
+
+    return final_results, umis_per_cell, reads_per_cell, merged_no_match

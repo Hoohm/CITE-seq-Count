@@ -30,7 +30,6 @@ class Chemistry:
     umi_barcode_end: int
     R2_trim_start: int
     reference_list_path: str
-    mapping_required: bool
 
 
 DEFINITIONS_DB = pooch.create(
@@ -119,7 +118,6 @@ def get_chemistry_definition(chemistry_short_name):
         ]["stop"],
         R2_trim_start=chemistry_defs["sequence_structure_indexes"]["R2"]["start"] - 1,
         reference_list_path=path,
-        mapping_required=chemistry_defs["reference_list"]["mapping"],
     )
     return chemistry_def
 
@@ -133,7 +131,6 @@ def create_chemistry_definition(args):
         umi_barcode_end=args.umi_last,
         R2_trim_start=args.start_trim,
         reference_list_path=args.reference_list,
-        mapping_required=args.translation,
     )
     return chemistry_def
 

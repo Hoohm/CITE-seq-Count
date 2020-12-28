@@ -50,53 +50,20 @@ def main():
     # Load TAGs/ABs.
     ab_map = preprocessing.parse_tags_csv(args.tags)
     ordered_tags, longest_tag_len = preprocessing.check_tags(ab_map, args.max_error)
-    # ordered_tags = preprocessing.convert_to_named_tuple(ordered_tags=ordered_tags)
+
     # Identify input file(s)
     read1_paths, read2_paths = preprocessing.get_read_paths(
         args.read1_path, args.read2_path
     )
+    # Checks before chunking.
+    (n_reads, R2_min_length, maximum_distance) = preprocessing.pre_run_checks(
+        read1_paths=read1_paths,
+        chemistry_def=chemistry_def,
+        longest_tag_len=longest_tag_len,
+        args=args,
+    )
 
-    # preprocessing and processing occur in separate loops so the program can crash earlier if
-    # one of the inputs is not valid.
-    read1_lengths = []
-    read2_lengths = []
-    total_reads = 0
-
-    for read1_path in read1_paths:
-        n_lines = preprocessing.get_n_lines(read1_path)
-        total_reads += n_lines / 4
-        # Get reads length. So far, there is no validation for Read2.
-        read1_lengths.append(preprocessing.get_read_length(read1_path))
-        # read2_lengths.append(preprocessing.get_read_length(read2_path))
-        # Check Read1 length against CELL and UMI barcodes length.
-        preprocessing.check_barcodes_lengths(
-            read1_lengths[-1],
-            chemistry_def.cell_barcode_start,
-            chemistry_def.cell_barcode_end,
-            chemistry_def.umi_barcode_start,
-            chemistry_def.umi_barcode_end,
-        )
-
-    # Get all reads or only top N?
-    if args.first_n < float("inf"):
-        n_reads = args.first_n
-    else:
-        n_reads = total_reads
-
-    # Define R2_lenght to reduce amount of data to transfer to childrens
-    number_of_samples = len(read1_paths)
-
-    # Print a statement if multiple files are run.
-    if number_of_samples != 1:
-        print("Detected {} pairs of files to run on.".format(number_of_samples))
-
-    if args.sliding_window:
-        R2_min_length = read2_lengths[0]
-        maximum_distance = 0
-    else:
-        R2_min_length = longest_tag_len
-        maximum_distance = args.max_error
-
+    # Chunk the data to disk before mapping
     (
         input_queue,
         temp_files,
@@ -113,39 +80,13 @@ def main():
         ordered_tags=ordered_tags,
         maximum_distance=maximum_distance,
     )
-    # Initialize the counts dicts that will be generated from each input fastq pair
-    final_results = defaultdict(lambda: defaultdict(Counter))
-    umis_per_cell = Counter()
-    reads_per_cell = Counter()
-    merged_no_match = Counter()
-
-    print("Started mapping")
-    parallel_results = []
-    pool = Pool(processes=args.n_threads)
-    errors = []
-    mapping = pool.map_async(
-        processing.map_reads,
-        input_queue,
-        callback=parallel_results.append,
-        error_callback=errors.append,
-    )
-    mapping.wait()
-
-    pool.close()
-    pool.join()
-    if len(errors) != 0:
-        for error in errors:
-            print(error)
-
-    print("Merging results")
+    # Map the data
     (
         final_results,
         umis_per_cell,
         reads_per_cell,
         merged_no_match,
-    ) = processing.merge_results(parallel_results=parallel_results[0])
-
-    del parallel_results
+    ) = processing.map_data(input_queue=input_queue, args=args)
 
     # Check if 99% of the reads are unmapped.
     processing.check_unmapped(
@@ -154,8 +95,8 @@ def main():
         total_reads=total_reads,
         start_trim=chemistry_def.R2_trim_start,
     )
-    # Delete temp_files
-    # exit()
+
+    # Remove temp chunks
     for file_path in temp_files:
         os.remove(file_path)
 

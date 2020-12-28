@@ -314,3 +314,57 @@ def get_read_paths(read1_path, read2_path):
         )
     return (_read1_path, _read2_path)
 
+
+def pre_run_checks(read1_paths, chemistry_def, longest_tag_len, args):
+    """ Checks that the chemistry is properly set and defines how many reads to process
+
+    Args:
+        read1_paths (list): List of paths
+        chemistry_def (Chemistry): Chemistry definition
+        longest_tag_len (int): Longest tag sequence
+        args (argparse): List of arguments
+    
+    Returns:
+        n_reads (int): Number of reads to run on
+        R2_min_length (int): Min R2 length to check if reads are too short
+        maximum_distance (int): Maximum error rate allowed for mapping tags
+
+    """
+    read1_lengths = []
+    read2_lengths = []
+    total_reads = 0
+
+    for read1_path in read1_paths:
+        n_lines = get_n_lines(read1_path)
+        total_reads += n_lines / 4
+        # Get reads length. So far, there is no validation for Read2.
+        read1_lengths.append(get_read_length(read1_path))
+
+        # Check Read1 length against CELL and UMI barcodes length.
+        check_barcodes_lengths(
+            read1_lengths[-1],
+            chemistry_def.cell_barcode_start,
+            chemistry_def.cell_barcode_end,
+            chemistry_def.umi_barcode_start,
+            chemistry_def.umi_barcode_end,
+        )
+
+    # Get all reads or only top N?
+    if args.first_n < float("inf"):
+        n_reads = args.first_n
+    else:
+        n_reads = total_reads
+
+    number_of_samples = len(read1_paths)
+
+    # Print a statement if multiple files are run.
+    if number_of_samples != 1:
+        print("Detected {} pairs of files to run on.".format(number_of_samples))
+
+    if args.sliding_window:
+        R2_min_length = read2_lengths[0]
+        maximum_distance = 0
+    else:
+        R2_min_length = longest_tag_len
+        maximum_distance = args.max_error
+    return n_reads, R2_min_length, maximum_distance

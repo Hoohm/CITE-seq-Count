@@ -157,31 +157,20 @@ def get_args():
     )
     if "--chemistry" not in sys.argv:
         cells.add_argument(
-            "-wl",
+            "-rl",
             "--reference_list",
             dest="reference_list",
             required=False,
             type=str,
             help=(
-                "A csv file containning a reference_list of barcodes produced"
+                "A csv file containning a reference list of barcodes produced"
                 " by the mRNA data.\n\n"
                 "\tExample:\n"
+                "reference\n"
                 "\tATGCTAGTGCTA\n\tGCTAGTCAGGAT\n\tCGACTGCTAACG\n\n"
                 "Or 10X-style:\n"
                 "\tATGCTAGTGCTA-1\n\tGCTAGTCAGGAT-1\n\tCGACTGCTAACG-1\n"
             ),
-        )
-
-        cells.add_argument(
-            "--translation",
-            required=False,
-            type=str,
-            help="A csv file containing the mapping between two sets of cell barcode list.\n"
-            "A required header such as the reference is named reference_list. Example:\n\n"
-            "\treference_list,translation\n"
-            "\tAAACCCAAGAAACACT,AAACCCATCAAACACT\n"
-            "\tAAACCCAAGAAACCAT,AAACCCATCAAACCAT\n"
-            "\nThe output matrix will possess both cell barcode IDs",
         )
 
     # FILTERS group.
