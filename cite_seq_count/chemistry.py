@@ -29,7 +29,7 @@ class Chemistry:
     umi_barcode_start: int
     umi_barcode_end: int
     R2_trim_start: int
-    whitelist_path: str
+    reference_list_path: str
     mapping_required: bool
 
 
@@ -90,17 +90,19 @@ def get_chemistry_definition(chemistry_short_name):
     """
     chemistry_defs = fetch_definitions()[chemistry_short_name]
 
-    if chemistry_defs["whitelist"]["path"] not in DEFINITIONS_DB.registry:
+    if chemistry_defs["reference_list"]["path"] not in DEFINITIONS_DB.registry:
         path = pooch.retrieve(
             url=os.path.join(
-                GLOBAL_LINK_GITHUB, "chemistries", chemistry_defs["whitelist"]["path"]
+                GLOBAL_LINK_GITHUB,
+                "chemistries",
+                chemistry_defs["reference_list"]["path"],
             ),
             known_hash=None,
-            fname=chemistry_defs["whitelist"]["path"],
+            fname=chemistry_defs["reference_list"]["path"],
             path=DEFINITIONS_DB.abspath,
         )
     else:
-        path = DEFINITIONS_DB.registry[chemistry_defs["whitelist"]["path"]]
+        path = DEFINITIONS_DB.registry[chemistry_defs["reference_list"]["path"]]
     chemistry_def = Chemistry(
         name=chemistry_short_name,
         cell_barcode_start=chemistry_defs["barcode_structure_indexes"]["cell_barcode"][
@@ -116,8 +118,8 @@ def get_chemistry_definition(chemistry_short_name):
             "R1"
         ]["stop"],
         R2_trim_start=chemistry_defs["sequence_structure_indexes"]["R2"]["start"] - 1,
-        whitelist_path=path,
-        mapping_required=chemistry_defs["whitelist"]["mapping"],
+        reference_list_path=path,
+        mapping_required=chemistry_defs["reference_list"]["mapping"],
     )
     return chemistry_def
 
@@ -130,7 +132,7 @@ def create_chemistry_definition(args):
         umi_barcode_start=args.umi_first,
         umi_barcode_end=args.umi_last,
         R2_trim_start=args.start_trim,
-        whitelist_path=args.whitelist,
+        reference_list_path=args.reference_list,
         mapping_required=args.translation,
     )
     return chemistry_def
@@ -139,20 +141,20 @@ def create_chemistry_definition(args):
 def setup_chemistry(args):
     if args.chemistry:
         chemistry_def = get_chemistry_definition(args.chemistry)
-        whitelist = preprocessing.parse_whitelist_csv(
-            filename=chemistry_def.whitelist_path,
+        reference_dict = preprocessing.parse_reference_list_csv(
+            filename=chemistry_def.reference_list_path,
             barcode_length=chemistry_def.cell_barcode_end
             - chemistry_def.cell_barcode_start
             + 1,
         )
     else:
         chemistry_def = create_chemistry_definition(args)
-        if args.whitelist:
-            print("Loading whitelist")
-            whitelist = preprocessing.parse_whitelist_csv(
-                filename=args.whitelist,
+        if args.reference_list:
+            print("Loading reference_list")
+            reference_dict = preprocessing.parse_reference_list_csv(
+                filename=args.reference_list,
                 barcode_length=args.cb_last - args.cb_first + 1,
             )
         else:
-            whitelist = False
-    return (whitelist, chemistry_def)
+            reference_dict = False
+    return (reference_dict, chemistry_def)

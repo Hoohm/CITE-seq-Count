@@ -12,14 +12,14 @@ from itertools import combinations
 from itertools import islice
 
 
-def parse_whitelist_csv(filename, barcode_length):
+def parse_reference_list_csv(filename, barcode_length):
     """Reads white-listed barcodes from a CSV file.
 
     The function accepts plain barcodes or even 10X style barcodes with the
     `-1` at the end of each barcode.
 
     Args:
-        filename (str): Whitelist barcode file.
+        filename (str): reference_list barcode file.
         barcode_length (int): Length of the expected barcodes.
 
     Returns:
@@ -27,6 +27,9 @@ def parse_whitelist_csv(filename, barcode_length):
 
     """
     STRIP_CHARS = '"0123456789- \t\n'
+    REQUIRED_HEADER = ["reference"]
+    # OPTIONAL_HEADER = ["translation"]
+
     cell_pattern = regex.compile(r"[ATGC]{{{}}}".format(barcode_length))
 
     if filename.endswith(".gz"):
@@ -35,22 +38,42 @@ def parse_whitelist_csv(filename, barcode_length):
     else:
         f = open(filename, encoding="UTF-8")
         csv_reader = csv.reader(f)
-    whitelist = [
-        row[0].strip(STRIP_CHARS)
-        for row in csv_reader
-        if (len(row[0].strip(STRIP_CHARS)) == barcode_length)
-    ]
 
-    for cell_barcode in whitelist:
+    header = next(csv_reader)
+    set_dif = set(REQUIRED_HEADER) - set(header)
+    if len(set_dif) != 0:
+        raise SystemExit(
+            "The header is missing {}. Exiting".format(",".join(list(set_dif)))
+        )
+
+    reference_id = header.index("reference")
+    reference_dict = {}
+    if "translation" in header:
+
+        translation_id = header.index("translation")
+        for row in csv_reader:
+            ref_barcode = row[reference_id].strip(STRIP_CHARS)
+            tra_barcode = row[translation_id].strip(STRIP_CHARS)
+            if (
+                len(ref_barcode) == barcode_length
+                and len(tra_barcode) == barcode_length
+            ):
+                reference_dict[ref_barcode] = tra_barcode
+    else:
+        for row in csv_reader:
+            ref_barcode = row[reference_id].strip(STRIP_CHARS)
+            if len(ref_barcode) == barcode_length:
+                reference_dict[ref_barcode] = 0
+    for cell_barcode in reference_dict.keys():
         if not cell_pattern.match(cell_barcode):
             sys.exit(
                 "This barcode {} is not only composed of ATGC bases.".format(
                     cell_barcode
                 )
             )
-    if len(whitelist) == 0:
-        sys.exit("Whitelist is empty.")
-    return set(whitelist)
+    if len(reference_dict) == 0:
+        sys.exit("reference_dict is empty.")
+    return reference_dict
 
 
 def parse_tags_csv(filename):
@@ -128,7 +151,7 @@ def check_tags(tags, maximum_distance):
         if len(tag_seq) > longest_tag_len:
             longest_tag_len = len(tag_seq)
         seq_list.append(tag_seq)
-    tag_list.append(tag(name="unmapped", sequence="UNKNOWN", id=i + 1,))
+    # tag_list.append(tag(name="unmapped", sequence="UNKNOWN", id=i + 1,))
     # If only one TAG is provided, then no distances to compare.
     if len(tags) == 1:
         return (tag_list, longest_tag_len)

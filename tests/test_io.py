@@ -11,7 +11,7 @@ def data():
     test_matrix = sparse.dok_matrix((4, 2))
     test_matrix[1, 1] = 1
     pytest.sparse_matrix = test_matrix
-    pytest.filtered_cells = set(["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"])
+    pytest.filtered_cells = ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"]
     tag = namedtuple("tag", ["name", "sequence", "id"])
     pytest.ordered_tags_map = [
         tag(name="test1", sequence="CGTA", id=0),
@@ -28,12 +28,14 @@ def test_write_to_files(data, tmpdir):
     import gzip
     import scipy
 
+    reference_dict = {"ACTGTTTTATTGGCCT": 0, "TTCATAAGGTAGGGAT": 0}
     io.write_to_files(
         pytest.sparse_matrix,
         pytest.filtered_cells,
         pytest.ordered_tags_map,
         pytest.data_type,
         tmpdir,
+        reference_dict=reference_dict,
     )
     file = tmpdir.join("umi_count/matrix.mtx.gz")
     with gzip.open(file, "rb") as mtx_file:

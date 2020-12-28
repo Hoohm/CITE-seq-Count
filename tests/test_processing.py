@@ -67,12 +67,11 @@ def data():
     pytest.tags = [
         tag(name="test1", sequence="CGTACGTAGCCTAGC", id=0),
         tag(name="test2", sequence="CGTAGCTCG", id=1),
-        tag(name="unmapped", sequence="UNKNOWN", id=3),
     ]
 
     pytest.barcode_slice = slice(0, 16)
     pytest.umi_slice = slice(16, 26)
-    pytest.correct_whitelist = set(["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"])
+    pytest.correct_reference_list = set(["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"])
     pytest.legacy = False
     pytest.debug = False
     pytest.start_trim = 0
@@ -143,8 +142,6 @@ def test_find_best_match_with_3_distance(data):
     distance = 3
     for tag in pytest.tags_tuple:
         counts = Counter()
-        if tag.name == "unmapped":
-            continue
         for seq in extend_seq_pool(tag.sequence, distance):
             counts[processing.find_best_match(seq, pytest.tags_tuple, distance)] += 1
         assert counts[tag.id] == 4
@@ -209,10 +206,10 @@ def test_generate_sparse_umi_matrices(data):
     umi_results_matrix = processing.generate_sparse_matrices(
         pytest.corrected_results,
         pytest.tags,
-        set(["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"]),
+        ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"],
         umi_counts=True,
     )
-    assert umi_results_matrix.shape == (3, 2)
+    assert umi_results_matrix.shape == (2, 2)
     total_umis = 0
     for i in range(umi_results_matrix.shape[0]):
         for j in range(umi_results_matrix.shape[1]):
@@ -225,7 +222,7 @@ def test_generate_sparse_read_matrices(data):
     read_results_matrix = processing.generate_sparse_matrices(
         pytest.corrected_results,
         pytest.tags,
-        set(["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"]),
+        ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"],
         umi_counts=False,
     )
     assert read_results_matrix.shape == (3, 2)

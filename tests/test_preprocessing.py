@@ -14,7 +14,7 @@ def data():
     pytest.failing_csv = "tests/test_data/tags/fail/*.csv"
 
     # Test file paths
-    pytest.correct_whitelist_path = "tests/test_data/whitelists/correct.csv"
+    pytest.correct_reference_list_path = "tests/test_data/reference_lists/correct.csv"
     pytest.correct_tags_path = "tests/test_data/tags/pass/correct.csv"
     pytest.correct_R1_path = "tests/test_data/fastq/correct_R1.fastq.gz"
     pytest.correct_R2_path = "tests/test_data/fastq/correct_R2.fastq.gz"
@@ -33,7 +33,7 @@ def data():
     )
 
     # Create some variables to compare to
-    pytest.correct_whitelist = set(["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"])
+    pytest.correct_reference_list = set(["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"])
     pytest.correct_tags = {
         "AGGACCATCCAA": "CITE_LEN_12_1",
         "ACATGTTACCGT": "CITE_LEN_12_2",
@@ -75,11 +75,10 @@ def test_csv_parser(data):
 
 
 @pytest.mark.dependency()
-def test_parse_whitelist_csv(data):
-    assert preprocessing.parse_whitelist_csv(pytest.correct_whitelist_path, 16) in (
-        pytest.correct_whitelist,
-        1,
-    )
+def test_parse_reference_list_csv(data):
+    assert preprocessing.parse_reference_list_csv(
+        pytest.correct_reference_list_path, 16
+    ).keys() in (pytest.correct_reference_list, 1,)
 
 
 @pytest.mark.dependency()

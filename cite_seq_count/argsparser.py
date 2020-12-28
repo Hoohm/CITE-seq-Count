@@ -143,7 +143,7 @@ def get_args():
     )
     # Cells group
     cells = parser.add_argument_group(
-        "Cells", description=("Expected number of cells and potential whitelist")
+        "Cells", description=("Expected number of cells and potential reference_list")
     )
 
     cells.add_argument(
@@ -158,12 +158,12 @@ def get_args():
     if "--chemistry" not in sys.argv:
         cells.add_argument(
             "-wl",
-            "--whitelist",
-            dest="whitelist",
+            "--reference_list",
+            dest="reference_list",
             required=False,
             type=str,
             help=(
-                "A csv file containning a whitelist of barcodes produced"
+                "A csv file containning a reference_list of barcodes produced"
                 " by the mRNA data.\n\n"
                 "\tExample:\n"
                 "\tATGCTAGTGCTA\n\tGCTAGTCAGGAT\n\tCGACTGCTAACG\n\n"
@@ -177,8 +177,8 @@ def get_args():
             required=False,
             type=str,
             help="A csv file containing the mapping between two sets of cell barcode list.\n"
-            "A required header such as the reference is named whitelist. Example:\n\n"
-            "\twhitelist,translation\n"
+            "A required header such as the reference is named reference_list. Example:\n\n"
+            "\treference_list,translation\n"
             "\tAAACCCAAGAAACACT,AAACCCATCAAACACT\n"
             "\tAAACCCAAGAAACCAT,AAACCCATCAAACCAT\n"
             "\nThe output matrix will possess both cell barcode IDs",

@@ -45,7 +45,7 @@ def main():
     assert os.access(args.temp_path, os.W_OK)
 
     # Get chemistry defs
-    (whitelist, chemistry_def) = chemistry.setup_chemistry(args)
+    (reference_dict, chemistry_def) = chemistry.setup_chemistry(args)
 
     # Load TAGs/ABs.
     ab_map = preprocessing.parse_tags_csv(args.tags)
@@ -130,6 +130,7 @@ def main():
         error_callback=errors.append,
     )
     mapping.wait()
+
     pool.close()
     pool.join()
     if len(errors) != 0:
@@ -170,7 +171,7 @@ def main():
             bcs_corrected = 0
         else:
             print("Correcting cell barcodes")
-            if not whitelist:
+            if not reference_dict:
                 (
                     final_results,
                     umis_per_cell,
@@ -188,10 +189,10 @@ def main():
                     final_results,
                     umis_per_cell,
                     bcs_corrected,
-                ) = processing.correct_cells_whitelist(
+                ) = processing.correct_cells_reference_list(
                     final_results=final_results,
                     umis_per_cell=umis_per_cell,
-                    whitelist=whitelist,
+                    reference_list=set(reference_dict.keys()),
                     collapsing_threshold=args.bc_threshold,
                     ab_map=ordered_tags,
                 )
@@ -199,11 +200,11 @@ def main():
         print("Skipping cell barcode correction")
         bcs_corrected = 0
 
-    # If given, use whitelist for top cells
+    # If given, use reference_list for top cells
     top_cells_tuple = umis_per_cell.most_common(args.expected_cells * 10)
-    if whitelist:
+    if reference_dict:
         # Add potential missing cell barcodes.
-        # for missing_cell in whitelist:
+        # for missing_cell in reference_list:
         #     if missing_cell in final_results:
         #         continue
         #     else:
@@ -211,14 +212,15 @@ def main():
         #         for TAG in ordered_tags:
         #             final_results[missing_cell][TAG.safe_name] = Counter()
         #         filtered_cells.add(missing_cell)
-        top_cells = set([pair[0] for pair in top_cells_tuple])
-        filtered_cells = set()
+        top_cells = [pair[0] for pair in top_cells_tuple]
+        filtered_cells = []
         for cell in top_cells:
-            if cell in whitelist:
-                filtered_cells.add(cell)
+            # pylint: disable=no-member
+            if cell in reference_dict.keys():
+                filtered_cells.append(cell)
     else:
         # Select top cells based on total umis per cell
-        filtered_cells = set([pair[0] for pair in top_cells_tuple])
+        filtered_cells = [pair[0] for pair in top_cells_tuple]
 
     # Create sparse matrices for reads results
     read_results_matrix = processing.generate_sparse_matrices(
@@ -233,6 +235,7 @@ def main():
         ordered_tags=ordered_tags,
         data_type="read",
         outfolder=args.outfolder,
+        reference_dict=reference_dict,
     )
 
     # UMI correction
@@ -334,6 +337,7 @@ def main():
         ordered_tags=ordered_tags,
         data_type="umi",
         outfolder=args.outfolder,
+        reference_dict=reference_dict,
     )
 
     # Write unmapped sequences

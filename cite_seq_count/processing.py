@@ -103,7 +103,6 @@ def map_reads(mapping_input):
     n = 1
     t = time.time()
     unmapped_id = len(tags) - 1
-    del tags[-1]
     # Progress info
     with open(filename, "r") as input_file:
         reads = csv.reader(input_file)
@@ -343,7 +342,7 @@ def correct_cells(
         umis_per_cell (Counter): Counter of umis per cell after cell barcode correction
         corrected_umis (int): How many umis have been corrected.
     """
-    print("Looking for a whitelist")
+    print("Looking for a reference_list")
     _, true_to_false = whitelist_methods.getCellWhitelist(
         cell_barcode_counts=reads_per_cell,
         expect_cells=expected_cells,
@@ -361,16 +360,16 @@ def correct_cells(
     return (final_results, umis_per_cell, corrected_barcodes)
 
 
-def correct_cells_whitelist(
-    final_results, umis_per_cell, whitelist, collapsing_threshold, ab_map
+def correct_cells_reference_list(
+    final_results, umis_per_cell, reference_list, collapsing_threshold, ab_map
 ):
     """
-    Corrects cell barcodes.
+    Corrects cell barcodes based on a given reference_list.
     
     Args:
         final_results (dict): Dict of dict of Counters with mapping results.
         umis_per_cell (Counter): Counter of UMIs per cell.
-        whitelist (set): The whitelist reference given by the user.
+        reference_list (set): The reference_list reference given by the user.
         collapsing_threshold (int): Max distance between umis.
         ab_map (OrederedDict): Tags in an ordered dict.
 
@@ -380,18 +379,18 @@ def correct_cells_whitelist(
         umis_per_cell (Counter): Updated UMI counts after correction.
         corrected_barcodes (int): How many umis have been corrected.
     """
+    print("Generating barcode tree from reference list")
     # pylint: disable=no-member
-    barcode_tree = pybktree.BKTree(Levenshtein.hamming, whitelist)
-    print("Generated barcode tree from whitelist")
+    barcode_tree = pybktree.BKTree(Levenshtein.hamming, reference_list)
     barcodes = set(final_results.keys())
-    print("Finding reference candidates")
+    print("Selecting reference candidates")
     print("Processing {:,} cell barcodes".format(len(barcodes)))
 
     # Run with one process
     true_to_false = find_true_to_false_map(
         barcode_tree=barcode_tree,
         cell_barcodes=barcodes,
-        whitelist=whitelist,
+        reference_list=reference_list,
         collapsing_threshold=collapsing_threshold,
     )
     print("Collapsing wrong barcodes with original barcodes")
@@ -402,7 +401,7 @@ def correct_cells_whitelist(
 
 
 def find_true_to_false_map(
-    barcode_tree, cell_barcodes, whitelist, collapsing_threshold
+    barcode_tree, cell_barcodes, reference_list, collapsing_threshold
 ):
     """
     Creates a mapping between "fake" cell barcodes and their original true barcode.
@@ -410,7 +409,7 @@ def find_true_to_false_map(
     Args:
         barcode_tree (BKTree): BKTree of all original cell barcodes.
         cell_barcodes (List): Cell barcodes to go through.
-        whitelist (Set): Set of the whitelist, the "true" cell barcodes.
+        reference_list (Set): Set of the reference_list, the "true" cell barcodes.
         collasping_threshold (int): How many mistakes to correct.
 
     Return:
@@ -418,10 +417,10 @@ def find_true_to_false_map(
     """
     true_to_false = defaultdict(list)
     for cell_barcode in cell_barcodes:
-        if cell_barcode in whitelist:
-            # if the barcode is already whitelisted, no need to add
+        if cell_barcode in reference_list:
+            # if the barcode is already reference_listed, no need to add
             continue
-        # get all members of whitelist that are at distance of collapsing_threshold
+        # get all members of reference_list that are at distance of collapsing_threshold
         candidates = [
             white_cell
             for d, white_cell in barcode_tree.find(cell_barcode, collapsing_threshold)
@@ -431,12 +430,12 @@ def find_true_to_false_map(
             white_cell_str = candidates[0]
             true_to_false[white_cell_str].append(cell_barcode)
         elif len(candidates) == 0:
-            # the cell doesnt match to any whitelisted barcode,
+            # the cell doesnt match to any reference_listed barcode,
             # hence we have to drop it
             # (as it cannot be asscociated with any frequent barcode)
             continue
         else:
-            # more than on whitelisted candidate:
+            # more than on reference_listed candidate:
             # we drop it as its not uniquely assignable
             continue
     return true_to_false
@@ -457,12 +456,12 @@ def generate_sparse_matrices(
 
 
     """
-    unmapped_id = len(ordered_tags) - 1
+    unmapped_id = len(ordered_tags)
     if umi_counts:
-        del ordered_tags[-1]
-    results_matrix = sparse.dok_matrix(
-        (len(ordered_tags), len(filtered_cells)), dtype=int32
-    )
+        n_features = len(ordered_tags)
+    else:
+        n_features = len(ordered_tags) + 1
+    results_matrix = sparse.dok_matrix((n_features, len(filtered_cells)), dtype=int32)
     # print(ordered_tags)
 
     for i, cell_barcode in enumerate(filtered_cells):

@@ -10,10 +10,13 @@ from itertools import islice
 import pandas as pd
 
 from scipy import io
+import numpy as np
 from cite_seq_count import secondsToText
 
 
-def write_to_files(sparse_matrix, filtered_cells, ordered_tags, data_type, outfolder):
+def write_to_files(
+    sparse_matrix, filtered_cells, ordered_tags, data_type, outfolder, reference_dict
+):
     """Write the umi and read sparse matrices to file in gzipped mtx format.
 
     Args:
@@ -28,12 +31,19 @@ def write_to_files(sparse_matrix, filtered_cells, ordered_tags, data_type, outfo
     io.mmwrite(os.path.join(prefix, "matrix.mtx"), sparse_matrix)
     with gzip.open(os.path.join(prefix, "barcodes.tsv.gz"), "wb") as barcode_file:
         for barcode in filtered_cells:
-            barcode_file.write("{}\n".format(barcode).encode())
+            if reference_dict[barcode] != 0:
+                barcode_file.write(
+                    "{}\t{}\n".format(barcode, reference_dict[barcode]).encode(),
+                )
+            else:
+                barcode_file.write("{}\n".format(barcode).encode())
     with gzip.open(os.path.join(prefix, "features.tsv.gz"), "wb") as feature_file:
         for feature in ordered_tags:
             feature_file.write(
                 "{}\t{}\n".format(feature.sequence, feature.name).encode()
             )
+        if data_type == "read":
+            feature_file.write("{}\t{}\n".format("UNKNOWN", "unmapped").encode())
     with open(os.path.join(prefix, "matrix.mtx"), "rb") as mtx_in:
         with gzip.open(os.path.join(prefix, "matrix.mtx") + ".gz", "wb") as mtx_gz:
             shutil.copyfileobj(mtx_in, mtx_gz)

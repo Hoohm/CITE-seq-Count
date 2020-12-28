@@ -13,14 +13,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   - (BETA) New functionnality that will fetch the chemistry definition from a remote repo to simplify usage and reduce human errors.
 
 ### Changed
-  - The `features.csv` now has different columns for the tag name and the tag sequence. This keeps the relevant information
+  - The `features.tsv` now has different columns for the tag name and the tag sequence. This keeps the relevant information
     in the output files as well as simplifies reading the mtx format when processing the data.
-  - The mapping step has been changed. It will first write the reads to files and then read in the chunks.
+  - The mapping step has been changed. It will first write chunks of reads to files and then read in the chunks in each child process.
     This should solve the io bottleneck from before.
   - There are new options now for parallel computing. `--chunk_size` Determines how many reads will be read per chunk. #99
   - `--sliding-window` now only checks for exact matches.
   - Added cython dependency based on issue #117
-  - The main results dict will now use an `int` as keys reducing memory footprint.
+  - The main results dict now uses an `int` as keys reducing memory footprint.
   - Fixed the issue #92 with using `--bc_collapsing_dist 0`.
   - Fixed issue #122 and now properly checks number of files.
   - Fixed the error in the documentation pointed by issue #132.
@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   - Tags csv file now requires a header with at least "sequence" and "feature_name".
   - Updated tags file parsing to make it more reliable.
   - Added new tests to help out contributions.
-  - If no clustered cells found, the dense output matrix for that will not be written.
+  - If no clustered cells found, the dense output matrix will not be written.
 
   ### Removed
   - Unmmapped reads are not umi corrected anymore reducing run time and memory usage.
