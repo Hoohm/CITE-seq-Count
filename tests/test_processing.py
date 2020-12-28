@@ -175,7 +175,7 @@ def test_classify_reads_multi_process(data):
 
 @pytest.mark.dependency(depends=["test_classify_reads_multi_process"])
 def test_correct_umis(data):
-    temp = processing.correct_umis((pytest.results, 2, pytest.max_umis))
+    temp = processing.correct_umis_in_cells((pytest.results, 2, pytest.max_umis, 2))
     results = temp[0]
     n_corrected = temp[1]
     for cell_barcode in results.keys():
@@ -191,7 +191,7 @@ def test_correct_umis(data):
 
 @pytest.mark.dependency(depends=["test_correct_umis"])
 def test_correct_cells(data):
-    processing.correct_cells(
+    processing.correct_cells_no_reference_list(
         pytest.corrected_results,
         pytest.reads_per_cell,
         pytest.umis_per_cell,
