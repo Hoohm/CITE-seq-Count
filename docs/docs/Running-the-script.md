@@ -117,18 +117,15 @@ Barcodes from 1 to 16 and UMI from 17 to 26, then this is the input you need:
 
 If you have doubts about those parameters, you can check [this great ressource](https://teichlab.github.io/scg_lib_structs/) for help.
 
-* [Optional] How many errors are allowed between two cell barcodes to collapse them onto one cell.
+* [Optional] How many errors are allowed between two cell barcodes to collapse them onto one cell. If set to 0, deactivates correction.
 
 `--bc_collapsing_dist N_ERRORS`, default `1`
 
 
-* [Optional] How many errors are allowed between two umi within the same cell and TAG to collapse.
+* [Optional] How many errors are allowed between two umi within the same cell and TAG to collapse. If set to 0, deactivates correction.
 
 `--umi_collapsing_dist N_ERRORS`, default `2`
 
-* [Optional] Deactivate UMI correction.
-
-`--no_umi_correction`
 
 ### Cells
 

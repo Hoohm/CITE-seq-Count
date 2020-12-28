@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   - If no clustered cells found, the dense output matrix will not be written.
   - Barcode whitelists are now called reference lists.
   - The reference list file now requires a header `reference`. There is now an optional column called `translation`. This is specific to chemistries such as 10xV3 that use different barcodes for mRNA and Antibody tag capture sequences. See more details in the documentation.
+  - Bumped UMI_tools to 1.1.1
 
   ### Removed
   - Unmmapped reads are not umi corrected anymore reducing run time and memory usage.

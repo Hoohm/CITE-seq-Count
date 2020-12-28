@@ -192,7 +192,7 @@ def merge_results(parallel_results):
                         umis_per_cell[cell_barcode] += len(mapped[cell_barcode][TAG])
                         reads_per_cell[cell_barcode] += mapped[cell_barcode][TAG][UMI]
         merged_no_match.update(unmapped)
-    return (merged_results, umis_per_cell, reads_per_cell, merged_no_match)
+    return merged_results, umis_per_cell, reads_per_cell, merged_no_match
 
 
 def check_unmapped(no_match, too_short, total_reads, start_trim):
@@ -205,7 +205,7 @@ def check_unmapped(no_match, too_short, total_reads, start_trim):
         )
 
 
-def correct_umis(umi_correction_input):
+def correct_umis_in_cells(umi_correction_input):
     """
     Corrects umi barcodes within same cell/tag groups.
     
@@ -221,7 +221,7 @@ def correct_umis(umi_correction_input):
         aberrant_umi_count_cells (set): Set of uncorrected cells.
     """
 
-    (final_results, collapsing_threshold, max_umis) = umi_correction_input
+    (final_results, collapsing_threshold, max_umis, unmapped_id) = umi_correction_input
     print(
         "Started umi correction in child process {} working on {} cells".format(
             os.getpid(), len(final_results)
@@ -232,8 +232,8 @@ def correct_umis(umi_correction_input):
     cells = final_results.keys()
     for cell_barcode in cells:
         for TAG in final_results[cell_barcode]:
-            if TAG == "unmapped":
-                final_results[cell_barcode][TAG].pop()
+            if TAG == unmapped_id:
+                final_results[cell_barcode].pop(unmapped_id)
 
             n_umis = len(final_results[cell_barcode][TAG])
             if n_umis > 1 and n_umis <= max_umis:
@@ -319,7 +319,7 @@ def collapse_cells(true_to_false, umis_per_cell, final_results, ab_map):
     return (umis_per_cell, final_results, corrected_barcodes)
 
 
-def correct_cells(
+def correct_cells_no_reference_list(
     final_results,
     reads_per_cell,
     umis_per_cell,
@@ -342,15 +342,19 @@ def correct_cells(
         umis_per_cell (Counter): Counter of umis per cell after cell barcode correction
         corrected_umis (int): How many umis have been corrected.
     """
-    print("Looking for a reference_list")
+    print("Looking for a reference list")
     _, true_to_false = whitelist_methods.getCellWhitelist(
+        knee_method="density",
         cell_barcode_counts=reads_per_cell,
         expect_cells=expected_cells,
         cell_number=expected_cells,
         error_correct_threshold=collapsing_threshold,
         plotfile_prefix=False,
     )
-
+    if true_to_false is None:
+        print("Failed to find a good reference list. Will not correct cell barcodes")
+        corrected_barcodes = 0
+        return (final_results, umis_per_cell, corrected_barcodes)
     (umis_per_cell, final_results, corrected_barcodes) = collapse_cells(
         true_to_false=true_to_false,
         umis_per_cell=umis_per_cell,
@@ -409,7 +413,7 @@ def find_true_to_false_map(
     Args:
         barcode_tree (BKTree): BKTree of all original cell barcodes.
         cell_barcodes (List): Cell barcodes to go through.
-        reference_list (Set): Set of the reference_list, the "true" cell barcodes.
+        reference_list (dict): Dict of the reference_list, the "true" cell barcodes.
         collasping_threshold (int): How many mistakes to correct.
 
     Return:
@@ -524,3 +528,110 @@ def map_data(input_queue, args):
     )
 
     return final_results, umis_per_cell, reads_per_cell, merged_no_match
+
+
+def run_umi_correction(final_results, filtered_cells, unmapped_id, args):
+    input_queue = []
+    umi_correction_input = namedtuple(
+        "umi_correction_input",
+        ["cells", "collapsing_threshold", "max_umis", "unmapped_id"],
+    )
+    cells = {}
+    n_cells = 0
+    num_chunks = 0
+    print("preparing UMI correction jobs")
+    cell_batch_size = round(len(filtered_cells) / args.n_threads) + 1
+    for cell in filtered_cells:
+        cells[cell] = final_results[cell]
+        n_cells += 1
+        if n_cells % cell_batch_size == 0:
+            input_queue.append(
+                umi_correction_input(
+                    cells=cells,
+                    collapsing_threshold=args.umi_threshold,
+                    max_umis=20000,
+                    unmapped_id=unmapped_id,
+                )
+            )
+            cells = {}
+            num_chunks += 1
+    input_queue.append(
+        umi_correction_input(
+            cells=cells,
+            collapsing_threshold=args.umi_threshold,
+            max_umis=20000,
+            unmapped_id=unmapped_id,
+        )
+    )
+
+    pool = Pool(processes=args.n_threads)
+    errors = []
+    parallel_results = []
+    correct_umis = pool.map_async(
+        correct_umis_in_cells,
+        input_queue,
+        callback=parallel_results.append,
+        error_callback=errors.append,
+    )
+
+    correct_umis.wait()
+    pool.close()
+    pool.join()
+
+    if len(errors) != 0:
+        for error in errors:
+            print("There was an error {}", error)
+
+    final_results = {}
+    umis_corrected = 0
+    aberrant_cells = set()
+    for chunk in parallel_results[0]:
+        (temp_results, temp_umis, temp_aberrant_cells) = chunk
+        final_results.update(temp_results)
+        umis_corrected += temp_umis
+        aberrant_cells.update(temp_aberrant_cells)
+
+    return final_results, umis_corrected, aberrant_cells
+
+
+def run_cell_barcode_correction(
+    final_results, umis_per_cell, reads_per_cell, reference_dict, ordered_tags, args
+):
+    if len(umis_per_cell) <= args.expected_cells:
+        print(
+            "Number of expected cells, {}, is higher "
+            "than number of cells found {}.\nNot performing "
+            "cell barcode correction"
+            "".format(args.expected_cells, len(umis_per_cell))
+        )
+        bcs_corrected = 0
+    else:
+        print("Correcting cell barcodes")
+        if not reference_dict:
+            print("Reference list not given")
+            (
+                final_results,
+                umis_per_cell,
+                bcs_corrected,
+            ) = correct_cells_no_reference_list(
+                final_results=final_results,
+                reads_per_cell=reads_per_cell,
+                umis_per_cell=umis_per_cell,
+                expected_cells=args.expected_cells,
+                collapsing_threshold=args.bc_threshold,
+                ab_map=ordered_tags,
+            )
+        else:
+            print("Reference list given")
+            (
+                final_results,
+                umis_per_cell,
+                bcs_corrected,
+            ) = correct_cells_reference_list(
+                final_results=final_results,
+                umis_per_cell=umis_per_cell,
+                reference_list=set(reference_dict.keys()),
+                collapsing_threshold=args.bc_threshold,
+                ab_map=ordered_tags,
+            )
+    return final_results, umis_per_cell, bcs_corrected

@@ -31,10 +31,11 @@ def write_to_files(
     io.mmwrite(os.path.join(prefix, "matrix.mtx"), sparse_matrix)
     with gzip.open(os.path.join(prefix, "barcodes.tsv.gz"), "wb") as barcode_file:
         for barcode in filtered_cells:
-            if reference_dict[barcode] != 0:
-                barcode_file.write(
-                    "{}\t{}\n".format(barcode, reference_dict[barcode]).encode(),
-                )
+            if reference_dict:
+                if reference_dict[barcode] != 0:
+                    barcode_file.write(
+                        "{}\t{}\n".format(barcode, reference_dict[barcode]).encode(),
+                    )
             else:
                 barcode_file.write("{}\n".format(barcode).encode())
     with gzip.open(os.path.join(prefix, "features.tsv.gz"), "wb") as feature_file:

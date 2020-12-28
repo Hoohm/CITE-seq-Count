@@ -102,41 +102,18 @@ def main():
 
     # Correct cell barcodes
     if args.bc_threshold != 0:
-        if len(umis_per_cell) <= args.expected_cells:
-            print(
-                "Number of expected cells, {}, is higher "
-                "than number of cells found {}.\nNot performing "
-                "cell barcode correction"
-                "".format(args.expected_cells, len(umis_per_cell))
-            )
-            bcs_corrected = 0
-        else:
-            print("Correcting cell barcodes")
-            if not reference_dict:
-                (
-                    final_results,
-                    umis_per_cell,
-                    bcs_corrected,
-                ) = processing.correct_cells(
-                    final_results=final_results,
-                    reads_per_cell=reads_per_cell,
-                    umis_per_cell=umis_per_cell,
-                    expected_cells=args.expected_cells,
-                    collapsing_threshold=args.bc_threshold,
-                    ab_map=ordered_tags,
-                )
-            else:
-                (
-                    final_results,
-                    umis_per_cell,
-                    bcs_corrected,
-                ) = processing.correct_cells_reference_list(
-                    final_results=final_results,
-                    umis_per_cell=umis_per_cell,
-                    reference_list=set(reference_dict.keys()),
-                    collapsing_threshold=args.bc_threshold,
-                    ab_map=ordered_tags,
-                )
+        (
+            final_results,
+            umis_per_cell,
+            bcs_corrected,
+        ) = processing.run_cell_barcode_correction(
+            final_results=final_results,
+            umis_per_cell=umis_per_cell,
+            reads_per_cell=reads_per_cell,
+            reference_dict=reference_dict,
+            ordered_tags=ordered_tags,
+            args=args,
+        )
     else:
         print("Skipping cell barcode correction")
         bcs_corrected = 0
@@ -180,68 +157,19 @@ def main():
     )
 
     # UMI correction
+
     if args.umi_threshold != 0:
         # Correct UMIS
-        input_queue = []
-
-        umi_correction_input = namedtuple(
-            "umi_correction_input", ["cells", "collapsing_threshold", "max_umis"]
+        (final_results, umis_corrected, aberrant_cells) = processing.run_umi_correction(
+            final_results=final_results,
+            filtered_cells=filtered_cells,
+            unmapped_id=len(ordered_tags),
+            args=args,
         )
-        cells = {}
-        n_cells = 0
-        num_chunks = 0
-        print("preparing UMI correction jobs")
-        cell_batch_size = round(len(filtered_cells) / args.n_threads) + 1
-        for cell in filtered_cells:
-            cells[cell] = final_results[cell]
-            n_cells += 1
-            if n_cells % cell_batch_size == 0:
-                input_queue.append(
-                    umi_correction_input(
-                        cells=cells,
-                        collapsing_threshold=args.umi_threshold,
-                        max_umis=20000,
-                    )
-                )
-                cells = {}
-                num_chunks += 1
-        input_queue.append(
-            umi_correction_input(
-                cells=cells, collapsing_threshold=args.umi_threshold, max_umis=20000
-            )
-        )
-
-        pool = Pool(processes=args.n_threads)
-        errors = []
-        parallel_results = []
-        correct_umis = pool.map_async(
-            processing.correct_umis,
-            input_queue,
-            callback=parallel_results.append,
-            error_callback=errors.append,
-        )
-
-        correct_umis.wait()
-        pool.close()
-        pool.join()
-
-        if len(errors) != 0:
-            for error in errors:
-                print(error)
-
-        final_results = {}
-        umis_corrected = 0
-        aberrant_cells = set()
-
-        for chunk in parallel_results[0]:
-            (temp_results, temp_umis, temp_aberrant_cells) = chunk
-            final_results.update(temp_results)
-            umis_corrected += temp_umis
-            aberrant_cells.update(temp_aberrant_cells)
     else:
         # Don't correct
         umis_corrected = 0
-        aberrant_cells = set()
+        aberrant_cells = []
 
     if len(aberrant_cells) > 0:
         # Remove aberrant cells from the top cells
@@ -254,16 +182,15 @@ def main():
             ordered_tags=ordered_tags,
             filtered_cells=aberrant_cells,
         )
-        if len(umi_aberrant_matrix) > 0:
-            # Write uncorrected cells to dense output
-            io.write_dense(
-                sparse_matrix=umi_aberrant_matrix,
-                ordered_tags=ordered_tags,
-                columns=aberrant_cells,
-                outfolder=os.path.join(args.outfolder, "uncorrected_cells"),
-                filename="dense_umis.tsv",
-            )
-    # delete the last element (unmapped)
+        # Write uncorrected cells to dense output
+        io.write_dense(
+            sparse_matrix=umi_aberrant_matrix,
+            ordered_tags=ordered_tags,
+            columns=aberrant_cells,
+            outfolder=os.path.join(args.outfolder, "uncorrected_cells"),
+            filename="dense_umis.tsv",
+        )
+    # Generate the UMI count matrix
     umi_results_matrix = processing.generate_sparse_matrices(
         final_results=final_results,
         ordered_tags=ordered_tags,
