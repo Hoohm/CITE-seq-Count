@@ -91,7 +91,13 @@ def get_args():
             "\t-cbf 1 -cbl 16 -umif 17 -umil 26"
         ),
     )
-    barcodes.add_argument("--chemistry", type=str, required=False, default=False)
+    barcodes.add_argument(
+        "--chemistry",
+        type=str,
+        required=False,
+        default=False,
+        help=("Option replacing cell/UMI barcodes indexes and reference list."),
+    )
     if "--chemistry" not in sys.argv:
         barcodes.add_argument(
             "-cbf",
@@ -99,7 +105,7 @@ def get_args():
             dest="cb_first",
             required=True,
             type=int,
-            help=("Postion of the first base of your cell " "barcodes."),
+            help=("Postion of the first base of your cell barcodes."),
         )
         barcodes.add_argument(
             "-cbl",
@@ -107,7 +113,7 @@ def get_args():
             dest="cb_last",
             required=True,
             type=int,
-            help=("Postion of the last base of your cell " "barcodes."),
+            help=("Postion of the last base of your cell barcodes."),
         )
         barcodes.add_argument(
             "-umif",
@@ -147,7 +153,7 @@ def get_args():
     )
 
     cells.add_argument(
-        "-cells",
+        "-n_cells",
         "--expected_cells",
         dest="expected_cells",
         required=True,

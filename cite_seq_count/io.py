@@ -233,6 +233,11 @@ def write_chunks_to_disk(
         chemistry_def.umi_barcode_start - 1, chemistry_def.umi_barcode_end
     )
 
+    temp_filename = os.path.join(temp_path, "temp_{}".format(num_chunk))
+    chunked_file_object = open(temp_filename, "w")
+    temp_files.append(os.path.abspath(temp_filename))
+    reads_written = 0
+
     for read1_path, read2_path in zip(read1_paths, read2_paths):
         if enough_reads:
             break
@@ -242,10 +247,6 @@ def write_chunks_to_disk(
         ) as textfile2:
             secondlines = islice(zip(textfile1, textfile2), 1, None, 4)
 
-            temp_filename = os.path.join(temp_path, "temp_{}".format(num_chunk))
-            chunked_file_object = open(temp_filename, "w")
-            temp_files.append(os.path.abspath(temp_filename))
-            reads_written = 0
             for read1, read2 in secondlines:
 
                 read1 = read1.strip()

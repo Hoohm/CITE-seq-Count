@@ -29,5 +29,5 @@ setuptools.setup(
         "pybktree==1.1",
         "cython>=0.29.17",
     ],
-    python_requires=">=3.6",
+    python_requires=">=3.8",
 )

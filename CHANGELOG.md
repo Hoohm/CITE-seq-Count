@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   - Barcode whitelists are now called reference lists.
   - The reference list file now requires a header `reference`. There is now an optional column called `translation`. This is specific to chemistries such as 10xV3 that use different barcodes for mRNA and Antibody tag capture sequences. See more details in the documentation.
   - Bumped UMI_tools to 1.1.1
+  - Changed `-cells` paramter to `-n_cells` for more explicit argument.
 
   ### Removed
   - Unmmapped reads are not umi corrected anymore reducing run time and memory usage.
