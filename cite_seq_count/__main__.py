@@ -86,7 +86,9 @@ def main():
         umis_per_cell,
         reads_per_cell,
         merged_no_match,
-    ) = processing.map_data(input_queue=input_queue, args=args)
+    ) = processing.map_data(
+        input_queue=input_queue, unmapped_id=len(ordered_tags), args=args
+    )
 
     # Check if 99% of the reads are unmapped.
     processing.check_unmapped(

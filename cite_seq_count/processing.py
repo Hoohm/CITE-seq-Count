@@ -102,7 +102,7 @@ def map_reads(mapping_input):
     no_match = Counter()
     n = 1
     t = time.time()
-    unmapped_id = len(tags) - 1
+    unmapped_id = len(tags)
     # Progress info
     with open(filename, "r") as input_file:
         reads = csv.reader(input_file)
@@ -160,7 +160,7 @@ def map_reads(mapping_input):
     return (results, no_match)
 
 
-def merge_results(parallel_results):
+def merge_results(parallel_results, unmapped_id):
     """Merge chunked results from parallel processing.
 
     Args:
@@ -183,6 +183,8 @@ def merge_results(parallel_results):
             if cell_barcode not in merged_results:
                 merged_results[cell_barcode] = defaultdict(Counter)
             for TAG in mapped[cell_barcode]:
+                if TAG == unmapped_id:
+                    continue
                 # Test the counter. Returns false if empty
                 if mapped[cell_barcode][TAG]:
                     for UMI in mapped[cell_barcode][TAG]:
@@ -386,7 +388,7 @@ def correct_cells_reference_list(
     print("Generating barcode tree from reference list")
     # pylint: disable=no-member
     barcode_tree = pybktree.BKTree(Levenshtein.hamming, reference_list)
-    barcodes = set(final_results.keys())
+    barcodes = set(umis_per_cell)
     print("Selecting reference candidates")
     print("Processing {:,} cell barcodes".format(len(barcodes)))
 
@@ -433,14 +435,10 @@ def find_true_to_false_map(
         if len(candidates) == 1:
             white_cell_str = candidates[0]
             true_to_false[white_cell_str].append(cell_barcode)
-        elif len(candidates) == 0:
+        else:
             # the cell doesnt match to any reference_listed barcode,
             # hence we have to drop it
             # (as it cannot be asscociated with any frequent barcode)
-            continue
-        else:
-            # more than on reference_listed candidate:
-            # we drop it as its not uniquely assignable
             continue
     return true_to_false
 
@@ -484,7 +482,7 @@ def generate_sparse_matrices(
     return results_matrix
 
 
-def map_data(input_queue, args):
+def map_data(input_queue, unmapped_id, args):
     """
     Maps the data given an input_queue
 
@@ -524,7 +522,7 @@ def map_data(input_queue, args):
 
     print("Merging results")
     (final_results, umis_per_cell, reads_per_cell, merged_no_match,) = merge_results(
-        parallel_results=parallel_results[0]
+        parallel_results=parallel_results[0], unmapped_id=unmapped_id
     )
 
     return final_results, umis_per_cell, reads_per_cell, merged_no_match

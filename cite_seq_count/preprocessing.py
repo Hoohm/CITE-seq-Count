@@ -28,6 +28,7 @@ def parse_reference_list_csv(filename, barcode_length):
     """
     STRIP_CHARS = '"0123456789- \t\n'
     REQUIRED_HEADER = ["reference"]
+    has_translation = False
     # OPTIONAL_HEADER = ["translation"]
 
     cell_pattern = regex.compile(r"[ATGC]{{{}}}".format(barcode_length))
@@ -49,6 +50,7 @@ def parse_reference_list_csv(filename, barcode_length):
     reference_id = header.index("reference")
     reference_dict = {}
     if "translation" in header:
+        has_translation = True
 
         translation_id = header.index("translation")
         for row in csv_reader:
@@ -73,6 +75,10 @@ def parse_reference_list_csv(filename, barcode_length):
             )
     if len(reference_dict) == 0:
         sys.exit("reference_dict is empty.")
+    if has_translation:
+        print(
+            "Your reference list provides a translation name. This will be the default for count matrices."
+        )
     return reference_dict
 
 
