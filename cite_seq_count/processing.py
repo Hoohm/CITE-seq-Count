@@ -183,6 +183,7 @@ def merge_results(parallel_results, unmapped_id):
             if cell_barcode not in merged_results:
                 merged_results[cell_barcode] = defaultdict(Counter)
             for TAG in mapped[cell_barcode]:
+                # We don't want to capture unmapped data in the umi counts
                 if TAG == unmapped_id:
                     continue
                 # Test the counter. Returns false if empty

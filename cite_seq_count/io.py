@@ -34,7 +34,7 @@ def write_to_files(
             if reference_dict:
                 if reference_dict[barcode] != 0:
                     barcode_file.write(
-                        "{}\t{}\n".format(barcode, reference_dict[barcode]).encode(),
+                        "{}\t{}\n".format(reference_dict[barcode], barcode).encode(),
                     )
             else:
                 barcode_file.write("{}\n".format(barcode).encode())
