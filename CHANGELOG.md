@@ -9,17 +9,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   - `CITE-seq-Count` is now Compatible with trimmed data. There is a new `too_short` category in the `run_report.yaml`
     that will let you know how much you lost due to reads being too short. #123
   - UMI correction is now also parallelized and will use the threads given.
-  - Added a check at the end of the mapping. If more than 99% of the reads are unmapped, CITE-seq-Count will exit.
+  - Added a check at the end of the mapping. If more than 99% of the reads are unmapped, CITE-seq-Count will exit. #62
   - (BETA) New functionnality that will fetch the chemistry definition from a remote repo to simplify usage and reduce human errors.
+  - Added cython dependency based on issue #117
 
 ### Changed
   - The `features.tsv` now has different columns for the tag name and the tag sequence. This keeps the relevant information
     in the output files as well as simplifies reading the mtx format when processing the data.
   - The mapping step has been changed. It will first write chunks of reads to files and then read in the chunks in each child process.
     This should solve the io bottleneck from before.
-  - There are new options now for parallel computing. `--chunk_size` Determines how many reads will be read per chunk. #99
+  - There are new options now for parallel computing. `--chunk_size` Determines how many reads will be read per chunk. This should fix issues like #99.
   - `--sliding-window` now only checks for exact matches.
-  - Added cython dependency based on issue #117
   - The main results dict now uses an `int` as keys reducing memory footprint.
   - Fixed the issue #92 with using `--bc_collapsing_dist 0`.
   - Fixed issue #122 and now properly checks number of files.
@@ -31,9 +31,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   - Added new tests to help out contributions.
   - If no clustered cells found, the dense output matrix will not be written.
   - Barcode whitelists are now called reference lists.
-  - The reference list file now requires a header `reference`. There is now an optional column called `translation`. This is specific to chemistries such as 10xV3 that use different barcodes for mRNA and Antibody tag capture sequences. See more details in the documentation.
+  - The reference list file now requires a header `reference`. There is now an optional column called `translation`. This is specific to chemistries such as 10xV3 that use different barcodes for mRNA and Antibody tag capture sequences. See more details in the documentation. #139 and #141
   - Bumped UMI_tools to 1.1.1
   - Changed `-cells` paramter to `-n_cells` for more explicit argument.
+  - Cell barcode correction when reference list is provided is now discarding cells with only unmapped reads reducing run time.
+  - Aberrant cells wording replaced by clustered cells to be more specific.
 
   ### Removed
   - Unmmapped reads are not umi corrected anymore reducing run time and memory usage.

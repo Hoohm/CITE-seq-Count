@@ -162,7 +162,11 @@ def main():
 
     if args.umi_threshold != 0:
         # Correct UMIS
-        (final_results, umis_corrected, aberrant_cells) = processing.run_umi_correction(
+        (
+            final_results,
+            umis_corrected,
+            clustered_cells,
+        ) = processing.run_umi_correction(
             final_results=final_results,
             filtered_cells=filtered_cells,
             unmapped_id=len(ordered_tags),
@@ -171,24 +175,24 @@ def main():
     else:
         # Don't correct
         umis_corrected = 0
-        aberrant_cells = []
+        clustered_cells = []
 
-    if len(aberrant_cells) > 0:
-        # Remove aberrant cells from the top cells
-        for cell_barcode in aberrant_cells:
+    if len(clustered_cells) > 0:
+        # Remove clustered cells from the top cells
+        for cell_barcode in clustered_cells:
             filtered_cells.remove(cell_barcode)
 
-        # Create sparse aberrant cells matrix
-        umi_aberrant_matrix = processing.generate_sparse_matrices(
+        # Create sparse clustered cells matrix
+        umi_clustered_matrix = processing.generate_sparse_matrices(
             final_results=final_results,
             ordered_tags=ordered_tags,
-            filtered_cells=aberrant_cells,
+            filtered_cells=clustered_cells,
         )
         # Write uncorrected cells to dense output
         io.write_dense(
-            sparse_matrix=umi_aberrant_matrix,
+            sparse_matrix=umi_clustered_matrix,
             ordered_tags=ordered_tags,
-            columns=aberrant_cells,
+            columns=clustered_cells,
             outfolder=os.path.join(args.outfolder, "uncorrected_cells"),
             filename="dense_umis.tsv",
         )
@@ -229,7 +233,7 @@ def main():
         ordered_tags=ordered_tags,
         umis_corrected=umis_corrected,
         bcs_corrected=bcs_corrected,
-        bad_cells=aberrant_cells,
+        bad_cells=clustered_cells,
         R1_too_short=R1_too_short,
         R2_too_short=R2_too_short,
         args=args,

@@ -221,7 +221,7 @@ def correct_umis_in_cells(umi_correction_input):
     Returns:
         final_results (dict): Same as input but with corrected umis.
         corrected_umis (int): How many umis have been corrected.
-        aberrant_umi_count_cells (set): Set of uncorrected cells.
+        clustered_umi_count_cells (set): Set of uncorrected cells.
     """
 
     (final_results, collapsing_threshold, max_umis, unmapped_id) = umi_correction_input
@@ -231,7 +231,7 @@ def correct_umis_in_cells(umi_correction_input):
         )
     )
     corrected_umis = 0
-    aberrant_cells = set()
+    clustered_cells = set()
     cells = final_results.keys()
     for cell_barcode in cells:
         for TAG in final_results[cell_barcode]:
@@ -250,9 +250,9 @@ def correct_umis_in_cells(umi_correction_input):
                 final_results[cell_barcode][TAG] = new_res
                 corrected_umis += temp_corrected_umis
             elif n_umis > max_umis:
-                aberrant_cells.add(cell_barcode)
+                clustered_cells.add(cell_barcode)
     print("Finished correcting umis in child {}".format(os.getpid()))
-    return (final_results, corrected_umis, aberrant_cells)
+    return (final_results, corrected_umis, clustered_cells)
 
 
 def update_umi_counts(UMIclusters, cell_tag_counts):
@@ -583,14 +583,14 @@ def run_umi_correction(final_results, filtered_cells, unmapped_id, args):
 
     final_results = {}
     umis_corrected = 0
-    aberrant_cells = set()
+    clustered_cells = set()
     for chunk in parallel_results[0]:
-        (temp_results, temp_umis, temp_aberrant_cells) = chunk
+        (temp_results, temp_umis, temp_clustered_cells) = chunk
         final_results.update(temp_results)
         umis_corrected += temp_umis
-        aberrant_cells.update(temp_aberrant_cells)
+        clustered_cells.update(temp_clustered_cells)
 
-    return final_results, umis_corrected, aberrant_cells
+    return final_results, umis_corrected, clustered_cells
 
 
 def run_cell_barcode_correction(

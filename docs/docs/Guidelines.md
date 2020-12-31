@@ -12,7 +12,8 @@ You can find this mapping [here](https://github.com/10XGenomics/cellranger/blob/
 
 Since version 1.5.0, this is taken care of by CSC if you provide the translation column in the reference `--reference_file` file as described in the documentation.
 * The dense output will have the translated barcodes in the header.
-* the MTX output will have two columns. The firts column is the original barcode found in the fastqs provided and the second column will be the translated barcode given by the reference list csv.
+* the MTX output will have two columns. The first column is the translated barcode given by the reference list csv and the second column is the original barcode found in the data.
+* I recommend using the MTX format because it contains both cell barcodes.
 
 ## PRE 1.5.0 instructions
 
