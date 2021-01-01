@@ -3,10 +3,7 @@ import gzip
 import sys
 import regex
 import Levenshtein
-import requests
 
-from math import floor
-from collections import OrderedDict
 from collections import namedtuple
 from itertools import combinations
 from itertools import islice

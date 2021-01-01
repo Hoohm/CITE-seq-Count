@@ -1,9 +1,7 @@
 import time
-import gzip
 import sys
 import os
 import Levenshtein
-import regex
 import pybktree
 import csv
 
@@ -18,12 +16,10 @@ from itertools import islice
 from numpy import int32
 from scipy import sparse
 from umi_tools import network
-from umi_tools import umi_methods
 import umi_tools.whitelist_methods as whitelist_methods
 
 
 from cite_seq_count import secondsToText
-from cite_seq_count import preprocessing
 
 
 def find_best_match(TAG_seq, tags, maximum_distance):
@@ -101,9 +97,10 @@ def map_reads(mapping_input):
     results = {}
     no_match = Counter()
     n = 1
-    t = time.time()
+
     unmapped_id = len(tags)
     # Progress info
+    t = time.time()
     with open(filename, "r") as input_file:
         reads = csv.reader(input_file)
         for read in reads:
@@ -200,7 +197,8 @@ def merge_results(parallel_results, unmapped_id):
 
 def check_unmapped(no_match, too_short, total_reads, start_trim):
     """Check if the number of unmapped is higher than 99%"""
-    if (sum(no_match.values()) + too_short) / total_reads > float(0.99):
+    sum_unmapped = sum(no_match.values()) + too_short
+    if sum_unmapped / total_reads > float(0.99):
         sys.exit(
             """More than 99% of your data is unmapped.\nPlease check that your --start_trim {} parameter is correct and that your tags file is properly formatted""".format(
                 start_trim
@@ -505,23 +503,28 @@ def map_data(input_queue, unmapped_id, args):
 
     print("Started mapping")
     parallel_results = []
-    pool = Pool(processes=args.n_threads)
-    errors = []
-    mapping = pool.map_async(
-        map_reads,
-        input_queue,
-        callback=parallel_results.append,
-        error_callback=errors.append,
-    )
-    mapping.wait()
 
-    pool.close()
-    pool.join()
-    if len(errors) != 0:
-        for error in errors:
-            print(error)
+    if args.n_threads == 1:
+        mapped_reads = map_reads(input_queue[0])
+        parallel_results.append([mapped_reads])
+    else:
+        pool = Pool(processes=args.n_threads)
+        errors = []
+        mapping = pool.map_async(
+            map_reads,
+            input_queue,
+            callback=parallel_results.append,
+            error_callback=errors.append,
+        )
+        mapping.wait()
 
-    print("Merging results")
+        pool.close()
+        pool.join()
+        if len(errors) != 0:
+            for error in errors:
+                print(error)
+
+        print("Merging results")
     (final_results, umis_per_cell, reads_per_cell, merged_no_match,) = merge_results(
         parallel_results=parallel_results[0], unmapped_id=unmapped_id
     )
@@ -535,52 +538,58 @@ def run_umi_correction(final_results, filtered_cells, unmapped_id, args):
         "umi_correction_input",
         ["cells", "collapsing_threshold", "max_umis", "unmapped_id"],
     )
-    cells = {}
+    cells_results = {}
     n_cells = 0
     num_chunks = 0
+
     print("preparing UMI correction jobs")
     cell_batch_size = round(len(filtered_cells) / args.n_threads) + 1
     for cell in filtered_cells:
-        cells[cell] = final_results[cell]
+        cells_results[cell] = final_results.pop(cell)
         n_cells += 1
         if n_cells % cell_batch_size == 0:
             input_queue.append(
                 umi_correction_input(
-                    cells=cells,
+                    cells=cells_results,
                     collapsing_threshold=args.umi_threshold,
                     max_umis=20000,
                     unmapped_id=unmapped_id,
                 )
             )
-            cells = {}
+            cells_results = {}
             num_chunks += 1
+
+    del final_results
+
     input_queue.append(
         umi_correction_input(
-            cells=cells,
+            cells=cells_results,
             collapsing_threshold=args.umi_threshold,
             max_umis=20000,
             unmapped_id=unmapped_id,
         )
     )
+    if args.n_threads == 1:
+        pool = Pool(processes=args.n_threads)
+        errors = []
+        parallel_results = []
+        correct_umis = pool.map_async(
+            correct_umis_in_cells,
+            input_queue,
+            callback=parallel_results.append,
+            error_callback=errors.append,
+        )
 
-    pool = Pool(processes=args.n_threads)
-    errors = []
-    parallel_results = []
-    correct_umis = pool.map_async(
-        correct_umis_in_cells,
-        input_queue,
-        callback=parallel_results.append,
-        error_callback=errors.append,
-    )
+        correct_umis.wait()
+        pool.close()
+        pool.join()
 
-    correct_umis.wait()
-    pool.close()
-    pool.join()
-
-    if len(errors) != 0:
-        for error in errors:
-            print("There was an error {}", error)
-
+        if len(errors) != 0:
+            for error in errors:
+                print("There was an error {}", error)
+    else:
+        single_thread_result = correct_umis_in_cells(input_queue[0])
+        parallel_results.append([single_thread_result])
     final_results = {}
     umis_corrected = 0
     clustered_cells = set()

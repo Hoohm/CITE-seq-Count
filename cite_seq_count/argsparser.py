@@ -19,14 +19,28 @@ def chunk_size_limit(arg):
     try:
         f = int(arg)
     except ValueError:
-        raise ArgumentTypeError("Must be an int")
+        raise ArgumentTypeError("Chunk size must be an int")
     if f < 1 or f > max_size:
         raise ArgumentTypeError(
             "Argument must be < " + str(max_size) + "and > " + str(1)
         )
     else:
-        return False
-    return f
+        return f
+
+
+def thread_default():
+    """
+    Set number of threads default.
+
+    """
+    max_cpu = cpu_count()
+
+    if max_cpu > 4:
+        return 4
+    elif max_cpu == 4:
+        return 3
+    else:
+        return 1
 
 
 def get_args():
@@ -223,7 +237,7 @@ def get_args():
         required=False,
         type=int,
         dest="n_threads",
-        default=cpu_count(),
+        default=thread_default(),
         help="How many threads are to be used for running the program",
     )
     parallel.add_argument(

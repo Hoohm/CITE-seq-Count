@@ -10,7 +10,6 @@ from itertools import islice
 import pandas as pd
 
 from scipy import io
-import numpy as np
 from cite_seq_count import secondsToText
 
 
@@ -223,6 +222,7 @@ def write_chunks_to_disk(
     temp_files = []
     R1_too_short = 0
     R2_too_short = 0
+    total_reads = 0
     total_reads_written = 0
     enough_reads = False
 
@@ -239,6 +239,7 @@ def write_chunks_to_disk(
     reads_written = 0
 
     for read1_path, read2_path in zip(read1_paths, read2_paths):
+
         if enough_reads:
             break
         print("Reading reads from files: {}, {}".format(read1_path, read2_path))
@@ -248,6 +249,7 @@ def write_chunks_to_disk(
             secondlines = islice(zip(textfile1, textfile2), 1, None, 4)
 
             for read1, read2 in secondlines:
+                total_reads += 1
 
                 read1 = read1.strip()
                 if len(read1) < chemistry_def.umi_barcode_end:
@@ -303,5 +305,22 @@ def write_chunks_to_disk(
                     enough_reads = True
                     chunked_file_object.close()
                     break
+    if not enough_reads:
+        chunked_file_object.close()
+        input_queue.append(
+            mapping_input(
+                filename=temp_filename,
+                tags=ordered_tags,
+                debug=args.debug,
+                maximum_distance=maximum_distance,
+                sliding_window=args.sliding_window,
+            )
+        )
+    return (
+        input_queue,
+        temp_files,
+        R1_too_short,
+        R2_too_short,
+        total_reads,
+    )
 
-    return input_queue, temp_files, R1_too_short, R2_too_short, total_reads_written

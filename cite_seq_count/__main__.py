@@ -5,14 +5,7 @@ Author: Patrick Roelli
 import sys
 import os
 import logging
-import gzip
-import requests
 import time
-
-from collections import OrderedDict, Counter, defaultdict, namedtuple
-
-# pylint: disable=no-name-in-module
-from multiprocess import Pool, Queue, JoinableQueue, Process
 
 from cite_seq_count import preprocessing
 from cite_seq_count import processing
@@ -121,7 +114,7 @@ def main():
         bcs_corrected = 0
 
     # If given, use reference_list for top cells
-    top_cells_tuple = umis_per_cell.most_common(args.expected_cells * 10)
+    top_cells_tuple = umis_per_cell.most_common(args.expected_cells)
     if reference_dict:
         # Add potential missing cell barcodes.
         # for missing_cell in reference_list:
