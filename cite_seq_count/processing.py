@@ -569,10 +569,10 @@ def run_umi_correction(final_results, filtered_cells, unmapped_id, args):
             unmapped_id=unmapped_id,
         )
     )
-    if args.n_threads == 1:
+    parallel_results = []
+    if args.n_threads != 1:
         pool = Pool(processes=args.n_threads)
         errors = []
-        parallel_results = []
         correct_umis = pool.map_async(
             correct_umis_in_cells,
             input_queue,
