@@ -1,6 +1,19 @@
 import pytest
+import os
+import gzip
 from cite_seq_count import io
 from collections import namedtuple
+
+# copied from https://stackoverflow.com/questions/3431825/generating-an-md5-checksum-of-a-file
+import hashlib
+
+
+def md5(fname):
+    hash_md5 = hashlib.md5()
+    with gzip.open(fname, "rb") as f:
+        string = f.read()
+        hash_md5.update(string)
+    return hash_md5.hexdigest()
 
 
 @pytest.fixture
@@ -21,22 +34,71 @@ def data():
     ]
 
     pytest.data_type = "umi"
-    pytest.outfolder = "tests/test_data/"
 
 
-def test_write_to_files(data, tmpdir):
+def test_write_to_files_wo_translation(data, tmpdir):
     import gzip
     import scipy
 
     reference_dict = {"ACTGTTTTATTGGCCT": 0, "TTCATAAGGTAGGGAT": 0}
+    output_path = os.path.join(tmpdir, "without_translation")
+
+    mtx_path = os.path.join(output_path, "umi_count", "matrix.mtx.gz")
+    features_path = os.path.join(output_path, "umi_count", "features.tsv.gz")
+    barcodes_path = os.path.join(output_path, "umi_count", "barcodes.tsv.gz")
+    md5_sums = {
+        barcodes_path: "b7af6a32e83963606f181509a571966f",
+        features_path: "e889e780dbce481287c993dd043714c8",
+        mtx_path: "0312f3a2bfe57222ebe94051ba07786e",
+    }
+
     io.write_to_files(
         pytest.sparse_matrix,
         pytest.filtered_cells,
         pytest.ordered_tags_map,
         pytest.data_type,
-        tmpdir,
+        output_path,
         reference_dict=reference_dict,
     )
-    file = tmpdir.join("umi_count/matrix.mtx.gz")
-    with gzip.open(file, "rb") as mtx_file:
+    file_path = os.path.join(tmpdir, "without_translation", "umi_count/matrix.mtx.gz")
+    with gzip.open(file_path, "rb") as mtx_file:
         assert isinstance(scipy.io.mmread(mtx_file), scipy.sparse.coo.coo_matrix)
+    assert md5_sums[barcodes_path] == md5(barcodes_path)
+    assert md5_sums[features_path] == md5(features_path)
+    assert md5_sums[mtx_path] == md5(mtx_path)
+
+
+def test_write_to_files_with_translation(data, tmpdir):
+    import gzip
+    import scipy
+
+    reference_dict = {
+        "ACTGTTTTATTGGCCT": "GGCTTCGATACTAGAT",
+        "TTCATAAGGTAGGGAT": "GATCGGATAGCTAATA",
+    }
+    output_path = os.path.join(tmpdir, "with_translation")
+
+    mtx_path = os.path.join(output_path, "umi_count", "matrix.mtx.gz")
+    features_path = os.path.join(output_path, "umi_count", "features.tsv.gz")
+    barcodes_path = os.path.join(output_path, "umi_count", "barcodes.tsv.gz")
+
+    md5_sums = {
+        barcodes_path: "fce83378b4dd548882fb9271bdd5b4f1",
+        features_path: "e889e780dbce481287c993dd043714c8",
+        mtx_path: "0312f3a2bfe57222ebe94051ba07786e",
+    }
+
+    io.write_to_files(
+        pytest.sparse_matrix,
+        pytest.filtered_cells,
+        pytest.ordered_tags_map,
+        pytest.data_type,
+        output_path,
+        reference_dict=reference_dict,
+    )
+    file_path = os.path.join(tmpdir, "with_translation", "umi_count/matrix.mtx.gz")
+    with gzip.open(file_path, "rb") as mtx_file:
+        assert isinstance(scipy.io.mmread(mtx_file), scipy.sparse.coo.coo_matrix)
+    assert md5_sums[barcodes_path] == md5(barcodes_path)
+    assert md5_sums[features_path] == md5(features_path)
+    assert md5_sums[mtx_path] == md5(mtx_path)

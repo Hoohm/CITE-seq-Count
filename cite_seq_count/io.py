@@ -35,6 +35,8 @@ def write_to_files(
                     barcode_file.write(
                         "{}\t{}\n".format(reference_dict[barcode], barcode).encode(),
                     )
+                else:
+                    barcode_file.write("{}\n".format(barcode).encode())
             else:
                 barcode_file.write("{}\n".format(barcode).encode())
     with gzip.open(os.path.join(prefix, "features.tsv.gz"), "wb") as feature_file:

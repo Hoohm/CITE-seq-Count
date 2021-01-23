@@ -116,6 +116,7 @@ def main():
     # If given, use reference_list for top cells
     top_cells_tuple = umis_per_cell.most_common(args.expected_cells)
     if reference_dict:
+
         # Add potential missing cell barcodes.
         # for missing_cell in reference_list:
         #     if missing_cell in final_results:
