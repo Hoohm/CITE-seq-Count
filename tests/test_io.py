@@ -1,6 +1,7 @@
 import pytest
 import os
 import gzip
+import scipy
 from cite_seq_count import io
 from collections import namedtuple
 
@@ -37,9 +38,6 @@ def data():
 
 
 def test_write_to_files_wo_translation(data, tmpdir):
-    import gzip
-    import scipy
-
     reference_dict = {"ACTGTTTTATTGGCCT": 0, "TTCATAAGGTAGGGAT": 0}
     output_path = os.path.join(tmpdir, "without_translation")
 
@@ -69,9 +67,6 @@ def test_write_to_files_wo_translation(data, tmpdir):
 
 
 def test_write_to_files_with_translation(data, tmpdir):
-    import gzip
-    import scipy
-
     reference_dict = {
         "ACTGTTTTATTGGCCT": "GGCTTCGATACTAGAT",
         "TTCATAAGGTAGGGAT": "GATCGGATAGCTAATA",
@@ -102,3 +97,28 @@ def test_write_to_files_with_translation(data, tmpdir):
     assert md5_sums[barcodes_path] == md5(barcodes_path)
     assert md5_sums[features_path] == md5(features_path)
     assert md5_sums[mtx_path] == md5(mtx_path)
+
+
+def test_write_to_dense_wo_translation(data, tmpdir):
+    reference_dict = {"ACTGTTTTATTGGCCT": 0, "TTCATAAGGTAGGGAT": 0}
+    output_path = os.path.join(tmpdir, "without_translation")
+    csv_name = "dense_umis.tsv"
+    csv_path = os.path.join(output_path, csv_name)
+
+    md5_sums = {
+        csv_path: "b7af6a32e83963606f181509a571966f",
+    }
+
+    io.write_dense(
+        sparse_matrix=pytest.sparse_matrix,
+        ordered_tags=pytest.ordered_tags_map,
+        columns=pytest.filtered_cells,
+        outfolder=output_path,
+        filename=csv_name,
+    )
+    file_path = os.path.join(tmpdir, "without_translation", csv_name)
+    assert False
+
+
+def test_write_to_dense_with_translation(data, tmpdir):
+    assert False
