@@ -22,28 +22,31 @@ You can find a description of each option bellow.
 
 ### INPUT
 
-* [Required] Read1 fastq file location in fastq.gz format. Read 1 typically contains Cell barcode and UMI.
+* [Required] Read1 fastq file location in fastq.gz format. Read 1 typically contains Cell barcode and UMI. You can provide multiple lanes of the same run separated by a `,`.
 
 `-R1 READ1_PATH.fastq.gz, --read1 READ1_PATH.fastq.gz`
+`-R1 READ1_PATH_L001.fastq.gz,READ1_PATH_L002.fastq.gz --read1 READ1_PATH.fastq.gz,READ1_PATH_L002.fastq.gz`
 
 
-* [Required] Read2 fastq file location in fastq.gz. Read 2 typically contains the Antibody barcode.
+* [Required] Read2 fastq file location in fastq.gz. Read 2 typically contains the Antibody barcode. You can provide multiple lanes of the same run separated by a `,`.
 
 `-R2 READ2_PATH.fastq.gz, --read2 READ2_PATH.fastq.gz`
+`-R1 READ2_PATH_L001.fastq.gz,READ2_PATH_L002.fastq.gz --read1 READ2_PATH.fastq.gz,READ2_PATH_L002.fastq.gz`
 
 
 * [Required] The path to the csv file containing the antibody barcodes as well as their respective names.
-You can run tags of different length together.
+You can run tags of different length together. The headers `sequence` and `feature_name` are required in no particular order.
 
 `-t tags.csv, --tags tags.csv`
 
 
 ### Antibody barcodes structure:
-```                        
-ATGCGA,First_tag_name
-GTCATG,Second_tag_name
-GCTAGTCGTACGA,Third_tag_name
-GCTAGGTGTCGTA,Forth_tag_name
+```            
+feature_name,sequence            
+First_tag_name,ATGCGA
+Second_tag_name,GTCATG
+Third_tag_name,GCTAGTCGTACGA
+Forth_tag_name,GCTAGGTGTCGTA
 ```
 
 *IMPORTANT*: You need to provide only the variable region of the TAG in the tags.csv. Please refer to the following examples.
@@ -60,7 +63,7 @@ GCTGTCAGCATAC C AAAAAAAAAA
 GCTGTCAGCATAC G AAAAAAAAAA
 ```
 The tags.csv should only contain the part before the `T`
-```                        
+```            
 GCTAGTCGTACGA,tag1
 GCTGTCAGCATAC,tag2
 ```
@@ -112,48 +115,54 @@ Barcodes from 1 to 16 and UMI from 17 to 26, then this is the input you need:
 
 `-cbf 1 -cbl 16 -umif 17 -umil 26`
 
+If you have doubts about those parameters, you can check [this great ressource](https://teichlab.github.io/scg_lib_structs/) for help.
 
-* [Optional] How many errors are allowed between two cell barcodes to collapse them onto one cell.
+* [Optional] How many errors are allowed between two cell barcodes to collapse them onto one cell. If set to 0, deactivates correction.
 
 `--bc_collapsing_dist N_ERRORS`, default `1`
 
 
-* [Optional] How many errors are allowed between two umi within the same cell and TAG to collapse.
+* [Optional] How many errors are allowed between two umi within the same cell and TAG to collapse. If set to 0, deactivates correction.
 
 `--umi_collapsing_dist N_ERRORS`, default `2`
 
-* [Optional] Deactivate UMI correction.
-
-`--no_umi_correction`
 
 ### Cells
 
 You have to choose either the number of cells you expect or give it a list of cell barcodes to retrieve.
 
 * [Required] How many cells you expect in your run.
-* [Optional] If a whitelist is provided.
+* [Optional] If a reference_list is provided.
 
 `-cells EXPECTED_CELLS, --expected_cells EXPECTED_CELLS`
 
-* [Optional] Whitelist of cell barcodes provided as a csv file. CITE-seq-Count will search for those barcodes in the data and correct other barcodes based on this list. Will force the output to provide all the barcodes from the whitelist. Please see the [guidelines](Guidelines.md) for information regarding specific chemistries.
+* [Optional] reference list of cell barcodes provided as a csv file. CITE-seq-Count will search for those barcodes in the data and correct other barcodes based on this list. Please see the [guidelines](Guidelines.md) for information regarding specific chemistries.
 
-`-wl WHITELIST, --whitelist WHITELIST`
+`-rl reference_list, --reference_list reference_list`
 
 
-Example:
+Example simple reference:
 ```
+reference
 ATGCTAGTGCTA
 GCTAGTCAGGAT
 CGACTGCTAACG
 ```
 
+Example translated reference:
+```
+reference,translation
+ATGCTAGTGCTA,GCTGACTGATGC
+GCTAGTCAGGAT,GCTGACTTATCG
+CGACTGCTAACG,GGCTTAGCATAG
+```
 
 ### FILTERING
 
 
 Filtering for structure of the antibody barcode as well as maximum errors.
 
-* [OPTIONAL] Maximum Levenshtein distance allowed. This allows to catch antibody barcodes that might have `--max-error` errors compared to the real barcodes. (was `-hd` in previous versions)
+* [OPTIONAL] Maximum hamming distance allowed. This allows to catch antibody barcodes that might have `--max-error` errors compared to the real barcodes. (was `-hd` in previous versions)
 
 `--max-error MAX_ERROR`, default `2`
 
@@ -173,7 +182,7 @@ There is a sanity check when for the `MAX_ERROR` value chosen to be sure you are
 
 `-trim N_BASES, --start-trim N_BASES`, default `0`
 
-* [OPTIONAL] Activate sliding window alignement. Use this when you have a protocol that has a variable sequence before the inserted TAG.
+* [OPTIONAL] Activate sliding window alignement. Use this when you have a protocol that has a variable sequence before the inserted TAG. This disables error correction on the TAGS. Only exact matches will be outputed.
 
 `--sliding-window`, default `False`
 
@@ -203,7 +212,7 @@ TTCAATTTC ATGCTAGCTAAAAAAAAAAAA
 
 ### OPTIONAL
 
-* [Optional] Select first N reads to run on instead of all. This is usefull when trying to test out your parameters	 before running the whole dataset.
+* [Optional] Select first N reads to run on instead of all. This is usefull when trying to test out your parameters	before running the whole dataset.
 
 `-n FIRST_N, --first_n FIRST_N`
 

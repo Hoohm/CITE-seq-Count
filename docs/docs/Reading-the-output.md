@@ -25,7 +25,7 @@ File descriptions
 -------------------
 
 * `features.tsv.gz` contains the feature names, in this context our tags.
-* `barcodes.tsv.gz` contains the cell barcodes.
+* `barcodes.tsv.gz` contains the cell barcodes. If running with a translation, first column is the translated barcode, second column is the original barcode found in the data.
 * `matrix.mtx.gz` contains the actual values.
 read_count and umi_count contain respectively the read counts and the collapsed umi counts. For analysis you should use the umi data. The read_count can be used to check if you have an overamplification or oversequencing issue with your protocol.
 * `unmapped.csv` contains the top N tags that haven't been mapped.
@@ -39,6 +39,9 @@ CITE-seq-Count Version: 1.4.3
 Reads processed: 1000000
 Percentage mapped: 33
 Percentage unmapped: 67
+Percentage too short: 0
+  R1_too_short: 0
+  R2_too_short: 0
 Uncorrected cells: 0
 Correction:
 	Cell barcodes collapsing threshold: 1
@@ -65,10 +68,14 @@ Packages to read MTX
 
 I recommend using `Seurat` and their `Read10x` function to read the results.
 
+
 With Seurat V3:
 
 `Read10x('OUTFOLDER/umi_count/', gene.column=1)`
 
+Version 1.5.0 of CSC came with some breaking changes. Older versions would use this command:
+
+`Read10x('OUTFOLDER/umi_count/', gene.column=1)`
 
 With Matrix:
 
@@ -82,7 +89,8 @@ mat <- readMM(file = matrix.path)
 feature.names = read.delim(features.path, header = FALSE, stringsAsFactors = FALSE)
 barcode.names = read.delim(barcode.path, header = FALSE, stringsAsFactors = FALSE)
 colnames(mat) = barcode.names$V1
-rownames(mat) = feature.names$V1
+rownames(mat) = feature.names$V2
+# rownames(mat) = feature.names$V1 if you are using an older version than 1.5.0
 ```
 
 **Python**
@@ -101,5 +109,6 @@ data = data.T
 features = pd.read_csv(os.path.join(path, 'umi_count/features.tsv.gz'), header=None)
 barcodes = pd.read_csv(os.path.join(path, 'umi_count/barcodes.tsv.gz'), header=None)
 data.var_names = features[0]
-data.obs_names = barcodes[0]
+data.obs_names = barcodes[1]
+#data.obs_names = barcodes[0] if you are using an older version than 1.5.0
 ```

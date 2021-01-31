@@ -4,162 +4,168 @@ import sys
 import regex
 import Levenshtein
 
-from math import floor
-from collections import OrderedDict
 from collections import namedtuple
 from itertools import combinations
 from itertools import islice
 
 
-def parse_whitelist_csv(filename, barcode_length, collapsing_threshold):
+def parse_reference_list_csv(filename, barcode_length):
     """Reads white-listed barcodes from a CSV file.
 
     The function accepts plain barcodes or even 10X style barcodes with the
     `-1` at the end of each barcode.
 
     Args:
-        filename (str): Whitelist barcode file.
+        filename (str): reference_list barcode file.
         barcode_length (int): Length of the expected barcodes.
-        collapsing_threshold (int): Maximum distance to collapse cell barcodes.
 
     Returns:
         set: The set of white-listed barcodes.
-        int: Collasping threshold
 
     """
     STRIP_CHARS = '"0123456789- \t\n'
-    with open(filename, mode="r") as csv_file:
-        csv_reader = csv.reader(csv_file)
-        cell_pattern = regex.compile(r"[ATGC]{{{}}}".format(barcode_length))
-        whitelist = [
-            row[0].strip(STRIP_CHARS)
-            for row in csv_reader
-            if (len(row[0].strip(STRIP_CHARS)) == barcode_length)
-        ]
-    for cell_barcode in whitelist:
+    REQUIRED_HEADER = ["reference"]
+    has_translation = False
+    # OPTIONAL_HEADER = ["translation"]
+
+    cell_pattern = regex.compile(r"[ATGC]{{{}}}".format(barcode_length))
+
+    if filename.endswith(".gz"):
+        f = gzip.open(filename, mode="rt")
+        csv_reader = csv.reader(f)
+    else:
+        f = open(filename, encoding="UTF-8")
+        csv_reader = csv.reader(f)
+
+    header = next(csv_reader)
+    set_dif = set(REQUIRED_HEADER) - set(header)
+    if len(set_dif) != 0:
+        raise SystemExit(
+            "The header is missing {}. Exiting".format(",".join(list(set_dif)))
+        )
+
+    reference_id = header.index("reference")
+    reference_dict = {}
+    if "translation" in header:
+        has_translation = True
+
+        translation_id = header.index("translation")
+        for row in csv_reader:
+            ref_barcode = row[reference_id].strip(STRIP_CHARS)
+            tra_barcode = row[translation_id].strip(STRIP_CHARS)
+            if (
+                len(ref_barcode) == barcode_length
+                and len(tra_barcode) == barcode_length
+            ):
+                reference_dict[ref_barcode] = tra_barcode
+    else:
+        for row in csv_reader:
+            ref_barcode = row[reference_id].strip(STRIP_CHARS)
+            if len(ref_barcode) == barcode_length:
+                reference_dict[ref_barcode] = 0
+    for cell_barcode in reference_dict.keys():
         if not cell_pattern.match(cell_barcode):
             sys.exit(
                 "This barcode {} is not only composed of ATGC bases.".format(
                     cell_barcode
                 )
             )
-    # collapsing_threshold=test_cell_distances(whitelist, collapsing_threshold)
-    if len(whitelist) == 0:
-        sys.exit(
-            "Please check cell barcode indexes -cbs, -cbl because none of the given whitelist is valid."
-        )
-    return (set(whitelist), collapsing_threshold)
-
-
-def test_cell_distances(whitelist, collapsing_threshold):
-    """Tests cell barcode distances to validate provided cell barcode collapsing threshold
-    
-    Function needs the given whitelist as well as the threshold.
-    If the value is too high, it will rerun until an acceptable value is found.
-    
-    Args:
-        whitelist (set): Whitelist barcode set
-        collapsing_threshold (int): Value of threshold
-
-    Returns:
-        collapsing_threshold (int): Valid threshold
-    """
-    ok = False
-    while not ok:
+    if len(reference_dict) == 0:
+        sys.exit("reference_dict is empty.")
+    if has_translation:
         print(
-            "Testing cell barcode collapsing threshold of {}".format(
-                collapsing_threshold
-            )
+            "Your reference list provides a translation name. This will be the default for count matrices."
         )
-        all_comb = combinations(whitelist, 2)
-        for comb in all_comb:
-            if Levenshtein.hamming(comb[0], comb[1]) <= collapsing_threshold:
-                collapsing_threshold -= 1
-                print("Value is too high, reducing it by 1")
-                break
-        else:
-            ok = True
-    print("Using {} for cell barcode collapsing threshold".format(collapsing_threshold))
-    return collapsing_threshold
+    return reference_dict
 
 
 def parse_tags_csv(filename):
-    """Reads the TAGs from a CSV file.
+    """Reads the TAGs from a CSV file. Checks that the header contains
+    necessary strings and if sequences are made of ATGC
 
-    The expected file format (no header) is: TAG,TAG_NAME.
+    The expected file format has a header with "sequence" and "feature_name".
+    Order doesn't matter.
     e.g. file content
+        sequence,feature_name
         GTCAACTCTTTAGCG,Hashtag_1
         TGATGGCCTATTGGG,Hashtag_2
         TTCCGCCTCTCTTTG,Hashtag_3
 
     Args:
-        filename (str): TAGs file.
+        filename (str): TAGs file path.
 
     Returns:
-        dict: A dictionary containing the TAGs and their names.
+        dict: A dictionary using sequences as keys and feature names as values.
 
     """
+    REQUIRED_HEADER = ["sequence", "feature_name"]
+    atgc_test = regex.compile("^[ATGC]{1,}$")
     with open(filename, mode="r") as csv_file:
         csv_reader = csv.reader(csv_file)
         tags = {}
-        for row in csv_reader:
-            tags[row[0].strip()] = row[1].strip()
+        header = next(csv_reader)
+        set_dif = set(REQUIRED_HEADER) - set(header)
+        if len(set_dif) != 0:
+            raise SystemExit(
+                "The header is missing {}. Exiting".format(",".join(list(set_dif)))
+            )
+        sequence_id = header.index("sequence")
+        feature_id = header.index("feature_name")
+        for i, row in enumerate(csv_reader):
+            sequence = row[sequence_id].strip()
+
+            if not regex.match(atgc_test, sequence):
+                raise SystemExit(
+                    "Sequence {} on line {} is not only composed of ATGC. Exiting".format(
+                        sequence, i
+                    )
+                )
+            tags[sequence] = row[feature_id].strip()
     return tags
 
 
 def check_tags(tags, maximum_distance):
     """Evaluates the distance between the TAGs based on the `maximum distance`
     argument provided.
-
-    Additionally, it adds the barcode to the name of the TAG circumventing the
-    need of having to share the mapping of the antibody and the barcode.
     
     The output will have the keys sorted by TAG length (longer first). This
     way, longer barcodes will be evaluated first.
+    Adds unmapped category as well.
 
     Args:
-        tags (dict): A dictionary with the TAGs + TAG Names.
-        maximum_distance (int): The maximum Levenshtein distance allowed
+        tags (dict): A dictionary with TAG sequences as keys and names as values.
+        maximum_distance (int): The minimum Levenshtein distance allowed
             between two TAGs.
 
     Returns:
-        OrderedDict: An ordered dictionary containing the TAGs and
-            their names in descendent order based on the length of the TAGs.
+        list: An ordered list of namedtuples
         int: the length of the longest TAG
 
     """
-    ordered_tags = OrderedDict()
+    tag = namedtuple("tag", ["name", "sequence", "id"])
     longest_tag_len = 0
+    seq_list = []
+    tag_list = []
     for i, tag_seq in enumerate(sorted(tags, key=len, reverse=True)):
-        ordered_tags[tags[tag_seq]] = {}
-        ordered_tags[tags[tag_seq]]["id"] = i
-        ordered_tags[tags[tag_seq]]["sequence"] = tag_seq
+        safe_name = sanitize_name(tags[tag_seq])
+
+        # for index, tag_name in enumerate(ordered_tags):
+        tag_list.append(tag(name=safe_name, sequence=tag_seq, id=i,))
         if len(tag_seq) > longest_tag_len:
             longest_tag_len = len(tag_seq)
-
-    ordered_tags["unmapped"] = {}
-    ordered_tags["unmapped"]["id"] = i + 1
-    ordered_tags["unmapped"]["sequence"] = "UNKNOWN"
+        seq_list.append(tag_seq)
+    # tag_list.append(tag(name="unmapped", sequence="UNKNOWN", id=i + 1,))
     # If only one TAG is provided, then no distances to compare.
     if len(tags) == 1:
-        ordered_tags["unmapped"] = {}
-        ordered_tags["unmapped"]["id"] = 2
-        return (ordered_tags, longest_tag_len)
+        return (tag_list, longest_tag_len)
 
+    # Check if the distance is big enoughbetween tags
     offending_pairs = []
-    for a, b in combinations(tags.keys(), 2):
+    for a, b in combinations(seq_list, 2):
+        # pylint: disable=no-member
         distance = Levenshtein.distance(a, b)
         if distance <= (maximum_distance - 1):
             offending_pairs.append([a, b, distance])
-    DNA_pattern = regex.compile("^[ATGC]*$")
-    for tag in tags:
-        if not DNA_pattern.match(tag):
-            print(
-                "This tag {} is not only composed of ATGC bases.\nPlease check your tags file".format(
-                    tag
-                )
-            )
-            sys.exit("Exiting the application.\n")
     # If offending pairs are found, print them all.
     if offending_pairs:
         print(
@@ -176,32 +182,25 @@ def check_tags(tags, maximum_distance):
             )
         sys.exit("Exiting the application.\n")
 
-    return (ordered_tags, longest_tag_len)
+    return (tag_list, longest_tag_len)
 
 
 def sanitize_name(string):
+    """
+    Transforms special characters that are not compatible with namedtuples
+
+    Args:
+        string(str): a string from a feature name
+    
+    Returns:
+        str: modified string
+    """
     return string.replace("-", "_")
 
 
-def convert_to_named_tuple(ordered_tags):
-    # all_tags = namedtuple('all_tags', [sanitize_name(tag) for tag in ordered_tags.keys()])
-    tag = namedtuple("tag", ["safe_name", "name", "sequence", "id"])
-    tag_list = []
-    for index, tag_name in enumerate(ordered_tags):
-        tag_list.append(
-            tag(
-                safe_name=sanitize_name(tag_name),
-                name=tag_name,
-                sequence=ordered_tags[tag_name]["sequence"],
-                id=(index),
-            )
-        )
-        # all_tags[index+1]=ordered_tags[tag_name]['sequence']
-    return tag_list
-
-
 def get_read_length(filename):
-    """Check wether SEQUENCE lengths are consistent in a FASTQ file and return
+    """Check wether SEQUENCE lengths are consistent in
+    the first 1000 reads from a FASTQ file and return
     the length.
 
     Args:
@@ -213,20 +212,16 @@ def get_read_length(filename):
     """
     with gzip.open(filename, "r") as fastq_file:
         secondlines = islice(fastq_file, 1, 1000, 4)
-        # temp_length = len(next(secondlines).rstrip())
+        temp_length = len(next(secondlines).rstrip())
         for sequence in secondlines:
             read_length = len(sequence.rstrip())
-            # if (temp_length != read_length):
-            #     sys.exit(
-            #         '[ERROR] Sequence length in {} is not consistent. Please, trim all '
-            #         'sequences at the same length.\n'
-            #         'Exiting the application.\n'.format(filename)
-            #     )
+            if temp_length != read_length:
+                sys.exit(
+                    "[ERROR] Sequence length in {} is not consistent. Please, trim all "
+                    "sequences at the same length.\n"
+                    "Exiting the application.\n".format(filename)
+                )
     return read_length
-
-
-def get_chunk_strategy(read1_paths, read2_paths, chunk_size):
-    pass
 
 
 def check_barcodes_lengths(read1_length, cb_first, cb_last, umi_first, umi_last):
@@ -238,21 +233,13 @@ def check_barcodes_lengths(read1_length, cb_first, cb_last, umi_first, umi_last)
         cb_last (int): Barcode last base position for Read1.
         umi_first (int): UMI first base position for Read1.
         umi_last (int): UMI last base position for Read1.
-
-    Returns:
-        slice: A `slice` object to extract the Barcode from the sequence string.
-        slice: A `slice` object to extract the UMI from the sequence string.
-        int: The Barcode + UMI length.
-
     """
     barcode_length = cb_last - cb_first + 1
     umi_length = umi_last - umi_first + 1
     barcode_umi_length = barcode_length + umi_length
-    barcode_slice = slice(cb_first - 1, cb_last)
-    umi_slice = slice(umi_first - 1, umi_last)
 
     if barcode_umi_length > read1_length:
-        sys.exit(
+        raise SystemExit(
             "[ERROR] Read1 length is shorter than the option you are using for "
             "Cell and UMI barcodes length. Please, check your options and rerun.\n\n"
             "Exiting the application.\n"
@@ -265,8 +252,6 @@ def check_barcodes_lengths(read1_length, cb_first, cb_last, umi_first, umi_last)
                 read1_length, barcode_umi_length
             )
         )
-
-    return (barcode_slice, umi_slice, barcode_umi_length)
 
 
 def blocks(files, size=65536):
@@ -300,7 +285,7 @@ def get_n_lines(file_path):
     Returns:
         n_lines (int): Number of lines in the file
     """
-    print("Counting number of reads")
+    print("Counting number of reads in file {}".format(file_path))
     with gzip.open(file_path, "rt", encoding="utf-8", errors="ignore") as f:
         n_lines = sum(bl.count("\n") for bl in blocks(f))
     if n_lines % 4 != 0:
@@ -332,3 +317,57 @@ def get_read_paths(read1_path, read2_path):
         )
     return (_read1_path, _read2_path)
 
+
+def pre_run_checks(read1_paths, chemistry_def, longest_tag_len, args):
+    """ Checks that the chemistry is properly set and defines how many reads to process
+
+    Args:
+        read1_paths (list): List of paths
+        chemistry_def (Chemistry): Chemistry definition
+        longest_tag_len (int): Longest tag sequence
+        args (argparse): List of arguments
+    
+    Returns:
+        n_reads (int): Number of reads to run on
+        R2_min_length (int): Min R2 length to check if reads are too short
+        maximum_distance (int): Maximum error rate allowed for mapping tags
+
+    """
+    read1_lengths = []
+    read2_lengths = []
+    total_reads = 0
+
+    for read1_path in read1_paths:
+        n_lines = get_n_lines(read1_path)
+        total_reads += n_lines / 4
+        # Get reads length. So far, there is no validation for Read2.
+        read1_lengths.append(get_read_length(read1_path))
+
+        # Check Read1 length against CELL and UMI barcodes length.
+        check_barcodes_lengths(
+            read1_lengths[-1],
+            chemistry_def.cell_barcode_start,
+            chemistry_def.cell_barcode_end,
+            chemistry_def.umi_barcode_start,
+            chemistry_def.umi_barcode_end,
+        )
+
+    # Get all reads or only top N?
+    if args.first_n < float("inf"):
+        n_reads = args.first_n
+    else:
+        n_reads = total_reads
+
+    number_of_samples = len(read1_paths)
+
+    # Print a statement if multiple files are run.
+    if number_of_samples != 1:
+        print("Detected {} pairs of files to run on.".format(number_of_samples))
+
+    if args.sliding_window:
+        R2_min_length = read2_lengths[0]
+        maximum_distance = 0
+    else:
+        R2_min_length = longest_tag_len
+        maximum_distance = args.max_error
+    return n_reads, R2_min_length, maximum_distance

@@ -1,93 +1,129 @@
 import pytest
 import io
 from cite_seq_count import preprocessing
+import glob
+from collections import namedtuple
 
 
 @pytest.fixture
 def data():
     from collections import OrderedDict
     from itertools import islice
-    
-    # Test file paths
-    pytest.correct_whitelist_path = 'tests/test_data/whitelists/correct.csv'
-    pytest.correct_tags_path = 'tests/test_data/tags/correct.csv'
-    pytest.correct_R1_path = 'tests/test_data/fastq/correct_R1.fastq.gz'
-    pytest.correct_R2_path = 'tests/test_data/fastq/correct_R2.fastq.gz'
-    pytest.corrupt_R1_path = 'tests/test_data/fastq/corrupted_R1.fastq.gz'
-    pytest.corrupt_R2_path = 'tests/test_data/fastq/corrupted_R2.fastq.gz'
 
-    pytest.correct_R1_multipath = 'path/to/R1_1.fastq.gz,path/to/R1_2.fastq.gz'
-    pytest.correct_R2_multipath = 'path/to/R2_1.fastq.gz,path/to/R2_2.fastq.gz'
-    pytest.incorrect_R2_multipath = 'path/to/R2_1.fastq.gz,path/to/R2_2.fastq.gz,path/to/R2_3.fastq.gz'
+    pytest.passing_csv = "tests/test_data/tags/pass/*.csv"
+    pytest.failing_csv = "tests/test_data/tags/fail/*.csv"
 
-    pytest.correct_multipath_result = (['path/to/R1_1.fastq.gz', 'path/to/R1_2.fastq.gz'],
-                                       ['path/to/R2_1.fastq.gz', 'path/to/R2_2.fastq.gz'])
+    pytest.passing_reference_list_csv = "tests/test_data/reference_lists/pass/*.csv"
+    pytest.failing_reference_list_csv = "tests/test_data/reference_lists/fail/*.csv"
+
+    pytest.correct_tags_path = "tests/test_data/tags/pass/correct.csv"
+    pytest.correct_R1_path = "tests/test_data/fastq/correct_R1.fastq.gz"
+    pytest.correct_R2_path = "tests/test_data/fastq/correct_R2.fastq.gz"
+    pytest.corrupt_R1_path = "tests/test_data/fastq/corrupted_R1.fastq.gz"
+    pytest.corrupt_R2_path = "tests/test_data/fastq/corrupted_R2.fastq.gz"
+
+    pytest.correct_R1_multipath = "path/to/R1_1.fastq.gz,path/to/R1_2.fastq.gz"
+    pytest.correct_R2_multipath = "path/to/R2_1.fastq.gz,path/to/R2_2.fastq.gz"
+    pytest.incorrect_R2_multipath = (
+        "path/to/R2_1.fastq.gz,path/to/R2_2.fastq.gz,path/to/R2_3.fastq.gz"
+    )
+
+    pytest.correct_multipath_result = (
+        ["path/to/R1_1.fastq.gz", "path/to/R1_2.fastq.gz"],
+        ["path/to/R2_1.fastq.gz", "path/to/R2_2.fastq.gz"],
+    )
 
     # Create some variables to compare to
-    pytest.correct_whitelist = set(['ACTGTTTTATTGGCCT','TTCATAAGGTAGGGAT'])
+    pytest.correct_reference_list = set(["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"])
     pytest.correct_tags = {
-        'AGGACCATCCAA':'CITE_LEN_12_1',
-        'ACATGTTACCGT':'CITE_LEN_12_2',
-        'AGCTTACTATCC':'CITE_LEN_12_3',
-        'TCGATAATGCGAGTACAA':'CITE_LEN_18_1',
-        'GAGGCTGAGCTAGCTAGT':'CITE_LEN_18_2',
-        'GGCTGATGCTGACTGCTA':'CITE_LEN_18_3',
-        'TGTGACGTATTGCTAGCTAG':'CITE_LEN_20_1',
-        'ACTGTCTAACGGGTCAGTGC':'CITE_LEN_20_2',
-        'TATCACATCGGTGGATCCAT':'CITE_LEN_20_3'}
-    pytest.correct_ordered_tags = OrderedDict({
-        'CITE_LEN_20_1':{'id':0,'sequence':'TGTGACGTATTGCTAGCTAG'},
-        'CITE_LEN_20_2':{'id':1,'sequence':'ACTGTCTAACGGGTCAGTGC'},
-        'CITE_LEN_20_3':{'id':2,'sequence':'TATCACATCGGTGGATCCAT'},
-        'CITE_LEN_18_1':{'id':3,'sequence':'TCGATAATGCGAGTACAA'},
-        'CITE_LEN_18_2':{'id':4,'sequence':'GAGGCTGAGCTAGCTAGT'},
-        'CITE_LEN_18_3':{'id':5,'sequence':'GGCTGATGCTGACTGCTA'},
-        'CITE_LEN_12_1':{'id':6,'sequence':'AGGACCATCCAA'},
-        'CITE_LEN_12_2':{'id':7,'sequence':'ACATGTTACCGT'},
-        'CITE_LEN_12_3':{'id':8,'sequence':'AGCTTACTATCC'},
-        'unmapped':{'id':9, 'sequence': 'UNKNOWN'}})
+        "AGGACCATCCAA": "CITE_LEN_12_1",
+        "ACATGTTACCGT": "CITE_LEN_12_2",
+        "AGCTTACTATCC": "CITE_LEN_12_3",
+        "TCGATAATGCGAGTACAA": "CITE_LEN_18_1",
+        "GAGGCTGAGCTAGCTAGT": "CITE_LEN_18_2",
+        "GGCTGATGCTGACTGCTA": "CITE_LEN_18_3",
+        "TGTGACGTATTGCTAGCTAG": "CITE_LEN_20_1",
+        "ACTGTCTAACGGGTCAGTGC": "CITE_LEN_20_2",
+        "TATCACATCGGTGGATCCAT": "CITE_LEN_20_3",
+    }
+    tag = namedtuple("tag", ["name", "sequence", "id"])
+    pytest.correct_tags_tuple = [
+        tag(name="CITE_LEN_20_1", sequence="TGTGACGTATTGCTAGCTAG", id=0),
+        tag(name="CITE_LEN_20_2", sequence="ACTGTCTAACGGGTCAGTGC", id=1),
+        tag(name="CITE_LEN_20_3", sequence="TATCACATCGGTGGATCCAT", id=2),
+        tag(name="CITE_LEN_18_1", sequence="TCGATAATGCGAGTACAA", id=3),
+        tag(name="CITE_LEN_18_2", sequence="GAGGCTGAGCTAGCTAGT", id=4),
+        tag(name="CITE_LEN_18_3", sequence="GGCTGATGCTGACTGCTA", id=5),
+        tag(name="CITE_LEN_12_1", sequence="AGGACCATCCAA", id=6),
+        tag(name="CITE_LEN_12_2", sequence="ACATGTTACCGT", id=7),
+        tag(name="CITE_LEN_12_3", sequence="AGCTTACTATCC", id=8),
+    ]
     pytest.barcode_slice = slice(0, 16)
     pytest.umi_slice = slice(16, 26)
     pytest.barcode_umi_length = 26
 
+
+def test_csv_parser(data):
+    passing_files = glob.glob(pytest.passing_csv)
+    for file_path in passing_files:
+        preprocessing.parse_tags_csv(file_path)
+    with pytest.raises(SystemExit):
+        failing_files = glob.glob(pytest.failing_csv)
+        for file_path in failing_files:
+            preprocessing.parse_tags_csv(file_path)
+
+
 @pytest.mark.dependency()
-def test_parse_whitelist_csv(data):
-    assert preprocessing.parse_whitelist_csv(pytest.correct_whitelist_path, 16, 1) == (pytest.correct_whitelist,1)
+def test_parse_reference_list_csv(data):
+    passing_files = glob.glob(pytest.passing_reference_list_csv)
+    for file_path in passing_files:
+        assert preprocessing.parse_reference_list_csv(file_path, 16).keys() in (
+            pytest.correct_reference_list,
+            1,
+        )
+    with pytest.raises(SystemExit):
+        failing_files = glob.glob(pytest.failing_reference_list_csv)
+        for file_path in failing_files:
+            preprocessing.parse_reference_list_csv(file_path, 16)
+
 
 @pytest.mark.dependency()
 def test_parse_tags_csv(data):
-    assert preprocessing.parse_tags_csv(pytest.correct_tags_path) == pytest.correct_tags
-
-@pytest.mark.dependency(depends=['test_parse_tags_csv'])
-def test_check_tags(data):
     tags = preprocessing.check_tags(pytest.correct_tags, 5)[0]
-    for name in tags.keys():
-        assert tags[name] == pytest.correct_ordered_tags[name]
-    
+    for i, tag in enumerate(tags):
+        assert tag == pytest.correct_tags_tuple[i]
 
-@pytest.mark.dependency(depends=['test_check_tags'])
+
+@pytest.mark.dependency(depends=["test_parse_tags_csv"])
 def test_check_distance_too_big_between_tags(data):
     with pytest.raises(SystemExit):
         preprocessing.check_tags(pytest.correct_tags, 8)
 
-@pytest.mark.dependency(depends=['test_parse_whitelist_csv'])
-def test_check_barcodes_lengths(data):
-    assert preprocessing.check_barcodes_lengths(26, 1, 16, 17, 26) == (pytest.barcode_slice, pytest.umi_slice, pytest.barcode_umi_length)
 
 @pytest.mark.dependency()
 def test_get_n_lines(data):
-  assert preprocessing.get_n_lines(pytest.correct_R1_path) == (200 * 4)
+    assert preprocessing.get_n_lines(pytest.correct_R1_path) == (200 * 4)
 
-@pytest.mark.dependency(depends=['test_get_n_lines'])
+
+@pytest.mark.dependency(depends=["test_get_n_lines"])
 def test_get_n_lines_not_multiple_of_4(data):
-  with pytest.raises(SystemExit):
-    preprocessing.get_n_lines(pytest.corrupt_R1_path)
+    with pytest.raises(SystemExit):
+        preprocessing.get_n_lines(pytest.corrupt_R1_path)
+
 
 @pytest.mark.dependency()
 def test_corrrect_multipath(data):
-  assert preprocessing.get_read_paths(pytest.correct_R1_multipath, pytest.correct_R2_multipath) == pytest.correct_multipath_result
+    assert (
+        preprocessing.get_read_paths(
+            pytest.correct_R1_multipath, pytest.correct_R2_multipath
+        )
+        == pytest.correct_multipath_result
+    )
 
-@pytest.mark.dependency(depends=['test_get_n_lines'])
+
+@pytest.mark.dependency(depends=["test_get_n_lines"])
 def test_incorrrect_multipath(data):
-  with pytest.raises(SystemExit):
-    preprocessing.get_read_paths(pytest.correct_R1_multipath, pytest.incorrect_R2_multipath)
+    with pytest.raises(SystemExit):
+        preprocessing.get_read_paths(
+            pytest.correct_R1_multipath, pytest.incorrect_R2_multipath
+        )
