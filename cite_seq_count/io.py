@@ -3,6 +3,7 @@ import gzip
 import shutil
 import time
 import datetime
+import tempfile
 
 from collections import namedtuple
 from itertools import islice
@@ -235,9 +236,11 @@ def write_chunks_to_disk(
         chemistry_def.umi_barcode_start - 1, chemistry_def.umi_barcode_end
     )
 
-    temp_filename = os.path.join(temp_path, "temp_{}".format(num_chunk))
-    chunked_file_object = open(temp_filename, "w")
-    temp_files.append(os.path.abspath(temp_filename))
+    chunked_file_object = tempfile.NamedTemporaryFile(
+        "w", dir=temp_path, suffix="_csc", delete=False
+    )
+    # chunked_file_object = open(temp_file, "w")
+    temp_files.append(chunked_file_object.name)
     reads_written = 0
 
     for read1_path, read2_path in zip(read1_paths, read2_paths):
@@ -287,7 +290,7 @@ def write_chunks_to_disk(
                     chunked_file_object.close()
                     input_queue.append(
                         mapping_input(
-                            filename=temp_filename,
+                            filename=chunked_file_object.name,
                             tags=ordered_tags,
                             debug=args.debug,
                             maximum_distance=maximum_distance,
@@ -299,9 +302,11 @@ def write_chunks_to_disk(
                         chunked_file_object.close()
                         break
                     num_chunk += 1
-                    temp_filename = "temp_{}".format(num_chunk)
-                    chunked_file_object = open(temp_filename, "w")
-                    temp_files.append(os.path.abspath(temp_filename))
+                    chunked_file_object = tempfile.NamedTemporaryFile(
+                        "w", dir=temp_path, suffix="_csc", delete=False
+                    )
+                    # chunked_file_object = open(temp_file, "w")
+                    temp_files.append(chunked_file_object.name)
                     reads_written = 0
                 if total_reads_written == n_reads_per_chunk:
                     enough_reads = True
@@ -311,7 +316,7 @@ def write_chunks_to_disk(
         chunked_file_object.close()
         input_queue.append(
             mapping_input(
-                filename=temp_filename,
+                filename=chunked_file_object.name,
                 tags=ordered_tags,
                 debug=args.debug,
                 maximum_distance=maximum_distance,

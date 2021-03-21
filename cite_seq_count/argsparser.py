@@ -1,6 +1,6 @@
 import pkg_resources
 import sys
-
+import tempfile
 
 from argparse import ArgumentParser, ArgumentTypeError, RawTextHelpFormatter
 
@@ -253,7 +253,7 @@ def get_args():
         required=False,
         type=str,
         dest="temp_path",
-        default=".",
+        default=tempfile.gettempdir(),
         help="Temp folder for chunk creation specification. Useful when using a cluster with a scratch folder",
     )
 
