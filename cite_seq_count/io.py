@@ -28,7 +28,7 @@ def write_to_files(
     """
     prefix = os.path.join(outfolder, data_type + "_count")
     os.makedirs(prefix, exist_ok=True)
-    io.mmwrite(os.path.join(prefix, "matrix.mtx"), sparse_matrix)
+    io.mmwrite(os.path.join(prefix, "matrix.mtx"), a=sparse_matrix, field="integer")
     with gzip.open(os.path.join(prefix, "barcodes.tsv.gz"), "wb") as barcode_file:
         for barcode in filtered_cells:
             if reference_dict:

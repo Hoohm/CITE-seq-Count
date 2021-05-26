@@ -52,7 +52,7 @@ def get_args():
         prog="CITE-seq-Count",
         formatter_class=RawTextHelpFormatter,
         description=(
-            "This script counts matching antibody tags from paired fastq "
+            "This package counts matching antibody tags from paired fastq "
             "files. Version {}".format(get_package_version())
         ),
     )
@@ -135,7 +135,7 @@ def get_args():
             dest="umi_first",
             required=True,
             type=int,
-            help="Postion of the first base of your UMI.",
+            help=("Postion of the first base of your UMI."),
         )
         barcodes.add_argument(
             "-umil",
@@ -143,7 +143,7 @@ def get_args():
             dest="umi_last",
             required=True,
             type=int,
-            help="Postion of the last base of your UMI.",
+            help=("Postion of the last base of your UMI."),
         )
     barcodes.add_argument(
         "--umi_collapsing_dist",
@@ -151,7 +151,7 @@ def get_args():
         required=False,
         type=int,
         default=1,
-        help="threshold for umi collapsing.",
+        help=("threshold for umi collapsing."),
     )
     barcodes.add_argument(
         "--bc_collapsing_dist",
@@ -159,32 +159,39 @@ def get_args():
         required=False,
         type=int,
         default=1,
-        help="threshold for cellular barcode collapsing.",
+        help=("threshold for cellular barcode collapsing."),
     )
-    # Cells group
-    cells = parser.add_argument_group(
-        "Cells", description=("Expected number of cells and potential reference_list")
-    )
+    # Cell filtering group. We ask for either number of expected cells or a pre-filtered list of cells.
 
-    cells.add_argument(
+    cells_filtering = parser.add_mutually_exclusive_group(required=True)
+
+    cells_filtering.add_argument(
         "-n_cells",
         "--expected_cells",
         dest="expected_cells",
-        required=True,
         type=int,
         help=("Number of expected cells from your run."),
         default=0,
     )
+    cells_filtering.add_argument(
+        "-fl",
+        "--filtered_cells",
+        dest="filtered_cells",
+        type=str,
+        help=("A specific list of cells to look for."),
+        default=False,
+    )
+
     if "--chemistry" not in sys.argv:
-        cells.add_argument(
+        barcodes.add_argument(
             "-rl",
             "--reference_list",
             dest="reference_list",
             required=False,
             type=str,
+            default=False,
             help=(
-                "A csv file containning a reference list of barcodes produced"
-                " by the mRNA data.\n\n"
+                "A csv file containning a reference list of all potential barcodes\n\n"
                 "\tExample:\n"
                 "reference\n"
                 "\tATGCTAGTGCTA\n\tGCTAGTCAGGAT\n\tCGACTGCTAACG\n\n"
@@ -238,7 +245,7 @@ def get_args():
         type=int,
         dest="n_threads",
         default=thread_default(),
-        help="How many threads are to be used for running the program",
+        help=("How many threads are to be used for running the program"),
     )
     parallel.add_argument(
         "-C",
@@ -246,7 +253,7 @@ def get_args():
         required=False,
         type=chunk_size_limit,
         dest="chunk_size",
-        help="How many reads should be sent to a child process at a time",
+        help=("How many reads should be sent to a child process at a time"),
     )
     parallel.add_argument(
         "--temp_path",
@@ -254,7 +261,9 @@ def get_args():
         type=str,
         dest="temp_path",
         default=tempfile.gettempdir(),
-        help="Temp folder for chunk creation specification. Useful when using a cluster with a scratch folder",
+        help=(
+            "Temp folder for chunk creation specification. Useful when using a cluster with a scratch folder"
+        ),
     )
 
     # Global group
@@ -265,7 +274,7 @@ def get_args():
         type=int,
         dest="first_n",
         default=float("inf"),
-        help="Select N reads to run on instead of all.",
+        help=("Select N reads to run on instead of all."),
     )
     parser.add_argument(
         "-o",
@@ -274,7 +283,7 @@ def get_args():
         type=str,
         default="Results",
         dest="outfolder",
-        help="Results will be written to this folder",
+        help=("Results will be written to this folder"),
     )
     parser.add_argument(
         "--dense",
@@ -282,7 +291,7 @@ def get_args():
         action="store_true",
         default=False,
         dest="dense",
-        help="Add a dense output to the results folder",
+        help=("Add a dense output to the results folder"),
     )
     parser.add_argument(
         "-u",
@@ -291,7 +300,7 @@ def get_args():
         type=str,
         dest="unmapped_file",
         default="unmapped.csv",
-        help="Write table of unknown TAGs to file.",
+        help=("Write table of unknown TAGs to file."),
     )
     parser.add_argument(
         "-ut",
@@ -300,10 +309,10 @@ def get_args():
         dest="unknowns_top",
         type=int,
         default=100,
-        help="Top n unmapped TAGs.",
+        help=("Top n unmapped TAGs."),
     )
     parser.add_argument(
-        "--debug", action="store_true", help="Print extra information for debugging."
+        "--debug", action="store_true", help=("Print extra information for debugging.")
     )
     parser.add_argument(
         "--version",

@@ -2,19 +2,21 @@ import pytest
 import io
 from cite_seq_count import preprocessing
 import glob
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
+from itertools import islice
 
 
 @pytest.fixture
 def data():
-    from collections import OrderedDict
-    from itertools import islice
 
     pytest.passing_csv = "tests/test_data/tags/pass/*.csv"
     pytest.failing_csv = "tests/test_data/tags/fail/*.csv"
 
     pytest.passing_reference_list_csv = "tests/test_data/reference_lists/pass/*.csv"
     pytest.failing_reference_list_csv = "tests/test_data/reference_lists/fail/*.csv"
+
+    pytest.passing_filtered_list_csv = "tests/test_data/filtered_lists/pass/*.csv"
+    pytest.failing_filtered_list_csv = "tests/test_data/filtered_lists/fail/*.csv"
 
     pytest.correct_tags_path = "tests/test_data/tags/pass/correct.csv"
     pytest.correct_R1_path = "tests/test_data/fastq/correct_R1.fastq.gz"
@@ -73,18 +75,28 @@ def test_csv_parser(data):
             preprocessing.parse_tags_csv(file_path)
 
 
+def test_filtered_list_parser(data):
+    passing_files = glob.glob(pytest.passing_filtered_list_csv)
+    for file_path in passing_files:
+        preprocessing.parse_filtered_list_csv(file_path, barcode_length=16)
+    with pytest.raises(SystemExit):
+        failing_files = glob.glob(pytest.failing_filtered_list_csv)
+        for file_path in failing_files:
+            preprocessing.parse_filtered_list_csv(file_path, barcode_length=16)
+
+
 @pytest.mark.dependency()
 def test_parse_reference_list_csv(data):
     passing_files = glob.glob(pytest.passing_reference_list_csv)
     for file_path in passing_files:
-        assert preprocessing.parse_reference_list_csv(file_path, 16).keys() in (
+        assert preprocessing.parse_cell_list_csv(file_path, 16, "reference").keys() in (
             pytest.correct_reference_list,
             1,
         )
     with pytest.raises(SystemExit):
         failing_files = glob.glob(pytest.failing_reference_list_csv)
         for file_path in failing_files:
-            preprocessing.parse_reference_list_csv(file_path, 16)
+            preprocessing.parse_cell_list_csv(file_path, 16, "reference")
 
 
 @pytest.mark.dependency()

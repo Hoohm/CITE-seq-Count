@@ -20,6 +20,7 @@ import umi_tools.whitelist_methods as whitelist_methods
 
 
 from cite_seq_count import secondsToText
+from cite_seq_count.preprocessing import parse_cell_list_csv
 
 
 def find_best_match(TAG_seq, tags, maximum_distance):
@@ -603,19 +604,24 @@ def run_umi_correction(final_results, filtered_cells, unmapped_id, args):
 
 
 def run_cell_barcode_correction(
-    final_results, umis_per_cell, reads_per_cell, reference_dict, ordered_tags, args
+    final_results,
+    umis_per_cell,
+    reads_per_cell,
+    reference_dict,
+    ordered_tags,
+    cell_barcode_correction,
+    args,
 ):
-    if len(umis_per_cell) <= args.expected_cells:
-        print(
-            "Number of expected cells, {}, is higher "
-            "than number of cells found {}.\nNot performing "
-            "cell barcode correction"
-            "".format(args.expected_cells, len(umis_per_cell))
-        )
-        bcs_corrected = 0
-    else:
-        print("Correcting cell barcodes")
-        if not reference_dict:
+    if cell_barcode_correction == "top":
+        if len(umis_per_cell) <= args.expected_cells:
+            print(
+                "Number of expected cells, {}, is higher "
+                "than number of cells found {}.\nNot performing "
+                "cell barcode correction"
+                "".format(args.expected_cells, len(umis_per_cell))
+            )
+            bcs_corrected = 0
+        else:
             print("Reference list not given")
             (
                 final_results,
@@ -629,17 +635,63 @@ def run_cell_barcode_correction(
                 collapsing_threshold=args.bc_threshold,
                 ab_map=ordered_tags,
             )
-        else:
-            print("Reference list given")
-            (
-                final_results,
-                umis_per_cell,
-                bcs_corrected,
-            ) = correct_cells_reference_list(
-                final_results=final_results,
-                umis_per_cell=umis_per_cell,
-                reference_list=set(reference_dict.keys()),
-                collapsing_threshold=args.bc_threshold,
-                ab_map=ordered_tags,
-            )
+    elif cell_barcode_correction == "list":
+        (final_results, umis_per_cell, bcs_corrected,) = correct_cells_reference_list(
+            final_results=final_results,
+            umis_per_cell=umis_per_cell,
+            reference_list=set(reference_dict.keys()),
+            collapsing_threshold=args.bc_threshold,
+            ab_map=ordered_tags,
+        )
     return final_results, umis_per_cell, bcs_corrected
+
+
+def choose_filtered_cells(
+    given_filtered_cells,
+    expected_cells,
+    chemistry_def,
+    final_results,
+    ordered_tags,
+    umis_per_cell,
+    translation_dict,
+):
+    """
+    Returns a list of barcodes that will be in the output
+    and helps decide based on the inputs.
+
+    Args:
+        given_filtered_cells (bool or str): False if not given, else string
+        expected_cells (int): Number of expected cells
+        chemistry_def (Chemistry): Defines the details of the chemistry
+        final_results (dict): All results
+        ordered_tags (named_tuple): Holds tags info
+        umis_per_cell (Counter): Holds number of UMIs per barcode
+    
+    Returns:
+        set: filtered cell set
+    """
+    # If given, use filtered_list for top cells
+    if given_filtered_cells:
+        filtered_cells = set(
+            parse_cell_list_csv(
+                filename=given_filtered_cells,
+                barcode_length=chemistry_def.cell_barcode_end
+                - chemistry_def.cell_barcode_start
+                + 1,
+                file_type="filtered",
+            ).keys()
+        )
+        # Add potential missing cell barcodes.
+        for missing_cell in filtered_cells:
+            if missing_cell in final_results:
+                continue
+            else:
+                final_results[missing_cell] = dict()
+                for TAG in ordered_tags:
+                    final_results[missing_cell][TAG.safe_name] = Counter()
+                filtered_cells.add(missing_cell)
+    else:
+        top_cells_tuple = umis_per_cell.most_common(expected_cells)
+        # Select top cells based on total umis per cell
+        filtered_cells = [pair[0] for pair in top_cells_tuple]
+

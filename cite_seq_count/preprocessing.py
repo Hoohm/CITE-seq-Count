@@ -8,8 +8,61 @@ from collections import namedtuple
 from itertools import combinations
 from itertools import islice
 
+from pandas import read_csv
 
-def parse_reference_list_csv(filename, barcode_length):
+
+def get_csv_reader_from_path(filename):
+    """
+    Returns a csv_reader object for a file weather it's a flat file or compressed.
+
+    Args:
+        filename: str
+    
+    Returns:
+        csv_reader: The csv_reader for the file
+    """
+    if filename.endswith(".gz"):
+        f = gzip.open(filename, mode="rt")
+        csv_reader = csv.reader(f)
+    else:
+        f = open(filename, encoding="UTF-8")
+        csv_reader = csv.reader(f)
+    return csv_reader
+
+
+def parse_filtered_list_csv(filename, barcode_length):
+    """
+    Reads in a one column, no header list of barcodes and returns a set.
+
+    Args:
+        filename(str): file path
+        barcode_length(int): Barcode expected length
+    
+    Returns:
+        set: A set of barcodes
+    """
+    STRIP_CHARS = '"0123456789- \t\n'
+    barcodes_pd = read_csv(filename)
+
+    barcodes = set(barcodes_pd.iloc[:, 0])
+
+    out_set = set()
+    barcode_pattern = regex.compile(r"^[ATGC]{{{}}}".format(barcode_length))
+    for barcode in barcodes:
+        check_barcode = barcode.strip(STRIP_CHARS)
+        if barcode_pattern.match(check_barcode):
+            out_set.add(check_barcode)
+        else:
+            sys.exit(
+                "This barcode {} is not only composed of ATGC bases.".format(
+                    check_barcode
+                )
+            )
+
+    return out_set
+
+
+def parse_cell_list_csv(filename, barcode_length, file_type):
     """Reads white-listed barcodes from a CSV file.
 
     The function accepts plain barcodes or even 10X style barcodes with the
@@ -24,19 +77,16 @@ def parse_reference_list_csv(filename, barcode_length):
 
     """
     STRIP_CHARS = '"0123456789- \t\n'
-    REQUIRED_HEADER = ["reference"]
+    if file_type == "reference":
+        REQUIRED_HEADER = ["reference"]
+    elif file_type == "filtered":
+        REQUIRED_HEADER = ["filtered_list"]
+
     has_translation = False
-    # OPTIONAL_HEADER = ["translation"]
+    # OPTIONAL_HEADER = ["translation", "filtered_list"]
 
-    cell_pattern = regex.compile(r"[ATGC]{{{}}}".format(barcode_length))
-
-    if filename.endswith(".gz"):
-        f = gzip.open(filename, mode="rt")
-        csv_reader = csv.reader(f)
-    else:
-        f = open(filename, encoding="UTF-8")
-        csv_reader = csv.reader(f)
-
+    cell_pattern = regex.compile(r"^[ATGC]{{{}}}".format(barcode_length))
+    csv_reader = get_csv_reader_from_path(filename=filename)
     header = next(csv_reader)
     set_dif = set(REQUIRED_HEADER) - set(header)
     if len(set_dif) != 0:
@@ -44,9 +94,9 @@ def parse_reference_list_csv(filename, barcode_length):
             "The header is missing {}. Exiting".format(",".join(list(set_dif)))
         )
 
-    reference_id = header.index("reference")
+    reference_id = header.index(REQUIRED_HEADER[0])
     reference_dict = {}
-    if "translation" in header:
+    if "translation" in header and REQUIRED_HEADER[0] == "reference":
         has_translation = True
 
         translation_id = header.index("translation")
@@ -63,6 +113,7 @@ def parse_reference_list_csv(filename, barcode_length):
             ref_barcode = row[reference_id].strip(STRIP_CHARS)
             if len(ref_barcode) == barcode_length:
                 reference_dict[ref_barcode] = 0
+
     for cell_barcode in reference_dict.keys():
         if not cell_pattern.match(cell_barcode):
             sys.exit(
@@ -74,7 +125,7 @@ def parse_reference_list_csv(filename, barcode_length):
         sys.exit("reference_dict is empty.")
     if has_translation:
         print(
-            "Your reference list provides a translation name. This will be the default for count matrices."
+            "Your reference list provides a translation name. This will be the default for the count matrices."
         )
     return reference_dict
 
@@ -222,6 +273,28 @@ def get_read_length(filename):
                     "Exiting the application.\n".format(filename)
                 )
     return read_length
+
+
+def determine_cell_correction_mode(args, chemistry):
+    """
+    Determines what mode to use for cell barcode correction.
+    Args:
+        args(argparse): All arguments
+    
+    Returns:
+        str: type of correction
+    """
+    if args.bc_threshold != 0:
+        if args.filtered_list:
+            filtered_set = parse_filtered_list_csv(
+                args.filtered_list,
+                (chemistry.cell_barcode_stop - chemistry.cell_barcode_start),
+            )
+            return filtered_set
+        else:
+            return False
+    else:
+        return False
 
 
 def check_barcodes_lengths(read1_length, cb_first, cb_last, umi_first, umi_last):

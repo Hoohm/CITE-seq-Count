@@ -4,6 +4,7 @@ import gzip
 import scipy
 from cite_seq_count import io
 from collections import namedtuple
+import numpy as np
 
 # copied from https://stackoverflow.com/questions/3431825/generating-an-md5-checksum-of-a-file
 import hashlib
@@ -11,9 +12,14 @@ import hashlib
 
 def md5(fname):
     hash_md5 = hashlib.md5()
-    with gzip.open(fname, "rb") as f:
-        string = f.read()
-        hash_md5.update(string)
+    if fname.endswith("gz"):
+        with gzip.open(fname, "rb") as f:
+            string = f.read()
+            hash_md5.update(string)
+    else:
+        with open(fname, "r") as f:
+            string = f.read()
+            hash_md5.update(string.encode())
     return hash_md5.hexdigest()
 
 
@@ -22,7 +28,7 @@ def data():
     from collections import OrderedDict
     from scipy import sparse
 
-    test_matrix = sparse.dok_matrix((4, 2))
+    test_matrix = sparse.dok_matrix((4, 2), dtype=np.int32)
     test_matrix[1, 1] = 1
     pytest.sparse_matrix = test_matrix
     pytest.filtered_cells = ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"]
@@ -47,7 +53,7 @@ def test_write_to_files_wo_translation(data, tmpdir):
     md5_sums = {
         barcodes_path: "b7af6a32e83963606f181509a571966f",
         features_path: "e889e780dbce481287c993dd043714c8",
-        mtx_path: "0312f3a2bfe57222ebe94051ba07786e",
+        mtx_path: "3ea98c44d88a947215bace0c72ac1303",
     }
 
     io.write_to_files(
@@ -80,7 +86,7 @@ def test_write_to_files_with_translation(data, tmpdir):
     md5_sums = {
         barcodes_path: "fce83378b4dd548882fb9271bdd5b4f1",
         features_path: "e889e780dbce481287c993dd043714c8",
-        mtx_path: "0312f3a2bfe57222ebe94051ba07786e",
+        mtx_path: "3ea98c44d88a947215bace0c72ac1303",
     }
 
     io.write_to_files(
@@ -106,7 +112,7 @@ def test_write_to_dense_wo_translation(data, tmpdir):
     csv_path = os.path.join(output_path, csv_name)
 
     md5_sums = {
-        csv_path: "b7af6a32e83963606f181509a571966f",
+        csv_path: "fef502237900ec386d100169fa1fab7c",
     }
 
     io.write_dense(
@@ -117,8 +123,4 @@ def test_write_to_dense_wo_translation(data, tmpdir):
         filename=csv_name,
     )
     file_path = os.path.join(tmpdir, "without_translation", csv_name)
-    assert False
-
-
-def test_write_to_dense_with_translation(data, tmpdir):
-    assert False
+    assert md5_sums[csv_path] == md5(file_path)

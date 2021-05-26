@@ -14,6 +14,8 @@ from cite_seq_count import io
 from cite_seq_count import secondsToText
 from cite_seq_count import argsparser
 
+from collections import Counter
+
 
 def main():
     # Create logger and stream handler
@@ -39,6 +41,8 @@ def main():
 
     # Get chemistry defs
     (reference_dict, chemistry_def) = chemistry.setup_chemistry(args)
+
+    # Check if we have a filtered list provided
 
     # Load TAGs/ABs.
     ab_map = preprocessing.parse_tags_csv(args.tags)
@@ -94,9 +98,9 @@ def main():
     # Remove temp chunks
     for file_path in temp_files:
         os.remove(file_path)
-
+    cell_barcode_correction = preprocessing.determine_cell_correction_mode(args)
     # Correct cell barcodes
-    if args.bc_threshold != 0:
+    if cell_barcode_correction != "no":
         (
             final_results,
             umis_per_cell,
@@ -107,34 +111,12 @@ def main():
             reads_per_cell=reads_per_cell,
             reference_dict=reference_dict,
             ordered_tags=ordered_tags,
+            cell_barcode_correction=cell_barcode_correction,
             args=args,
         )
     else:
         print("Skipping cell barcode correction")
         bcs_corrected = 0
-
-    # If given, use reference_list for top cells
-    top_cells_tuple = umis_per_cell.most_common(args.expected_cells)
-    if reference_dict:
-
-        # Add potential missing cell barcodes.
-        # for missing_cell in reference_list:
-        #     if missing_cell in final_results:
-        #         continue
-        #     else:
-        #         final_results[missing_cell] = dict()
-        #         for TAG in ordered_tags:
-        #             final_results[missing_cell][TAG.safe_name] = Counter()
-        #         filtered_cells.add(missing_cell)
-        top_cells = [pair[0] for pair in top_cells_tuple]
-        filtered_cells = []
-        for cell in top_cells:
-            # pylint: disable=no-member
-            if cell in reference_dict.keys():
-                filtered_cells.append(cell)
-    else:
-        # Select top cells based on total umis per cell
-        filtered_cells = [pair[0] for pair in top_cells_tuple]
 
     # Create sparse matrices for reads results
     read_results_matrix = processing.generate_sparse_matrices(

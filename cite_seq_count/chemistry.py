@@ -138,19 +138,21 @@ def create_chemistry_definition(args):
 def setup_chemistry(args):
     if args.chemistry:
         chemistry_def = get_chemistry_definition(args.chemistry)
-        reference_dict = preprocessing.parse_reference_list_csv(
+        reference_dict = preprocessing.parse_cell_list_csv(
             filename=chemistry_def.reference_list_path,
             barcode_length=chemistry_def.cell_barcode_end
             - chemistry_def.cell_barcode_start
             + 1,
+            file_type="reference",
         )
     else:
         chemistry_def = create_chemistry_definition(args)
         if args.reference_list:
             print("Loading reference_list")
-            reference_dict = preprocessing.parse_reference_list_csv(
+            reference_dict = preprocessing.parse_cell_list_csv(
                 filename=args.reference_list,
                 barcode_length=args.cb_last - args.cb_first + 1,
+                file_type="reference",
             )
         else:
             reference_dict = False
