@@ -3,31 +3,15 @@ import gzip
 import sys
 import regex
 import Levenshtein
+import umi_tools.whitelist_methods as whitelist_methods
 
+from cite_seq_count.io import get_csv_reader_from_path, get_n_lines
 from collections import namedtuple
 from itertools import combinations
 from itertools import islice
 
+
 from pandas import read_csv
-
-
-def get_csv_reader_from_path(filename):
-    """
-    Returns a csv_reader object for a file weather it's a flat file or compressed.
-
-    Args:
-        filename: str
-    
-    Returns:
-        csv_reader: The csv_reader for the file
-    """
-    if filename.endswith(".gz"):
-        f = gzip.open(filename, mode="rt")
-        csv_reader = csv.reader(f)
-    else:
-        f = open(filename, encoding="UTF-8")
-        csv_reader = csv.reader(f)
-    return csv_reader
 
 
 def parse_filtered_list_csv(filename, barcode_length):
@@ -275,7 +259,23 @@ def get_read_length(filename):
     return read_length
 
 
-def determine_cell_correction_mode(args, chemistry):
+def translate_barcodes(cell_set, reference_dict):
+    """Translate a list of barcode using a mapping reference
+    Args:
+        cell_set (set): A set of barcodes
+        reference_dict (dict): A dict providing a simple key value translation
+    
+    Returns:
+        translated_barcodes (set): A set of translated barcodes
+    """
+
+    translated_barcodes = set()
+    for cell in cell_set:
+        translate_barcodes.add(reference_dict[cell])
+    return translated_barcodes
+
+
+def get_filtered_list(args, chemistry, reference_dict, reads_per_cell):
     """
     Determines what mode to use for cell barcode correction.
     Args:
@@ -285,14 +285,35 @@ def determine_cell_correction_mode(args, chemistry):
         str: type of correction
     """
     if args.bc_threshold != 0:
+        # Are we provided with a filtered list?
         if args.filtered_list:
             filtered_set = parse_filtered_list_csv(
                 args.filtered_list,
                 (chemistry.cell_barcode_stop - chemistry.cell_barcode_start),
             )
+            # Do we need to translate the list?
+            if args.reference_dict:
+                # get the translation
+                filtered_set = translate_barcodes(
+                    cell_set=filtered_set, reference_dict=reference_dict
+                )
             return filtered_set
+        # We try and rely on the top number of cells now
         else:
-            return False
+            print("Looking for a reference list")
+            _, true_to_false = whitelist_methods.getCellWhitelist(
+                knee_method="density",
+                cell_barcode_counts=reads_per_cell,
+                expect_cells=args.expected_cells,
+                cell_number=args.expected_cells,
+                error_correct_threshold=args.bc_threshold,
+                plotfile_prefix=False,
+            )
+            if true_to_false is None:
+                print(
+                    "Failed to find a good reference list. Will not correct cell barcodes"
+                )
+                return False
     else:
         return False
 
@@ -325,70 +346,6 @@ def check_barcodes_lengths(read1_length, cb_first, cb_last, umi_first, umi_last)
                 read1_length, barcode_umi_length
             )
         )
-
-
-def blocks(files, size=65536):
-    """
-    A fast way of counting the lines of a large file.
-    Ref:
-        https://stackoverflow.com/a/9631635/9178565
-
-    Args:
-        files (io.handler): A file handler 
-        size (int): Block size
-    Returns:
-        A generator
-    """
-    while True:
-        b = files.read(size)
-        if not b:
-            break
-        yield b
-
-
-def get_n_lines(file_path):
-    """
-    Determines how many lines have to be processed
-    depending on options and number of available lines.
-    Checks that the number of lines is a multiple of 4.
-
-    Args:
-        file_path (string): Path to a fastq.gz file
-
-    Returns:
-        n_lines (int): Number of lines in the file
-    """
-    print("Counting number of reads in file {}".format(file_path))
-    with gzip.open(file_path, "rt", encoding="utf-8", errors="ignore") as f:
-        n_lines = sum(bl.count("\n") for bl in blocks(f))
-    if n_lines % 4 != 0:
-        sys.exit(
-            "{}'s number of lines is not a multiple of 4. The file "
-            "might be corrupted.\n Exiting".format(file_path)
-        )
-    return n_lines
-
-
-def get_read_paths(read1_path, read2_path):
-    """
-    Splits up 2 comma-separated strings of input files into list of files
-    to process. Ensures both lists are equal in length.
-
-    Args:
-        read1_path (string): Comma-separated paths to read1.fq
-        read2_path (string): Comma-separated paths to read2.fq
-    Returns:
-        _read1_path (list(string)): list of paths to read1.fq
-        _read2_path (list(string)): list of paths to read2.fq
-    """
-    _read1_path = read1_path.split(",")
-    _read2_path = read2_path.split(",")
-    if len(_read1_path) != len(_read2_path):
-        sys.exit(
-            "Unequal number of read1 ({}) and read2({}) files provided"
-            "\n Exiting".format(len(_read1_path), len(_read2_path))
-        )
-    return (_read1_path, _read2_path)
 
 
 def pre_run_checks(read1_paths, chemistry_def, longest_tag_len, args):

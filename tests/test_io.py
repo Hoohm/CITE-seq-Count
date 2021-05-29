@@ -28,6 +28,21 @@ def data():
     from collections import OrderedDict
     from scipy import sparse
 
+    pytest.correct_R1_path = "tests/test_data/fastq/correct_R1.fastq.gz"
+    pytest.correct_R2_path = "tests/test_data/fastq/correct_R2.fastq.gz"
+    pytest.corrupt_R1_path = "tests/test_data/fastq/corrupted_R1.fastq.gz"
+    pytest.corrupt_R2_path = "tests/test_data/fastq/corrupted_R2.fastq.gz"
+
+    pytest.correct_R1_multipath = "path/to/R1_1.fastq.gz,path/to/R1_2.fastq.gz"
+    pytest.correct_R2_multipath = "path/to/R2_1.fastq.gz,path/to/R2_2.fastq.gz"
+    pytest.incorrect_R2_multipath = (
+        "path/to/R2_1.fastq.gz,path/to/R2_2.fastq.gz,path/to/R2_3.fastq.gz"
+    )
+
+    pytest.correct_multipath_result = (
+        ["path/to/R1_1.fastq.gz", "path/to/R1_2.fastq.gz"],
+        ["path/to/R2_1.fastq.gz", "path/to/R2_2.fastq.gz"],
+    )
     test_matrix = sparse.dok_matrix((4, 2), dtype=np.int32)
     test_matrix[1, 1] = 1
     pytest.sparse_matrix = test_matrix
@@ -124,3 +139,28 @@ def test_write_to_dense_wo_translation(data, tmpdir):
     )
     file_path = os.path.join(tmpdir, "without_translation", csv_name)
     assert md5_sums[csv_path] == md5(file_path)
+
+
+@pytest.mark.dependency()
+def test_get_n_lines(data):
+    assert io.get_n_lines(pytest.correct_R1_path) == (200 * 4)
+
+
+@pytest.mark.dependency()
+def test_corrrect_multipath(data):
+    assert (
+        io.get_read_paths(pytest.correct_R1_multipath, pytest.correct_R2_multipath)
+        == pytest.correct_multipath_result
+    )
+
+
+@pytest.mark.dependency(depends=["test_get_n_lines"])
+def test_incorrrect_multipath(data):
+    with pytest.raises(SystemExit):
+        io.get_read_paths(pytest.correct_R1_multipath, pytest.incorrect_R2_multipath)
+
+
+@pytest.mark.dependency(depends=["test_get_n_lines"])
+def test_get_n_lines_not_multiple_of_4(data):
+    with pytest.raises(SystemExit):
+        io.get_n_lines(pytest.corrupt_R1_path)

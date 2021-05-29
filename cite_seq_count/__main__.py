@@ -100,7 +100,7 @@ def main():
         os.remove(file_path)
     cell_barcode_correction = preprocessing.determine_cell_correction_mode(args)
     # Correct cell barcodes
-    if cell_barcode_correction != "no":
+    if cell_barcode_correction:
         (
             final_results,
             umis_per_cell,

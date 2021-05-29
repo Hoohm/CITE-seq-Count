@@ -19,21 +19,6 @@ def data():
     pytest.failing_filtered_list_csv = "tests/test_data/filtered_lists/fail/*.csv"
 
     pytest.correct_tags_path = "tests/test_data/tags/pass/correct.csv"
-    pytest.correct_R1_path = "tests/test_data/fastq/correct_R1.fastq.gz"
-    pytest.correct_R2_path = "tests/test_data/fastq/correct_R2.fastq.gz"
-    pytest.corrupt_R1_path = "tests/test_data/fastq/corrupted_R1.fastq.gz"
-    pytest.corrupt_R2_path = "tests/test_data/fastq/corrupted_R2.fastq.gz"
-
-    pytest.correct_R1_multipath = "path/to/R1_1.fastq.gz,path/to/R1_2.fastq.gz"
-    pytest.correct_R2_multipath = "path/to/R2_1.fastq.gz,path/to/R2_2.fastq.gz"
-    pytest.incorrect_R2_multipath = (
-        "path/to/R2_1.fastq.gz,path/to/R2_2.fastq.gz,path/to/R2_3.fastq.gz"
-    )
-
-    pytest.correct_multipath_result = (
-        ["path/to/R1_1.fastq.gz", "path/to/R1_2.fastq.gz"],
-        ["path/to/R2_1.fastq.gz", "path/to/R2_2.fastq.gz"],
-    )
 
     # Create some variables to compare to
     pytest.correct_reference_list = set(["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"])
@@ -111,31 +96,3 @@ def test_check_distance_too_big_between_tags(data):
     with pytest.raises(SystemExit):
         preprocessing.check_tags(pytest.correct_tags, 8)
 
-
-@pytest.mark.dependency()
-def test_get_n_lines(data):
-    assert preprocessing.get_n_lines(pytest.correct_R1_path) == (200 * 4)
-
-
-@pytest.mark.dependency(depends=["test_get_n_lines"])
-def test_get_n_lines_not_multiple_of_4(data):
-    with pytest.raises(SystemExit):
-        preprocessing.get_n_lines(pytest.corrupt_R1_path)
-
-
-@pytest.mark.dependency()
-def test_corrrect_multipath(data):
-    assert (
-        preprocessing.get_read_paths(
-            pytest.correct_R1_multipath, pytest.correct_R2_multipath
-        )
-        == pytest.correct_multipath_result
-    )
-
-
-@pytest.mark.dependency(depends=["test_get_n_lines"])
-def test_incorrrect_multipath(data):
-    with pytest.raises(SystemExit):
-        preprocessing.get_read_paths(
-            pytest.correct_R1_multipath, pytest.incorrect_R2_multipath
-        )
