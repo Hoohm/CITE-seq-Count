@@ -52,24 +52,11 @@ def modify(seq, n, modification_type):
 def data():
     from collections import Counter
 
-    # Test file paths
-    pytest.correct_R1_path = "tests/test_data/fastq/correct_R1.fastq.gz"
-    pytest.correct_R2_path = "tests/test_data/fastq/correct_R2.fastq.gz"
     pytest.file_path = "tests/test_data/fastq/test_csv.csv"
-
-    pytest.chunk_size = 800
-    tag = namedtuple("tag", ["name", "sequence", "id"])
-    pytest.tags = [
-        tag(name="test1", sequence="CGTACGTAGCCTAGC", id=0),
-        tag(name="test2", sequence="CGTAGCTCG", id=1),
-    ]
-
+    pytest.debug = False
     pytest.barcode_slice = slice(0, 16)
     pytest.umi_slice = slice(16, 26)
     pytest.correct_reference_list = set(["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"])
-    pytest.legacy = False
-    pytest.debug = False
-    pytest.start_trim = 0
     pytest.maximum_distance = 5
     pytest.results = {
         "ACTGTTTTATTGGCCT": {
@@ -79,18 +66,8 @@ def data():
             1: Counter({b"TAGCTTAGTA": 3, b"TAGCTTAGTC": 2, b"GCGATGCATA": 1})
         },
     }
-    pytest.corrected_results = {
-        "ACTGTTTTATTGGCCT": {0: Counter({b"CATTAGTGGT": 6})},
-        "TTCATAAGGTAGGGAT": {1: Counter({b"TAGCTTAGTA": 5, b"GCGATGCATA": 1})},
-    }
-    pytest.umis_per_cell = Counter({"ACTGTTTTATTGGCCT": 1, "TTCATAAGGTAGGGAT": 2})
-    pytest.reads_per_cell = Counter({"ACTGTTTTATTGGCCT": 3, "TTCATAAGGTAGGGAT": 6})
-    pytest.expected_cells = 2
-    pytest.no_match = Counter()
-    pytest.collapsing_threshold = 1
-    pytest.sliding_window = False
-    pytest.max_umis = 20000
 
+    pytest.sliding_window = False
     pytest.sequence_pool = []
     pytest.tags_tuple = preprocessing.check_tags(
         preprocessing.parse_tags_csv("tests/test_data/tags/pass/correct.csv"), 5
