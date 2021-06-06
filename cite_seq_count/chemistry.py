@@ -29,7 +29,7 @@ class Chemistry:
     umi_barcode_start: int
     umi_barcode_end: int
     R2_trim_start: int
-    reference_list_path: str
+    translation_list_path: str
 
 
 DEFINITIONS_DB = pooch.create(
@@ -89,19 +89,19 @@ def get_chemistry_definition(chemistry_short_name):
     """
     chemistry_defs = fetch_definitions()[chemistry_short_name]
 
-    if chemistry_defs["reference_list"]["path"] not in DEFINITIONS_DB.registry:
+    if chemistry_defs["translation_list"]["path"] not in DEFINITIONS_DB.registry:
         path = pooch.retrieve(
             url=os.path.join(
                 GLOBAL_LINK_GITHUB,
                 "chemistries",
-                chemistry_defs["reference_list"]["path"],
+                chemistry_defs["translation_list"]["path"],
             ),
             known_hash=None,
-            fname=chemistry_defs["reference_list"]["path"],
+            fname=chemistry_defs["translation_list"]["path"],
             path=DEFINITIONS_DB.abspath,
         )
     else:
-        path = DEFINITIONS_DB.registry[chemistry_defs["reference_list"]["path"]]
+        path = DEFINITIONS_DB.registry[chemistry_defs["translation_list"]["path"]]
     chemistry_def = Chemistry(
         name=chemistry_short_name,
         cell_barcode_start=chemistry_defs["barcode_structure_indexes"]["cell_barcode"][
@@ -117,7 +117,7 @@ def get_chemistry_definition(chemistry_short_name):
             "R1"
         ]["stop"],
         R2_trim_start=chemistry_defs["sequence_structure_indexes"]["R2"]["start"] - 1,
-        reference_list_path=path,
+        translation_list_path=path,
     )
     return chemistry_def
 
@@ -130,7 +130,7 @@ def create_chemistry_definition(args):
         umi_barcode_start=args.umi_first,
         umi_barcode_end=args.umi_last,
         R2_trim_start=args.start_trim,
-        reference_list_path=args.reference_list,
+        translation_list_path=args.translation_list,
     )
     return chemistry_def
 
@@ -138,22 +138,22 @@ def create_chemistry_definition(args):
 def setup_chemistry(args):
     if args.chemistry:
         chemistry_def = get_chemistry_definition(args.chemistry)
-        reference_dict = preprocessing.parse_cell_list_csv(
-            filename=chemistry_def.reference_list_path,
+        translation_dict = preprocessing.parse_cell_list_csv(
+            filename=chemistry_def.translation_list_path,
             barcode_length=chemistry_def.cell_barcode_end
             - chemistry_def.cell_barcode_start
             + 1,
-            file_type="reference",
+            file_type="translation",
         )
     else:
         chemistry_def = create_chemistry_definition(args)
-        if args.reference_list:
-            print("Loading reference_list")
-            reference_dict = preprocessing.parse_cell_list_csv(
-                filename=args.reference_list,
+        if args.translation_list:
+            print("Loading translation_list")
+            translation_dict = preprocessing.parse_cell_list_csv(
+                filename=args.translation_list,
                 barcode_length=args.cb_last - args.cb_first + 1,
-                file_type="reference",
+                file_type="translation",
             )
         else:
-            reference_dict = False
-    return (reference_dict, chemistry_def)
+            translation_dict = False
+    return (translation_dict, chemistry_def)

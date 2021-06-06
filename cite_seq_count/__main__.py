@@ -8,6 +8,7 @@ import logging
 import time
 
 from cite_seq_count import preprocessing
+from cite_seq_count import mapping
 from cite_seq_count import processing
 from cite_seq_count import chemistry
 from cite_seq_count import io
@@ -40,7 +41,7 @@ def main():
     assert os.access(args.temp_path, os.W_OK)
 
     # Get chemistry defs
-    (reference_dict, chemistry_def) = chemistry.setup_chemistry(args)
+    (translation_dict, chemistry_def) = chemistry.setup_chemistry(args)
 
     # Check if we have a filtered list provided
 
@@ -49,8 +50,11 @@ def main():
     ordered_tags, longest_tag_len = preprocessing.check_tags(ab_map, args.max_error)
 
     # Identify input file(s)
-    read1_paths, read2_paths = preprocessing.get_read_paths(
-        args.read1_path, args.read2_path
+    read1_paths, read2_paths = io.get_read_paths(args.read1_path, args.read2_path)
+
+    # Check filtered input list
+    filtered_cells = preprocessing.get_filtered_list(
+        args=args, chemistry=chemistry_def, translation_dict=translation_dict
     )
     # Checks before chunking.
     (n_reads, R2_min_length, maximum_distance) = preprocessing.pre_run_checks(
@@ -78,17 +82,12 @@ def main():
         maximum_distance=maximum_distance,
     )
     # Map the data
-    (
-        final_results,
-        umis_per_cell,
-        reads_per_cell,
-        merged_no_match,
-    ) = processing.map_data(
+    (final_results, umis_per_cell, reads_per_cell, merged_no_match,) = mapping.map_data(
         input_queue=input_queue, unmapped_id=len(ordered_tags), args=args
     )
 
     # Check if 99% of the reads are unmapped.
-    processing.check_unmapped(
+    mapping.check_unmapped(
         no_match=merged_no_match,
         too_short=R1_too_short + R2_too_short,
         total_reads=total_reads,
@@ -98,9 +97,15 @@ def main():
     # Remove temp chunks
     for file_path in temp_files:
         os.remove(file_path)
-    cell_barcode_correction = preprocessing.determine_cell_correction_mode(args)
+
+    filtered_cells = processing.check_filtered_cells(
+        filtered_cells=filtered_cells,
+        expected_cells=args.expected_cells,
+        umis_per_cell=umis_per_cell,
+    )
+
     # Correct cell barcodes
-    if cell_barcode_correction:
+    if args.bc_threshold > 0:
         (
             final_results,
             umis_per_cell,
@@ -108,10 +113,8 @@ def main():
         ) = processing.run_cell_barcode_correction(
             final_results=final_results,
             umis_per_cell=umis_per_cell,
-            reads_per_cell=reads_per_cell,
-            reference_dict=reference_dict,
             ordered_tags=ordered_tags,
-            cell_barcode_correction=cell_barcode_correction,
+            filtered_set=filtered_cells,
             args=args,
         )
     else:
@@ -131,7 +134,7 @@ def main():
         ordered_tags=ordered_tags,
         data_type="read",
         outfolder=args.outfolder,
-        reference_dict=reference_dict,
+        translation_dict=translation_dict,
     )
 
     # UMI correction
@@ -187,7 +190,7 @@ def main():
         ordered_tags=ordered_tags,
         data_type="umi",
         outfolder=args.outfolder,
-        reference_dict=reference_dict,
+        translation_dict=translation_dict,
     )
 
     # Write unmapped sequences

@@ -110,7 +110,7 @@ def get_args():
         type=str,
         required=False,
         default=False,
-        help=("Option replacing cell/UMI barcodes indexes and reference list."),
+        help=("Option replacing cell/UMI barcodes indexes and translation list."),
     )
     if "--chemistry" not in sys.argv:
         barcodes.add_argument(
@@ -175,6 +175,7 @@ def get_args():
     )
     cells_filtering.add_argument(
         "-fl",
+        "-wl",
         "--filtered_cells",
         dest="filtered_cells",
         type=str,
@@ -184,19 +185,17 @@ def get_args():
 
     if "--chemistry" not in sys.argv:
         barcodes.add_argument(
-            "-rl",
-            "--reference_list",
-            dest="reference_list",
+            "-tl",
+            "--translation_list",
+            dest="translation_list",
             required=False,
             type=str,
             default=False,
             help=(
-                "A csv file containning a reference list of all potential barcodes\n\n"
+                "A csv file containning a translation list of all potential barcodes\n\n"
                 "\tExample:\n"
-                "reference\n"
-                "\tATGCTAGTGCTA\n\tGCTAGTCAGGAT\n\tCGACTGCTAACG\n\n"
-                "Or 10X-style:\n"
-                "\tATGCTAGTGCTA-1\n\tGCTAGTCAGGAT-1\n\tCGACTGCTAACG-1\n"
+                "whitelist,translation\n"
+                "\tAAACCCAAGAAACACT,AAACCCATCAAACACT\n\AAACCCAAGAAACCAT,AAACCCATCAAACCAT\n\AAACCCAAGAAACCCA,AAACCCATCAAACCCA\n\n"
             ),
         )
 

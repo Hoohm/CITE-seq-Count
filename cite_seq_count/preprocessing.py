@@ -53,7 +53,7 @@ def parse_cell_list_csv(filename, barcode_length, file_type):
     `-1` at the end of each barcode.
 
     Args:
-        filename (str): reference_list barcode file.
+        filename (str): translation_list barcode file.
         barcode_length (int): Length of the expected barcodes.
 
     Returns:
@@ -61,8 +61,8 @@ def parse_cell_list_csv(filename, barcode_length, file_type):
 
     """
     STRIP_CHARS = '"0123456789- \t\n'
-    if file_type == "reference":
-        REQUIRED_HEADER = ["reference"]
+    if file_type == "translation":
+        REQUIRED_HEADER = ["translation"]
     elif file_type == "filtered":
         REQUIRED_HEADER = ["filtered_list"]
 
@@ -78,40 +78,40 @@ def parse_cell_list_csv(filename, barcode_length, file_type):
             "The header is missing {}. Exiting".format(",".join(list(set_dif)))
         )
 
-    reference_id = header.index(REQUIRED_HEADER[0])
-    reference_dict = {}
-    if "translation" in header and REQUIRED_HEADER[0] == "reference":
+    translation_id = header.index(REQUIRED_HEADER[0])
+    translation_dict = {}
+    if "translation" in header and REQUIRED_HEADER[0] == "translation":
         has_translation = True
 
         translation_id = header.index("translation")
         for row in csv_reader:
-            ref_barcode = row[reference_id].strip(STRIP_CHARS)
+            ref_barcode = row[translation_id].strip(STRIP_CHARS)
             tra_barcode = row[translation_id].strip(STRIP_CHARS)
             if (
                 len(ref_barcode) == barcode_length
                 and len(tra_barcode) == barcode_length
             ):
-                reference_dict[ref_barcode] = tra_barcode
+                translation_dict[ref_barcode] = tra_barcode
     else:
         for row in csv_reader:
-            ref_barcode = row[reference_id].strip(STRIP_CHARS)
+            ref_barcode = row[translation_id].strip(STRIP_CHARS)
             if len(ref_barcode) == barcode_length:
-                reference_dict[ref_barcode] = 0
+                translation_dict[ref_barcode] = 0
 
-    for cell_barcode in reference_dict.keys():
+    for cell_barcode in translation_dict.keys():
         if not cell_pattern.match(cell_barcode):
             sys.exit(
                 "This barcode {} is not only composed of ATGC bases.".format(
                     cell_barcode
                 )
             )
-    if len(reference_dict) == 0:
-        sys.exit("reference_dict is empty.")
+    if len(translation_dict) == 0:
+        sys.exit("translation_dict is empty.")
     if has_translation:
         print(
-            "Your reference list provides a translation name. This will be the default for the count matrices."
+            "Your translation list provides a translation name. This will be the default for the count matrices."
         )
-    return reference_dict
+    return translation_dict
 
 
 def parse_tags_csv(filename):
@@ -259,11 +259,11 @@ def get_read_length(filename):
     return read_length
 
 
-def translate_barcodes(cell_set, reference_dict):
-    """Translate a list of barcode using a mapping reference
+def translate_barcodes(cell_set, translation_dict):
+    """Translate a list of barcode using a mapping translation
     Args:
         cell_set (set): A set of barcodes
-        reference_dict (dict): A dict providing a simple key value translation
+        translation_dict (dict): A dict providing a simple key value translation
     
     Returns:
         translated_barcodes (set): A set of translated barcodes
@@ -271,51 +271,8 @@ def translate_barcodes(cell_set, reference_dict):
 
     translated_barcodes = set()
     for cell in cell_set:
-        translate_barcodes.add(reference_dict[cell])
+        translate_barcodes.add(translation_dict[cell])
     return translated_barcodes
-
-
-def get_filtered_list(args, chemistry, reference_dict, reads_per_cell):
-    """
-    Determines what mode to use for cell barcode correction.
-    Args:
-        args(argparse): All arguments
-    
-    Returns:
-        str: type of correction
-    """
-    if args.bc_threshold != 0:
-        # Are we provided with a filtered list?
-        if args.filtered_list:
-            filtered_set = parse_filtered_list_csv(
-                args.filtered_list,
-                (chemistry.cell_barcode_stop - chemistry.cell_barcode_start),
-            )
-            # Do we need to translate the list?
-            if args.reference_dict:
-                # get the translation
-                filtered_set = translate_barcodes(
-                    cell_set=filtered_set, reference_dict=reference_dict
-                )
-            return filtered_set
-        # We try and rely on the top number of cells now
-        else:
-            print("Looking for a reference list")
-            _, true_to_false = whitelist_methods.getCellWhitelist(
-                knee_method="density",
-                cell_barcode_counts=reads_per_cell,
-                expect_cells=args.expected_cells,
-                cell_number=args.expected_cells,
-                error_correct_threshold=args.bc_threshold,
-                plotfile_prefix=False,
-            )
-            if true_to_false is None:
-                print(
-                    "Failed to find a good reference list. Will not correct cell barcodes"
-                )
-                return False
-    else:
-        return False
 
 
 def check_barcodes_lengths(read1_length, cb_first, cb_last, umi_first, umi_last):
@@ -401,3 +358,31 @@ def pre_run_checks(read1_paths, chemistry_def, longest_tag_len, args):
         R2_min_length = longest_tag_len
         maximum_distance = args.max_error
     return n_reads, R2_min_length, maximum_distance
+
+
+def get_filtered_list(args, chemistry, translation_dict):
+    """
+    Determines what mode to use for cell barcode correction.
+    Args:
+        args(argparse): All arguments
+    
+    Returns:
+        set if we have a filtered list
+        None if we want correction and we have not a list
+        False if we deactivation filtering
+    """
+    if args.filtered_cells:
+        filtered_set = parse_filtered_list_csv(
+            args.filtered_cells,
+            (chemistry.cell_barcode_stop - chemistry.cell_barcode_start),
+        )
+        # Do we need to translate the list?
+        if args.translation_dict:
+            # get the translation
+            translated_set = translate_barcodes(
+                cell_set=filtered_set, translation_dict=translation_dict
+            )
+            return translated_set
+        return filtered_set
+    else:
+        return None

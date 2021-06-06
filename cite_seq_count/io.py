@@ -100,7 +100,7 @@ def get_csv_reader_from_path(filename):
 
 
 def write_to_files(
-    sparse_matrix, filtered_cells, ordered_tags, data_type, outfolder, reference_dict
+    sparse_matrix, filtered_cells, ordered_tags, data_type, outfolder, translation_dict
 ):
     """Write the umi and read sparse matrices to file in gzipped mtx format.
 
@@ -111,18 +111,19 @@ def write_to_files(
         data_type (string): A string definning if the data is umi or read based.
         outfolder (string): Path to the output folder.
     """
+    original_barcode = list(translation_dict.keys())
+    translated_barcode = list(translation_dict.values())
     prefix = os.path.join(outfolder, data_type + "_count")
     os.makedirs(prefix, exist_ok=True)
     io.mmwrite(os.path.join(prefix, "matrix.mtx"), a=sparse_matrix, field="integer")
     with gzip.open(os.path.join(prefix, "barcodes.tsv.gz"), "wb") as barcode_file:
         for barcode in filtered_cells:
-            if reference_dict:
-                if reference_dict[barcode] != 0:
-                    barcode_file.write(
-                        "{}\t{}\n".format(reference_dict[barcode], barcode).encode(),
-                    )
-                else:
-                    barcode_file.write("{}\n".format(barcode).encode())
+            if translation_dict:
+                barcode_file.write(
+                    "{}\t{}\n".format(
+                        original_barcode[translated_barcode.index(barcode)], barcode
+                    ).encode(),
+                )
             else:
                 barcode_file.write("{}\n".format(barcode).encode())
     with gzip.open(os.path.join(prefix, "features.tsv.gz"), "wb") as feature_file:
