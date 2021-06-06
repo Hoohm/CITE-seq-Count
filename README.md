@@ -15,7 +15,7 @@ Installation
 -------------------------------------------
 
 ```
-pip install CITE-seq-Count==1.4.4
+pip install CITE-seq-Count==1.4.5
 ```
 
 
