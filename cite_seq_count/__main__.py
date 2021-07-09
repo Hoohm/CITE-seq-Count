@@ -53,6 +53,7 @@ def main():
     read1_paths, read2_paths = io.get_read_paths(args.read1_path, args.read2_path)
 
     # Check filtered input list
+    # If a translation is given, will return the translated version
     filtered_cells = preprocessing.get_filtered_list(
         args=args, chemistry=chemistry_def, translation_dict=translation_dict
     )
@@ -97,7 +98,7 @@ def main():
     # Remove temp chunks
     for file_path in temp_files:
         os.remove(file_path)
-
+    # Check that we have a filtered cell list to work on
     filtered_cells = processing.check_filtered_cells(
         filtered_cells=filtered_cells,
         expected_cells=args.expected_cells,
@@ -138,7 +139,6 @@ def main():
     )
 
     # UMI correction
-
     if args.umi_threshold != 0:
         # Correct UMIS
         (

@@ -124,7 +124,7 @@ def correct_cells_no_translation_list(
         umis_per_cell (Counter): Counter of umis per cell after cell barcode correction
         corrected_umis (int): How many umis have been corrected.
     """
-    print("Looking for a translation list")
+    print("Looking for a reference list")
     _, true_to_false = whitelist_methods.getCellWhitelist(
         knee_method="density",
         cell_barcode_counts=reads_per_cell,
@@ -134,7 +134,7 @@ def correct_cells_no_translation_list(
         plotfile_prefix=False,
     )
     if true_to_false is None:
-        print("Failed to find a good translation list. Will not correct cell barcodes")
+        print("Failed to find a good reference list. Will not correct cell barcodes")
         corrected_barcodes = 0
         return (final_results, umis_per_cell, corrected_barcodes)
     (umis_per_cell, final_results, corrected_barcodes) = collapse_cells(
@@ -146,8 +146,8 @@ def correct_cells_no_translation_list(
     return (final_results, umis_per_cell, corrected_barcodes)
 
 
-def correct_cells_translation_list(
-    final_results, umis_per_cell, translation_list, collapsing_threshold, ab_map
+def correct_cells_filtered_set(
+    final_results, umis_per_cell, filtered_set, collapsing_threshold, ab_map
 ):
     """
     Corrects cell barcodes based on a given translation_list.
@@ -165,18 +165,18 @@ def correct_cells_translation_list(
         umis_per_cell (Counter): Updated UMI counts after correction.
         corrected_barcodes (int): How many umis have been corrected.
     """
-    print("Generating barcode tree from translation list")
+    print("Generating barcode tree from reference list")
     # pylint: disable=no-member
-    barcode_tree = pybktree.BKTree(Levenshtein.hamming, translation_list)
+    barcode_tree = pybktree.BKTree(Levenshtein.hamming, filtered_set)
     barcodes = set(umis_per_cell)
-    print("Selecting translation candidates")
+    print("Selecting reference candidates")
     print("Processing {:,} cell barcodes".format(len(barcodes)))
 
     # Run with one process
     true_to_false = find_true_to_false_map(
         barcode_tree=barcode_tree,
         cell_barcodes=barcodes,
-        translation_list=translation_list,
+        filtered_set=filtered_set,
         collapsing_threshold=collapsing_threshold,
     )
     print("Collapsing wrong barcodes with original barcodes")
@@ -187,7 +187,7 @@ def correct_cells_translation_list(
 
 
 def find_true_to_false_map(
-    barcode_tree, cell_barcodes, translation_list, collapsing_threshold
+    barcode_tree, cell_barcodes, filtered_set, collapsing_threshold
 ):
     """
     Creates a mapping between "fake" cell barcodes and their original true barcode.
@@ -195,7 +195,7 @@ def find_true_to_false_map(
     Args:
         barcode_tree (BKTree): BKTree of all original cell barcodes.
         cell_barcodes (List): Cell barcodes to go through.
-        translation_list (dict): Dict of the translation_list, the "true" cell barcodes.
+        filtered_set (dict): Dict of the filtered_set, the "true" cell barcodes.
         collasping_threshold (int): How many mistakes to correct.
 
     Return:
@@ -203,10 +203,10 @@ def find_true_to_false_map(
     """
     true_to_false = defaultdict(list)
     for cell_barcode in cell_barcodes:
-        if cell_barcode in translation_list:
-            # if the barcode is already translation_listed, no need to add
+        if cell_barcode in filtered_set:
+            # if the barcode is already filtered_set, no need to add
             continue
-        # get all members of translation_list that are at distance of collapsing_threshold
+        # get all members of filtered_set that are at distance of collapsing_threshold
         candidates = [
             white_cell
             for d, white_cell in barcode_tree.find(cell_barcode, collapsing_threshold)
@@ -216,7 +216,7 @@ def find_true_to_false_map(
             white_cell_str = candidates[0]
             true_to_false[white_cell_str].append(cell_barcode)
         else:
-            # the cell doesnt match to any translation_listed barcode,
+            # the cell doesnt match to any filtered_set barcode,
             # hence we have to drop it
             # (as it cannot be asscociated with any frequent barcode)
             continue
@@ -237,10 +237,10 @@ def run_cell_barcode_correction(
         return final_results, umis_per_cell, bcs_corrected
 
     elif type(filtered_set) == set:
-        (final_results, umis_per_cell, bcs_corrected,) = correct_cells_translation_list(
+        (final_results, umis_per_cell, bcs_corrected,) = correct_cells_filtered_set(
             final_results=final_results,
             umis_per_cell=umis_per_cell,
-            translation_list=filtered_set,
+            filtered_set=filtered_set,
             collapsing_threshold=args.bc_threshold,
             ab_map=ordered_tags,
         )
@@ -250,7 +250,7 @@ def run_cell_barcode_correction(
             else:
                 final_results[missing_cell] = dict()
                 for TAG in ordered_tags:
-                    final_results[missing_cell][TAG.safe_name] = Counter()
+                    final_results[missing_cell][TAG.id] = Counter()
     return final_results, umis_per_cell, bcs_corrected
 
 
@@ -304,7 +304,7 @@ def check_filtered_cells(filtered_cells, expected_cells, umis_per_cell):
 #             else:
 #                 final_results[missing_cell] = dict()
 #                 for TAG in ordered_tags:
-#                     final_results[missing_cell][TAG.safe_name] = Counter()
+#                     final_results[missing_cell][TAG.name] = Counter()
 #                 filtered_cells.add(missing_cell)
 #     else:
 #         top_cells_tuple = umis_per_cell.most_common(expected_cells)
@@ -468,7 +468,7 @@ def generate_sparse_matrices(
         ordered_tags (list): Ordered tags in a list of tuples.
 
     Returns:
-        results_matrix (scipy.sparse.dok_matrix): UMI counts
+        results_matrix (scipy.sparse.dok_matrix): UMI or Read counts
 
 
     """
@@ -478,7 +478,6 @@ def generate_sparse_matrices(
     else:
         n_features = len(ordered_tags) + 1
     results_matrix = sparse.dok_matrix((n_features, len(filtered_cells)), dtype=int32)
-    # print(ordered_tags)
 
     for i, cell_barcode in enumerate(filtered_cells):
         if cell_barcode not in final_results.keys():
@@ -488,7 +487,8 @@ def generate_sparse_matrices(
             if umi_counts:
                 if TAG_id == unmapped_id:
                     continue
-                results_matrix[TAG_id, i] = len(final_results[cell_barcode][TAG_id])
+                else:
+                    results_matrix[TAG_id, i] = len(final_results[cell_barcode][TAG_id])
             else:
                 results_matrix[TAG_id, i] = sum(
                     final_results[cell_barcode][TAG_id].values()

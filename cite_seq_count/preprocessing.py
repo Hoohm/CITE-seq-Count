@@ -62,7 +62,7 @@ def parse_cell_list_csv(filename, barcode_length, file_type):
     """
     STRIP_CHARS = '"0123456789- \t\n'
     if file_type == "translation":
-        REQUIRED_HEADER = ["translation"]
+        REQUIRED_HEADER = ["reference", "translation"]
     elif file_type == "filtered":
         REQUIRED_HEADER = ["filtered_list"]
 
@@ -78,23 +78,24 @@ def parse_cell_list_csv(filename, barcode_length, file_type):
             "The header is missing {}. Exiting".format(",".join(list(set_dif)))
         )
 
-    translation_id = header.index(REQUIRED_HEADER[0])
+    # translation_id = header.index(REQUIRED_HEADER[0])
     translation_dict = {}
-    if "translation" in header and REQUIRED_HEADER[0] == "translation":
+    if "translation" in header:
         has_translation = True
 
         translation_id = header.index("translation")
+        reference_id = header.index("reference")
         for row in csv_reader:
-            ref_barcode = row[translation_id].strip(STRIP_CHARS)
+            ref_barcode = row[reference_id].strip(STRIP_CHARS)
             tra_barcode = row[translation_id].strip(STRIP_CHARS)
             if (
                 len(ref_barcode) == barcode_length
                 and len(tra_barcode) == barcode_length
             ):
-                translation_dict[ref_barcode] = tra_barcode
+                translation_dict[tra_barcode] = ref_barcode
     else:
         for row in csv_reader:
-            ref_barcode = row[translation_id].strip(STRIP_CHARS)
+            ref_barcode = row[0].strip(STRIP_CHARS)
             if len(ref_barcode) == barcode_length:
                 translation_dict[ref_barcode] = 0
 
@@ -271,7 +272,7 @@ def translate_barcodes(cell_set, translation_dict):
 
     translated_barcodes = set()
     for cell in cell_set:
-        translate_barcodes.add(translation_dict[cell])
+        translated_barcodes.add(translation_dict[cell])
     return translated_barcodes
 
 
@@ -374,10 +375,10 @@ def get_filtered_list(args, chemistry, translation_dict):
     if args.filtered_cells:
         filtered_set = parse_filtered_list_csv(
             args.filtered_cells,
-            (chemistry.cell_barcode_stop - chemistry.cell_barcode_start),
+            (chemistry.cell_barcode_end - chemistry.cell_barcode_start),
         )
         # Do we need to translate the list?
-        if args.translation_dict:
+        if args.translation_list:
             # get the translation
             translated_set = translate_barcodes(
                 cell_set=filtered_set, translation_dict=translation_dict

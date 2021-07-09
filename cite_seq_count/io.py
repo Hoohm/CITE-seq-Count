@@ -111,8 +111,9 @@ def write_to_files(
         data_type (string): A string definning if the data is umi or read based.
         outfolder (string): Path to the output folder.
     """
-    original_barcode = list(translation_dict.keys())
-    translated_barcode = list(translation_dict.values())
+    if translation_dict:
+        original_barcode = list(translation_dict.keys())
+        translated_barcode = list(translation_dict.values())
     prefix = os.path.join(outfolder, data_type + "_count")
     os.makedirs(prefix, exist_ok=True)
     io.mmwrite(os.path.join(prefix, "matrix.mtx"), a=sparse_matrix, field="integer")

@@ -58,7 +58,7 @@ def fetch_definitions():
     return json_data
 
 
-def list_chemistries(chemistry_defs):
+def list_chemistries(all_chemistry_defs):
     """
     List all the available chemistries in the database
     Args:
