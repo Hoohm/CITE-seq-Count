@@ -74,14 +74,14 @@ def test_filtered_list_parser(data):
 def test_parse_reference_list_csv(data):
     passing_files = glob.glob(pytest.passing_reference_list_csv)
     for file_path in passing_files:
-        assert preprocessing.parse_cell_list_csv(file_path, 16, "reference").keys() in (
+        assert preprocessing.parse_cell_list_csv(file_path, 16).keys() in (
             pytest.correct_reference_list,
             1,
         )
     with pytest.raises(SystemExit):
         failing_files = glob.glob(pytest.failing_reference_list_csv)
         for file_path in failing_files:
-            preprocessing.parse_cell_list_csv(file_path, 16, "reference")
+            preprocessing.parse_cell_list_csv(file_path, 16)
 
 
 @pytest.mark.dependency()

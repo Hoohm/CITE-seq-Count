@@ -143,7 +143,6 @@ def setup_chemistry(args):
             barcode_length=chemistry_def.cell_barcode_end
             - chemistry_def.cell_barcode_start
             + 1,
-            file_type="translation",
         )
     else:
         chemistry_def = create_chemistry_definition(args)
@@ -152,7 +151,6 @@ def setup_chemistry(args):
             translation_dict = preprocessing.parse_cell_list_csv(
                 filename=args.translation_list,
                 barcode_length=args.cb_last - args.cb_first + 1,
-                file_type="translation",
             )
         else:
             translation_dict = False

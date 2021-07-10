@@ -46,7 +46,7 @@ def parse_filtered_list_csv(filename, barcode_length):
     return out_set
 
 
-def parse_cell_list_csv(filename, barcode_length, file_type):
+def parse_cell_list_csv(filename, barcode_length):
     """Reads white-listed barcodes from a CSV file.
 
     The function accepts plain barcodes or even 10X style barcodes with the
@@ -61,13 +61,7 @@ def parse_cell_list_csv(filename, barcode_length, file_type):
 
     """
     STRIP_CHARS = '"0123456789- \t\n'
-    if file_type == "translation":
-        REQUIRED_HEADER = ["reference", "translation"]
-    elif file_type == "filtered":
-        REQUIRED_HEADER = ["filtered_list"]
-
-    has_translation = False
-    # OPTIONAL_HEADER = ["translation", "filtered_list"]
+    REQUIRED_HEADER = ["reference", "translation"]
 
     cell_pattern = regex.compile(r"^[ATGC]{{{}}}".format(barcode_length))
     csv_reader = get_csv_reader_from_path(filename=filename)
@@ -81,7 +75,6 @@ def parse_cell_list_csv(filename, barcode_length, file_type):
     # translation_id = header.index(REQUIRED_HEADER[0])
     translation_dict = {}
     if "translation" in header:
-        has_translation = True
 
         translation_id = header.index("translation")
         reference_id = header.index("reference")
@@ -94,10 +87,7 @@ def parse_cell_list_csv(filename, barcode_length, file_type):
             ):
                 translation_dict[tra_barcode] = ref_barcode
     else:
-        for row in csv_reader:
-            ref_barcode = row[0].strip(STRIP_CHARS)
-            if len(ref_barcode) == barcode_length:
-                translation_dict[ref_barcode] = 0
+        sys.exit('The header is missing a the "{}" keyword'.format("translation"))
 
     for cell_barcode in translation_dict.keys():
         if not cell_pattern.match(cell_barcode):
@@ -108,10 +98,9 @@ def parse_cell_list_csv(filename, barcode_length, file_type):
             )
     if len(translation_dict) == 0:
         sys.exit("translation_dict is empty.")
-    if has_translation:
-        print(
-            "Your translation list provides a translation name. This will be the default for the count matrices."
-        )
+    print(
+        "Your translation list provides a translation name. This will be the default for the count matrices."
+    )
     return translation_dict
 
 
@@ -271,8 +260,9 @@ def translate_barcodes(cell_set, translation_dict):
     """
 
     translated_barcodes = set()
-    for cell in cell_set:
-        translated_barcodes.add(translation_dict[cell])
+    for translated_barcode in translation_dict.keys():
+        if translation_dict[translated_barcode] in cell_set:
+            translated_barcodes.add(translated_barcode)
     return translated_barcodes
 
 
