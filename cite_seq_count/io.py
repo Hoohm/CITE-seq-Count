@@ -121,20 +121,26 @@ def write_to_files(
         data_type (string): A string definning if the data is umi or read based.
         outfolder (string): Path to the output folder.
     """
-    if translation_dict:
-        original_barcode = list(translation_dict.keys())
-        translated_barcode = list(translation_dict.values())
     prefix = os.path.join(outfolder, data_type + "_count")
+    unknown_id = 1
     os.makedirs(prefix, exist_ok=True)
     io.mmwrite(os.path.join(prefix, "matrix.mtx"), a=sparse_matrix, field="integer")
     with gzip.open(os.path.join(prefix, "barcodes.tsv.gz"), "wb") as barcode_file:
         for barcode in filtered_cells:
             if translation_dict:
-                barcode_file.write(
-                    "{}\t{}\n".format(
-                        original_barcode[translated_barcode.index(barcode)], barcode
-                    ).encode(),
-                )
+                if barcode in translation_dict:
+                    barcode_file.write(
+                        "{}\t{}\n".format(
+                            translation_dict[barcode], barcode
+                        ).encode(),
+                    )
+                else:
+                    barcode_file.write(
+                        "{}\t{}\n".format(
+                            "translation_not_found_{}".format(unknown_id), barcode
+                        ).encode(),
+                    )
+                    unknown_id += 1
             else:
                 barcode_file.write("{}\n".format(barcode).encode())
     with gzip.open(os.path.join(prefix, "features.tsv.gz"), "wb") as feature_file:
@@ -402,7 +408,6 @@ def write_chunks_to_disk(
                     chunked_file_object = tempfile.NamedTemporaryFile(
                         "w", dir=temp_path, suffix="_csc", delete=False
                     )
-                    # chunked_file_object = open(temp_file, "w")
                     temp_files.append(chunked_file_object.name)
                     reads_written = 0
                 if total_reads_written == n_reads_per_chunk:

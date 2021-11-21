@@ -106,11 +106,11 @@ def get_args():
         ),
     )
     barcodes.add_argument(
-        "--chemistry",
+        "--chemistry_id",
         type=str,
         required=False,
         default=False,
-        help=("Option replacing cell/UMI barcodes indexes and translation list."),
+        help=("[BETA FEATURE] Option replacing cell/UMI barcodes indexes and translation list."),
     )
     if "--chemistry" not in sys.argv:
         barcodes.add_argument(

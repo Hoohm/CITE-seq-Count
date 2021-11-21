@@ -33,13 +33,13 @@ def parse_filtered_list_csv(filename, barcode_length):
     out_set = set()
     barcode_pattern = regex.compile(r"^[ATGC]{{{}}}".format(barcode_length))
     for barcode in barcodes:
-        check_barcode = barcode.strip(STRIP_CHARS)
-        if barcode_pattern.match(check_barcode):
-            out_set.add(check_barcode)
+        checked_barcode = barcode.strip(STRIP_CHARS)
+        if barcode_pattern.match(checked_barcode):
+            out_set.add(checked_barcode)
         else:
             sys.exit(
-                "This barcode {} is not only composed of ATGC bases.".format(
-                    check_barcode
+                "Only ATGC barcodes are accepted in the filtered list. Please delete entry {}".format(
+                    checked_barcode
                 )
             )
 
@@ -63,44 +63,30 @@ def parse_cell_list_csv(filename, barcode_length):
     STRIP_CHARS = '"0123456789- \t\n'
     REQUIRED_HEADER = ["reference", "translation"]
 
-    cell_pattern = regex.compile(r"^[ATGC]{{{}}}".format(barcode_length))
-    csv_reader = get_csv_reader_from_path(filename=filename)
-    header = next(csv_reader)
+    data = read_csv(filename, dtype={"reference": str, "translation": str})
+    if data.shape[1] != 2:
+        print(data.head())
+        sys.exit("Your translation file only holds 1 column or is tab delimited instead of csv.")
+    barcode_pattern = regex.compile(r"^[ATGC]{{{}}}".format(barcode_length))
+    
+    header = data.columns
     set_dif = set(REQUIRED_HEADER) - set(header)
     if len(set_dif) != 0:
         raise SystemExit(
             "The header is missing {}. Exiting".format(",".join(list(set_dif)))
         )
 
-    # translation_id = header.index(REQUIRED_HEADER[0])
-    translation_dict = {}
-    if "translation" in header:
+    #Prepare and validate data
 
-        translation_id = header.index("translation")
-        reference_id = header.index("reference")
-        for row in csv_reader:
-            ref_barcode = row[reference_id].strip(STRIP_CHARS)
-            tra_barcode = row[translation_id].strip(STRIP_CHARS)
-            if (
-                len(ref_barcode) == barcode_length
-                and len(tra_barcode) == barcode_length
-            ):
-                translation_dict[tra_barcode] = ref_barcode
-    else:
-        sys.exit('The header is missing a the "{}" keyword'.format("translation"))
-
-    for cell_barcode in translation_dict.keys():
-        if not cell_pattern.match(cell_barcode):
-            sys.exit(
-                "This barcode {} is not only composed of ATGC bases.".format(
-                    cell_barcode
-                )
-            )
-    if len(translation_dict) == 0:
-        sys.exit("translation_dict is empty.")
-    print(
-        "Your translation list provides a translation name. This will be the default for the count matrices."
-    )
+    data["reference"] = data["reference"].map(lambda x: x.rstrip(STRIP_CHARS))
+    data["translation"] = data["translation"].map(lambda x: x.rstrip(STRIP_CHARS))
+    
+    if any(data["reference"].map(lambda x: not barcode_pattern.match(x))):
+        sys.exit("Barcode(s) in reference column don't match [ATGC] or a length of {}. Please check.".format(barcode_length))
+    if any(data["translation"].map(lambda x: not barcode_pattern.match(x))):
+        sys.exit("Barcode(s) in translation column don't match [ATGC] or a length of {}. Please check.".format(barcode_length))
+    
+    translation_dict = dict(zip(data.translation, data.reference))
     return translation_dict
 
 
@@ -131,25 +117,27 @@ def parse_tags_csv(file_name):
             csv_reader = csv.reader(csvfile)
     except Exception as e:
         sys.exit(e)
-    tags = {}
-    header = next(csv_reader)
-    set_dif = set(REQUIRED_HEADER) - set(header)
-    if len(set_dif) != 0:
-        raise SystemExit(
-            "The header is missing {}. Exiting".format(",".join(list(set_dif)))
-        )
-    sequence_id = header.index("sequence")
-    feature_id = header.index("feature_name")
-    for i, row in enumerate(csv_reader):
-        sequence = row[sequence_id].strip()
-
-        if not regex.match(atgc_test, sequence):
+    with open(file_name) as csvfile:   
+        csv_reader = csv.reader(csvfile)
+        tags = {}
+        header = next(csv_reader)
+        set_dif = set(REQUIRED_HEADER) - set(header)
+        if len(set_dif) != 0:
             raise SystemExit(
-                "Sequence {} on line {} is not only composed of ATGC. Exiting".format(
-                    sequence, i
-                )
+                "The header is missing {}. Exiting".format(",".join(list(set_dif)))
             )
-        tags[sequence] = row[feature_id].strip()
+        sequence_id = header.index("sequence")
+        feature_id = header.index("feature_name")
+        for i, row in enumerate(csv_reader):
+            sequence = row[sequence_id].strip()
+
+            if not regex.match(atgc_test, sequence):
+                raise SystemExit(
+                    "Sequence {} on line {} is not only composed of ATGC. Exiting".format(
+                        sequence, i
+                    )
+                )
+            tags[sequence] = row[feature_id].strip()
     return tags
 
 

@@ -41,7 +41,7 @@ def main():
     # Check a few path before doing anything
     if not os.access(args.temp_path, os.W_OK):
         sys.exit("Temp folder: {} is not writable. Please check permissions and/or change temp folder.".format(args.temp_path))
-    if not os.access(args.outfolder, os.W_OK):
+    if not os.access(os.path.dirname(os.path.abspath(args.outfolder)), os.W_OK):
         sys.exit("Output folder: {} is not writable. Please check permissions and/or change output folder.".format(args.outfolder))
     
 

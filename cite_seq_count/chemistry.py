@@ -136,8 +136,8 @@ def create_chemistry_definition(args):
 
 
 def setup_chemistry(args):
-    if args.chemistry:
-        chemistry_def = get_chemistry_definition(args.chemistry)
+    if args.chemistry_id:
+        chemistry_def = get_chemistry_definition(args.chemistry_id)
         translation_dict = preprocessing.parse_cell_list_csv(
             filename=chemistry_def.translation_list_path,
             barcode_length=chemistry_def.cell_barcode_end
