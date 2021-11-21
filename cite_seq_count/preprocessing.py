@@ -66,9 +66,11 @@ def parse_cell_list_csv(filename, barcode_length):
     data = read_csv(filename, dtype={"reference": str, "translation": str})
     if data.shape[1] != 2:
         print(data.head())
-        sys.exit("Your translation file only holds 1 column or is tab delimited instead of csv.")
+        sys.exit(
+            "Your translation file only holds 1 column or is tab delimited instead of csv."
+        )
     barcode_pattern = regex.compile(r"^[ATGC]{{{}}}".format(barcode_length))
-    
+
     header = data.columns
     set_dif = set(REQUIRED_HEADER) - set(header)
     if len(set_dif) != 0:
@@ -76,16 +78,24 @@ def parse_cell_list_csv(filename, barcode_length):
             "The header is missing {}. Exiting".format(",".join(list(set_dif)))
         )
 
-    #Prepare and validate data
+    # Prepare and validate data
 
     data["reference"] = data["reference"].map(lambda x: x.rstrip(STRIP_CHARS))
     data["translation"] = data["translation"].map(lambda x: x.rstrip(STRIP_CHARS))
-    
+
     if any(data["reference"].map(lambda x: not barcode_pattern.match(x))):
-        sys.exit("Barcode(s) in reference column don't match [ATGC] or a length of {}. Please check.".format(barcode_length))
+        sys.exit(
+            "Barcode(s) in reference column don't match [ATGC] or a length of {}. Please check.".format(
+                barcode_length
+            )
+        )
     if any(data["translation"].map(lambda x: not barcode_pattern.match(x))):
-        sys.exit("Barcode(s) in translation column don't match [ATGC] or a length of {}. Please check.".format(barcode_length))
-    
+        sys.exit(
+            "Barcode(s) in translation column don't match [ATGC] or a length of {}. Please check.".format(
+                barcode_length
+            )
+        )
+
     translation_dict = dict(zip(data.translation, data.reference))
     return translation_dict
 
@@ -111,13 +121,13 @@ def parse_tags_csv(file_name):
     """
     REQUIRED_HEADER = ["sequence", "feature_name"]
     atgc_test = regex.compile("^[ATGC]{1,}$")
-    
+
     try:
-        with open(file_name) as csvfile:   
+        with open(file_name) as csvfile:
             csv_reader = csv.reader(csvfile)
     except Exception as e:
         sys.exit(e)
-    with open(file_name) as csvfile:   
+    with open(file_name) as csvfile:
         csv_reader = csv.reader(csvfile)
         tags = {}
         header = next(csv_reader)

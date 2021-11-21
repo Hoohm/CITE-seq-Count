@@ -110,7 +110,9 @@ def get_args():
         type=str,
         required=False,
         default=False,
-        help=("[BETA FEATURE] Option replacing cell/UMI barcodes indexes and translation list."),
+        help=(
+            "[BETA FEATURE] Option replacing cell/UMI barcodes indexes and translation list."
+        ),
     )
     if "--chemistry" not in sys.argv:
         barcodes.add_argument(
@@ -254,7 +256,7 @@ def get_args():
         dest="chunk_size",
         help=("How many reads should be sent to a child process at a time"),
     )
-    
+
     # Global group
     parser.add_argument(
         "--temp_path",

@@ -40,10 +40,17 @@ def main():
     args = parser.parse_args()
     # Check a few path before doing anything
     if not os.access(args.temp_path, os.W_OK):
-        sys.exit("Temp folder: {} is not writable. Please check permissions and/or change temp folder.".format(args.temp_path))
+        sys.exit(
+            "Temp folder: {} is not writable. Please check permissions and/or change temp folder.".format(
+                args.temp_path
+            )
+        )
     if not os.access(os.path.dirname(os.path.abspath(args.outfolder)), os.W_OK):
-        sys.exit("Output folder: {} is not writable. Please check permissions and/or change output folder.".format(args.outfolder))
-    
+        sys.exit(
+            "Output folder: {} is not writable. Please check permissions and/or change output folder.".format(
+                args.outfolder
+            )
+        )
 
     # Get chemistry defs
     (translation_dict, chemistry_def) = chemistry.setup_chemistry(args)

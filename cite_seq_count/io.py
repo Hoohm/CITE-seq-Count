@@ -130,9 +130,7 @@ def write_to_files(
             if translation_dict:
                 if barcode in translation_dict:
                     barcode_file.write(
-                        "{}\t{}\n".format(
-                            translation_dict[barcode], barcode
-                        ).encode(),
+                        "{}\t{}\n".format(translation_dict[barcode], barcode).encode(),
                     )
                 else:
                     barcode_file.write(
