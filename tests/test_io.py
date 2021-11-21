@@ -59,7 +59,6 @@ def data():
 
 
 def test_write_to_files_wo_translation(data, tmpdir):
-    reference_dict = {"ACTGTTTTATTGGCCT": 0, "TTCATAAGGTAGGGAT": 0}
     output_path = os.path.join(tmpdir, "without_translation")
 
     mtx_path = os.path.join(output_path, "umi_count", "matrix.mtx.gz")
@@ -88,7 +87,7 @@ def test_write_to_files_wo_translation(data, tmpdir):
 
 
 def test_write_to_files_with_translation(data, tmpdir):
-    reference_dict = {
+    translation_dict = {
         "ACTGTTTTATTGGCCT": "GGCTTCGATACTAGAT",
         "TTCATAAGGTAGGGAT": "GATCGGATAGCTAATA",
     }
@@ -110,7 +109,7 @@ def test_write_to_files_with_translation(data, tmpdir):
         pytest.ordered_tags_map,
         pytest.data_type,
         output_path,
-        translation_dict=reference_dict,
+        translation_dict=translation_dict,
     )
     file_path = os.path.join(tmpdir, "with_translation", "umi_count/matrix.mtx.gz")
     with gzip.open(file_path, "rb") as mtx_file:

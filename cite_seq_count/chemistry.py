@@ -88,7 +88,7 @@ def get_chemistry_definition(chemistry_short_name):
     Fetches chemistry definitions from a remote definitions.json and returns the json.
     """
     chemistry_defs = fetch_definitions()[chemistry_short_name]
-
+    print(chemistry_defs)
     if chemistry_defs["translation_list"]["path"] not in DEFINITIONS_DB.registry:
         path = pooch.retrieve(
             url=os.path.join(

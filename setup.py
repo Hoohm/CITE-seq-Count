@@ -28,7 +28,7 @@ setuptools.setup(
         "pandas>=0.23.4",
         "pybktree==1.1",
         "cython>=0.29.17",
-        "jsonschema==4.2.1",
+        "pyyaml==6.0"
     ],
     python_requires=">=3.8",
 )
