@@ -21,7 +21,7 @@ def data():
     pytest.correct_tags_path = "tests/test_data/tags/pass/correct.csv"
 
     # Create some variables to compare to
-    pytest.correct_reference_list = set(["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"])
+    pytest.correct_reference_translation_list = set(["ACTGTTTTATTGGCCT","TTCATCCTTTAGGGAT"])
     pytest.correct_tags = {
         "AGGACCATCCAA": "CITE_LEN_12_1",
         "ACATGTTACCGT": "CITE_LEN_12_2",
@@ -75,7 +75,7 @@ def test_parse_reference_list_csv(data):
     passing_files = glob.glob(pytest.passing_reference_list_csv)
     for file_path in passing_files:
         assert preprocessing.parse_cell_list_csv(file_path, 16).keys() in (
-            pytest.correct_reference_list,
+            pytest.correct_reference_translation_list,
             1,
         )
     with pytest.raises(SystemExit):

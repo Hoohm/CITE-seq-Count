@@ -33,15 +33,15 @@ def data():
     pytest.corrupt_R1_path = "tests/test_data/fastq/corrupted_R1.fastq.gz"
     pytest.corrupt_R2_path = "tests/test_data/fastq/corrupted_R2.fastq.gz"
 
-    pytest.correct_R1_multipath = "path/to/R1_1.fastq.gz,path/to/R1_2.fastq.gz"
-    pytest.correct_R2_multipath = "path/to/R2_1.fastq.gz,path/to/R2_2.fastq.gz"
+    pytest.correct_R1_multipath = "tests/test_data/fastq/correct_R1.fastq.gz,tests/test_data/fastq/correct_R1.fastq.gz"
+    pytest.correct_R2_multipath = "tests/test_data/fastq/correct_R2.fastq.gz,tests/test_data/fastq/correct_R2.fastq.gz"
     pytest.incorrect_R2_multipath = (
         "path/to/R2_1.fastq.gz,path/to/R2_2.fastq.gz,path/to/R2_3.fastq.gz"
     )
 
     pytest.correct_multipath_result = (
-        ["path/to/R1_1.fastq.gz", "path/to/R1_2.fastq.gz"],
-        ["path/to/R2_1.fastq.gz", "path/to/R2_2.fastq.gz"],
+        [pytest.correct_R1_path, pytest.correct_R1_path],
+        [pytest.correct_R2_path, pytest.correct_R2_path],
     )
     test_matrix = sparse.dok_matrix((4, 2), dtype=np.int32)
     test_matrix[1, 1] = 1
@@ -77,7 +77,7 @@ def test_write_to_files_wo_translation(data, tmpdir):
         pytest.ordered_tags_map,
         pytest.data_type,
         output_path,
-        reference_dict=reference_dict,
+        translation_dict=False,
     )
     file_path = os.path.join(tmpdir, "without_translation", "umi_count/matrix.mtx.gz")
     with gzip.open(file_path, "rb") as mtx_file:
@@ -110,7 +110,7 @@ def test_write_to_files_with_translation(data, tmpdir):
         pytest.ordered_tags_map,
         pytest.data_type,
         output_path,
-        reference_dict=reference_dict,
+        translation_dict=reference_dict,
     )
     file_path = os.path.join(tmpdir, "with_translation", "umi_count/matrix.mtx.gz")
     with gzip.open(file_path, "rb") as mtx_file:

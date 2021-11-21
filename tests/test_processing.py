@@ -49,7 +49,7 @@ def test_correct_umis(data):
 
 @pytest.mark.dependency(depends=["test_correct_umis"])
 def test_correct_cells(data):
-    processing.correct_cells_no_reference_list(
+    processing.correct_cells_no_translation_list(
         pytest.corrected_results,
         pytest.reads_per_cell,
         pytest.umis_per_cell,
