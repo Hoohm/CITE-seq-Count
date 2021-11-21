@@ -104,7 +104,7 @@ def parse_cell_list_csv(filename, barcode_length):
     return translation_dict
 
 
-def parse_tags_csv(filename):
+def parse_tags_csv(file_name):
     """Reads the TAGs from a CSV file. Checks that the header contains
     necessary strings and if sequences are made of ATGC
 
@@ -117,7 +117,7 @@ def parse_tags_csv(filename):
         TTCCGCCTCTCTTTG,Hashtag_3
 
     Args:
-        filename (str): TAGs file path.
+        file_name (file): TAGs file name.
 
     Returns:
         dict: A dictionary using sequences as keys and feature names as values.
@@ -125,27 +125,31 @@ def parse_tags_csv(filename):
     """
     REQUIRED_HEADER = ["sequence", "feature_name"]
     atgc_test = regex.compile("^[ATGC]{1,}$")
-    with open(filename, mode="r") as csv_file:
-        csv_reader = csv.reader(csv_file)
-        tags = {}
-        header = next(csv_reader)
-        set_dif = set(REQUIRED_HEADER) - set(header)
-        if len(set_dif) != 0:
-            raise SystemExit(
-                "The header is missing {}. Exiting".format(",".join(list(set_dif)))
-            )
-        sequence_id = header.index("sequence")
-        feature_id = header.index("feature_name")
-        for i, row in enumerate(csv_reader):
-            sequence = row[sequence_id].strip()
+    
+    try:
+        with open(file_name) as csvfile:   
+            csv_reader = csv.reader(csvfile)
+    except Exception as e:
+        sys.exit(e)
+    tags = {}
+    header = next(csv_reader)
+    set_dif = set(REQUIRED_HEADER) - set(header)
+    if len(set_dif) != 0:
+        raise SystemExit(
+            "The header is missing {}. Exiting".format(",".join(list(set_dif)))
+        )
+    sequence_id = header.index("sequence")
+    feature_id = header.index("feature_name")
+    for i, row in enumerate(csv_reader):
+        sequence = row[sequence_id].strip()
 
-            if not regex.match(atgc_test, sequence):
-                raise SystemExit(
-                    "Sequence {} on line {} is not only composed of ATGC. Exiting".format(
-                        sequence, i
-                    )
+        if not regex.match(atgc_test, sequence):
+            raise SystemExit(
+                "Sequence {} on line {} is not only composed of ATGC. Exiting".format(
+                    sequence, i
                 )
-            tags[sequence] = row[feature_id].strip()
+            )
+        tags[sequence] = row[feature_id].strip()
     return tags
 
 

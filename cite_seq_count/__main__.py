@@ -38,12 +38,15 @@ def main():
 
     # Parse arguments.
     args = parser.parse_args()
-    assert os.access(args.temp_path, os.W_OK)
+    # Check a few path before doing anything
+    if not os.access(args.temp_path, os.W_OK):
+        sys.exit("Temp folder: {} is not writable. Please check permissions and/or change temp folder.".format(args.temp_path))
+    if not os.access(args.outfolder, os.W_OK):
+        sys.exit("Output folder: {} is not writable. Please check permissions and/or change output folder.".format(args.outfolder))
+    
 
     # Get chemistry defs
     (translation_dict, chemistry_def) = chemistry.setup_chemistry(args)
-
-    # Check if we have a filtered list provided
 
     # Load TAGs/ABs.
     ab_map = preprocessing.parse_tags_csv(args.tags)

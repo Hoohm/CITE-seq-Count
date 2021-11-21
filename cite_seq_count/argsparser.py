@@ -13,11 +13,11 @@ def get_package_version():
     return version
 
 
-def chunk_size_limit(arg):
+def chunk_size_limit(chunk_size: int) -> int:
     """Validates chunk_size limits"""
     max_size = 2147483647
     try:
-        f = int(arg)
+        f = int(chunk_size)
     except ValueError:
         raise ArgumentTypeError("Chunk size must be an int")
     if f < 1 or f > max_size:
@@ -254,7 +254,9 @@ def get_args():
         dest="chunk_size",
         help=("How many reads should be sent to a child process at a time"),
     )
-    parallel.add_argument(
+    
+    # Global group
+    parser.add_argument(
         "--temp_path",
         required=False,
         type=str,
@@ -264,8 +266,6 @@ def get_args():
             "Temp folder for chunk creation specification. Useful when using a cluster with a scratch folder"
         ),
     )
-
-    # Global group
     parser.add_argument(
         "-n",
         "--first_n",
@@ -280,7 +280,7 @@ def get_args():
         "--output",
         required=False,
         type=str,
-        default="Results",
+        default="results",
         dest="outfolder",
         help=("Results will be written to this folder"),
     )
