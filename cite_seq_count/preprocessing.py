@@ -21,7 +21,7 @@ def parse_filtered_list_csv(filename, barcode_length):
     Args:
         filename(str): file path
         barcode_length(int): Barcode expected length
-    
+
     Returns:
         set: A set of barcodes
     """
@@ -152,7 +152,7 @@ def parse_tags_csv(filename):
 def check_tags(tags, maximum_distance):
     """Evaluates the distance between the TAGs based on the `maximum distance`
     argument provided.
-    
+
     The output will have the keys sorted by TAG length (longer first). This
     way, longer barcodes will be evaluated first.
     Adds unmapped category as well.
@@ -175,7 +175,13 @@ def check_tags(tags, maximum_distance):
         safe_name = sanitize_name(tags[tag_seq])
 
         # for index, tag_name in enumerate(ordered_tags):
-        tag_list.append(tag(name=safe_name, sequence=tag_seq, id=i,))
+        tag_list.append(
+            tag(
+                name=safe_name,
+                sequence=tag_seq,
+                id=i,
+            )
+        )
         if len(tag_seq) > longest_tag_len:
             longest_tag_len = len(tag_seq)
         seq_list.append(tag_seq)
@@ -216,7 +222,7 @@ def sanitize_name(string):
 
     Args:
         string(str): a string from a feature name
-    
+
     Returns:
         str: modified string
     """
@@ -254,7 +260,7 @@ def translate_barcodes(cell_set, translation_dict):
     Args:
         cell_set (set): A set of barcodes
         translation_dict (dict): A dict providing a simple key value translation
-    
+
     Returns:
         translated_barcodes (set): A set of translated barcodes
     """
@@ -297,14 +303,14 @@ def check_barcodes_lengths(read1_length, cb_first, cb_last, umi_first, umi_last)
 
 
 def pre_run_checks(read1_paths, chemistry_def, longest_tag_len, args):
-    """ Checks that the chemistry is properly set and defines how many reads to process
+    """Checks that the chemistry is properly set and defines how many reads to process
 
     Args:
         read1_paths (list): List of paths
         chemistry_def (Chemistry): Chemistry definition
         longest_tag_len (int): Longest tag sequence
         args (argparse): List of arguments
-    
+
     Returns:
         n_reads (int): Number of reads to run on
         R2_min_length (int): Min R2 length to check if reads are too short
@@ -356,7 +362,7 @@ def get_filtered_list(args, chemistry, translation_dict):
     Determines what mode to use for cell barcode correction.
     Args:
         args(argparse): All arguments
-    
+
     Returns:
         set if we have a filtered list
         None if we want correction and we have not a list

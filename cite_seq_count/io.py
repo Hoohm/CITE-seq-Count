@@ -23,7 +23,7 @@ def blocks(files, size=65536):
         https://stackoverflow.com/a/9631635/9178565
 
     Args:
-        files (io.handler): A file handler 
+        files (io.handler): A file handler
         size (int): Block size
     Returns:
         A generator
@@ -77,25 +77,35 @@ def get_read_paths(read1_path, read2_path):
             "Unequal number of read1 ({}) and read2({}) files provided"
             "\n Exiting".format(len(_read1_path), len(_read2_path))
         )
+    all_files = _read1_path + _read2_path
+    for file_path in all_files:
+        if os.path.isfile(file_path):
+            if os.access(file_path, os.R_OK):
+                continue
+            else:
+                sys.exit("{} is not readable. Exiting".format(file_path))
+        else:
+            sys.exit("{} does not exist. Exiting".format(file_path))
+
     return (_read1_path, _read2_path)
 
 
-def get_csv_reader_from_path(filename):
+def get_csv_reader_from_path(filename, sep="\t"):
     """
     Returns a csv_reader object for a file weather it's a flat file or compressed.
 
     Args:
         filename: str
-    
+
     Returns:
         csv_reader: The csv_reader for the file
     """
     if filename.endswith(".gz"):
         f = gzip.open(filename, mode="rt")
-        csv_reader = csv.reader(f)
+        csv_reader = csv.reader(f, delimiter=sep)
     else:
         f = open(filename, encoding="UTF-8")
-        csv_reader = csv.reader(f)
+        csv_reader = csv.reader(f, delimiter=sep)
     return csv_reader
 
 
@@ -143,7 +153,7 @@ def write_to_files(
 def write_dense(sparse_matrix, ordered_tags, columns, outfolder, filename):
     """
     Writes a dense matrix in a csv format
-    
+
     Args:
        sparse_matrix (dok_matrix): Results in a sparse matrix.
        index (list): List of TAGS
@@ -417,4 +427,3 @@ def write_chunks_to_disk(
         R2_too_short,
         total_reads,
     )
-

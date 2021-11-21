@@ -95,4 +95,3 @@ def test_parse_tags_csv(data):
 def test_check_distance_too_big_between_tags(data):
     with pytest.raises(SystemExit):
         preprocessing.check_tags(pytest.correct_tags, 8)
-

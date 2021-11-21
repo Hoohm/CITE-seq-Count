@@ -111,14 +111,14 @@ def correct_cells_no_translation_list(
 ):
     """
     Corrects cell barcodes without a translation.
-    
+
     Args:
         final_results (dict): Dict of dict of Counters with mapping results.
         umis_per_cell (Counter): Counter of number of umis per cell.
         collapsing_threshold (int): Max distance between umis.
         expected_cells (int): Number of expected cells.
         ab_map (dict): Dict of the TAGS.
-    
+
     Returns:
         final_results (dict): Same as input but with corrected umis.
         umis_per_cell (Counter): Counter of umis per cell after cell barcode correction
@@ -151,7 +151,7 @@ def correct_cells_filtered_set(
 ):
     """
     Corrects cell barcodes based on a given translation_list.
-    
+
     Args:
         final_results (dict): Dict of dict of Counters with mapping results.
         umis_per_cell (Counter): Counter of UMIs per cell.
@@ -159,7 +159,7 @@ def correct_cells_filtered_set(
         collapsing_threshold (int): Max distance between umis.
         ab_map (OrederedDict): Tags in an ordered dict.
 
-    
+
     Returns:
         final_results (dict): Same as input but with corrected umis.
         umis_per_cell (Counter): Updated UMI counts after correction.
@@ -224,7 +224,11 @@ def find_true_to_false_map(
 
 
 def run_cell_barcode_correction(
-    final_results, umis_per_cell, ordered_tags, filtered_set, args,
+    final_results,
+    umis_per_cell,
+    ordered_tags,
+    filtered_set,
+    args,
 ):
     if args.expected_cells > len(filtered_set):
         print(
@@ -318,13 +322,13 @@ def check_filtered_cells(filtered_cells, expected_cells, umis_per_cell):
 def correct_umis_in_cells(umi_correction_input):
     """
     Corrects umi barcodes within same cell/tag groups.
-    
+
     Args:
         final_results (dict): Dict of dict of Counters with mapping results.
         collapsing_threshold (int): Max distance between umis.
         filtered_cells (set): Set of cells to go through.
         max_umis (int): Maximum UMIs to consider for one cluster.
-    
+
     Returns:
         final_results (dict): Same as input but with corrected umis.
         corrected_umis (int): How many umis have been corrected.
@@ -494,4 +498,3 @@ def generate_sparse_matrices(
                     final_results[cell_barcode][TAG_id].values()
                 )
     return results_matrix
-

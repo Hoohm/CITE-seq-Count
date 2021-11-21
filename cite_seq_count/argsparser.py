@@ -2,7 +2,7 @@ import pkg_resources
 import sys
 import tempfile
 
-from argparse import ArgumentParser, ArgumentTypeError, RawTextHelpFormatter
+from argparse import ArgumentParser, ArgumentTypeError, RawTextHelpFormatter, FileType
 
 # pylint: disable=no-name-in-module
 from multiprocess import cpu_count

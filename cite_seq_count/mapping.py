@@ -23,7 +23,7 @@ def map_data(input_queue, unmapped_id, args):
     Args:
         input_queue (list): List of parameters to run in parallel
         args (argparse): List of arguments
-    
+
     Returns:
         final_results (dict): final dictionnary with results
         umis_per_cell (Counter): Counter of UMIs per cell
@@ -60,9 +60,12 @@ def map_data(input_queue, unmapped_id, args):
                 print(error)
 
         print("Merging results")
-    (final_results, umis_per_cell, reads_per_cell, merged_no_match,) = merge_results(
-        parallel_results=parallel_results[0], unmapped_id=unmapped_id
-    )
+    (
+        final_results,
+        umis_per_cell,
+        reads_per_cell,
+        merged_no_match,
+    ) = merge_results(parallel_results=parallel_results[0], unmapped_id=unmapped_id)
 
     return final_results, umis_per_cell, reads_per_cell, merged_no_match
 
@@ -104,7 +107,7 @@ def find_best_match_shift(TAG_seq, tags):
     Only works with exact match.
     Just checks if the string is in the sequence.
     If no matches found returns 'unmapped'.
-    
+
     Args:
         TAG_seq (string): Sequence from R2 already start trimmed
         tags (dict): A dictionary with the TAGs as keys and TAG Names as values.
