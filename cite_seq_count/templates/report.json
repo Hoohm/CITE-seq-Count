@@ -1,0 +1,33 @@
+{
+  "Date": "",
+  "Running time": "",
+  "CITE-seq-Count Version": "",
+  "Reads processed": "",
+  "Percentage mapped": "",
+  "Percentage unmapped": "",
+  "Percentage too short": "",
+  "r1_too_short": "",
+  "r2_too_short": "",
+  "Uncorrected cells": "",
+  "Correction": {
+    "Cell barcodes collapsing threshold": "",
+    "Cell barcodes corrected": "",
+    "UMI collapsing threshold": "",
+    "UMIs corrected": ""
+  },
+  "Run parameters": {
+    "Read1_paths": "",
+    "Read2_paths": ""
+  },
+  "Cell barcode": {
+    "First position": "",
+    "Last position": ""
+  },
+  "UMI barcode": {
+    "First position": "",
+    "Last position": ""
+  },
+  "Expected cells": "",
+  "Tags max errors": "",
+  "Start trim": ""
+}

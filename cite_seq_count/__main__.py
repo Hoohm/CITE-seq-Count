@@ -7,15 +7,7 @@ import os
 import logging
 import time
 
-from cite_seq_count import preprocessing
-from cite_seq_count import mapping
-from cite_seq_count import processing
-from cite_seq_count import chemistry
-from cite_seq_count import io
-from cite_seq_count import secondsToText
-from cite_seq_count import argsparser
-
-from collections import Counter
+from cite_seq_count import preprocessing, argsparser, mapping, processing, chemistry, io
 
 
 def main():
@@ -93,7 +85,7 @@ def main():
         maximum_distance=maximum_distance,
     )
     # Map the data
-    (final_results, umis_per_cell, reads_per_cell, merged_no_match,) = mapping.map_data(
+    (final_results, umis_per_cell, reads_per_cell, merged_no_match) = mapping.map_data(
         input_queue=input_queue, unmapped_id=len(ordered_tags), args=args
     )
 

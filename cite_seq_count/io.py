@@ -1,3 +1,4 @@
+"""Handle io operations"""
 import os
 import csv
 import sys
@@ -6,14 +7,19 @@ import shutil
 import time
 import datetime
 import tempfile
+import json
 
 from collections import namedtuple
 from itertools import islice
 
+import pkg_resources
+import yaml
 import pandas as pd
 
 from scipy import io
 from cite_seq_count import secondsToText
+
+JSON_REPORT_PATH = pkg_resources.resource_filename(__name__, "templates/report.json")
 
 
 def blocks(files, size=65536):
@@ -29,10 +35,10 @@ def blocks(files, size=65536):
         A generator
     """
     while True:
-        b = files.read(size)
-        if not b:
+        partial_file = files.read(size)
+        if not partial_file:
             break
-        yield b
+        yield partial_file
 
 
 def get_n_lines(file_path):
@@ -47,13 +53,13 @@ def get_n_lines(file_path):
     Returns:
         n_lines (int): Number of lines in the file
     """
-    print("Counting number of reads in file {}".format(file_path))
-    with gzip.open(file_path, "rt", encoding="utf-8", errors="ignore") as f:
-        n_lines = sum(bl.count("\n") for bl in blocks(f))
+    print(f"Counting number of reads in file {file_path}")
+    with gzip.open(file_path, "rt", encoding="utf-8", errors="ignore") as infile:
+        n_lines = sum(bl.count("\n") for bl in blocks(infile))
     if n_lines % 4 != 0:
         sys.exit(
-            "{}'s number of lines is not a multiple of 4. The file "
-            "might be corrupted.\n Exiting".format(file_path)
+            f"{file_path}'s number of lines is not a multiple of 4. The file "
+            "might be corrupted.\n Exiting"
         )
     return n_lines
 
@@ -74,8 +80,8 @@ def get_read_paths(read1_path, read2_path):
     _read2_path = read2_path.split(",")
     if len(_read1_path) != len(_read2_path):
         sys.exit(
-            "Unequal number of read1 ({}) and read2({}) files provided"
-            "\n Exiting".format(len(_read1_path), len(_read2_path))
+            f"Unequal number of read1 ({len(_read1_path)}) and read2({len(_read2_path)}) files provided"
+            "\n Exiting"
         )
     all_files = _read1_path + _read2_path
     for file_path in all_files:
@@ -83,9 +89,9 @@ def get_read_paths(read1_path, read2_path):
             if os.access(file_path, os.R_OK):
                 continue
             else:
-                sys.exit("{} is not readable. Exiting".format(file_path))
+                sys.exit(f"{file_path} is not readable. Exiting")
         else:
-            sys.exit("{} does not exist. Exiting".format(file_path))
+            sys.exit(f"{file_path} does not exist. Exiting")
 
     return (_read1_path, _read2_path)
 
@@ -101,11 +107,11 @@ def get_csv_reader_from_path(filename, sep="\t"):
         csv_reader: The csv_reader for the file
     """
     if filename.endswith(".gz"):
-        f = gzip.open(filename, mode="rt")
-        csv_reader = csv.reader(f, delimiter=sep)
+        file_handle = gzip.open(filename, mode="rt")
+        csv_reader = csv.reader(file_handle, delimiter=sep)
     else:
-        f = open(filename, encoding="UTF-8")
-        csv_reader = csv.reader(f, delimiter=sep)
+        file_handle = open(filename, encoding="UTF-8")
+        csv_reader = csv.reader(file_handle, delimiter=sep)
     return csv_reader
 
 
@@ -130,22 +136,20 @@ def write_to_files(
             if translation_dict:
                 if barcode in translation_dict:
                     barcode_file.write(
-                        "{}\t{}\n".format(translation_dict[barcode], barcode).encode(),
+                        f"{translation_dict[barcode]}\t{barcode}\n".encode(),
                     )
                 else:
                     barcode_file.write(
                         "{}\t{}\n".format(
-                            "translation_not_found_{}".format(unknown_id), barcode
+                            f"translation_not_found_{unknown_id}", barcode
                         ).encode(),
                     )
                     unknown_id += 1
             else:
-                barcode_file.write("{}\n".format(barcode).encode())
+                barcode_file.write(f"{barcode}\n".encode())
     with gzip.open(os.path.join(prefix, "features.tsv.gz"), "wb") as feature_file:
         for feature in ordered_tags:
-            feature_file.write(
-                "{}\t{}\n".format(feature.sequence, feature.name).encode()
-            )
+            feature_file.write(f"{feature.sequence}\t{feature.name}\n".encode())
         if data_type == "read":
             feature_file.write("{}\t{}\n".format("UNKNOWN", "unmapped").encode())
     with open(os.path.join(prefix, "matrix.mtx"), "rb") as mtx_in:
@@ -187,24 +191,38 @@ def write_unmapped(merged_no_match, top_unknowns, outfolder, filename):
 
     top_unmapped = merged_no_match.most_common(top_unknowns)
 
-    with open(os.path.join(outfolder, filename), "w") as unknown_file:
+    with open(os.path.join(outfolder, filename), "w", encoding="utf-8") as unknown_file:
         unknown_file.write("tag,count\n")
         for element in top_unmapped:
-            unknown_file.write("{},{}\n".format(element[0], element[1]))
+            unknown_file.write(f"{element[0]},{element[1]}\n")
+
+
+def load_report_template() -> dict:
+    """Load json template for the report
+
+    Returns:
+        dict: Dict for the report
+    """
+    with open(file=JSON_REPORT_PATH, encoding="utf-8", mode="r") as json_in:
+        try:
+            report_dict = json.load(json_in)
+        except json.JSONDecodeError:
+            sys.exit(
+                f"Json report template at {JSON_REPORT_PATH} is not a valid json file."
+            )
+    return report_dict
 
 
 def create_report(
     total_reads,
-    reads_per_cell,
     no_match,
     version,
     start_time,
-    ordered_tags,
     umis_corrected,
     bcs_corrected,
     bad_cells,
-    R1_too_short,
-    R2_too_short,
+    r1_too_short,
+    r2_too_short,
     args,
     chemistry_def,
     maximum_distance,
@@ -220,76 +238,59 @@ def create_report(
         args (arg_parse): Arguments provided by the user.
 
     """
+
     total_unmapped = sum(no_match.values())
-    total_too_short = R1_too_short + R2_too_short
+    total_too_short = r1_too_short + r2_too_short
     total_mapped = total_reads - total_unmapped - total_too_short
 
     too_short_perc = round((total_too_short / total_reads) * 100)
     mapped_perc = round((total_mapped / total_reads) * 100)
     unmapped_perc = round((total_unmapped / total_reads) * 100)
 
-    with open(os.path.join(args.outfolder, "run_report.yaml"), "w") as report_file:
-        report_file.write(
-            """Date: {}
-Running time: {}
-CITE-seq-Count Version: {}
-Reads processed: {}
-Percentage mapped: {}
-Percentage unmapped: {}
-Percentage too short: {}
-  R1_too_short: {}
-  R2_too_short: {}
-Uncorrected cells: {}
-Correction:
-  Cell barcodes collapsing threshold: {}
-  Cell barcodes corrected: {}
-  UMI collapsing threshold: {}
-  UMIs corrected: {}
-Run parameters:
-  Read1_paths: {}
-  Read2_paths: {}
-  Cell barcode:
-    First position: {}
-    Last position: {}
-  UMI barcode:
-    First position: {}
-    Last position: {}
-  Expected cells: {}
-  Tags max errors: {}
-  Start trim: {}
-""".format(
-                datetime.datetime.today().strftime("%Y-%m-%d"),
-                secondsToText.secondsToText(time.time() - start_time),
-                version,
-                int(total_reads),
-                mapped_perc,
-                unmapped_perc,
-                too_short_perc,
-                R1_too_short,
-                R2_too_short,
-                len(bad_cells),
-                args.bc_threshold,
-                bcs_corrected,
-                args.umi_threshold,
-                umis_corrected,
-                args.read1_path,
-                args.read2_path,
-                chemistry_def.cell_barcode_start,
-                chemistry_def.cell_barcode_end,
-                chemistry_def.umi_barcode_start,
-                chemistry_def.umi_barcode_end,
-                args.expected_cells,
-                maximum_distance,
-                chemistry_def.R2_trim_start,
-            )
-        )
+    report_data = load_report_template()
+    report_data["Date"] = datetime.datetime.today().strftime("%Y-%m-%d")
+    report_data["Running time"] = secondsToText.secondsToText(time.time() - start_time)
+    report_data["CITE-seq-Count Version"] = version
+    report_data["Reads processed"] = int(total_reads)
+    report_data["Percentage mapped"] = mapped_perc
+    report_data["Percentage unmapped"] = unmapped_perc
+    report_data["Percentage too short"] = too_short_perc
+    report_data["Percentage too short"]["r1_too_short"] = r1_too_short
+    report_data["Percentage too short"]["r2_too_short"] = r2_too_short
+    report_data["Uncorrected cells"] = len(bad_cells)
+    report_data["Correction"]["Cell barcodes collapsing threshold"] = args.bc_threshold
+    report_data["Correction"]["Cell barcodes corrected"] = bcs_corrected
+    report_data["Correction"]["UMI collapsing threshold"] = args.umi_threshold
+    report_data["Correction"]["UMIs corrected"] = umis_corrected
+    report_data["Run parameters"]["Read1_paths"] = args.read1_path
+    report_data["Run parameters"]["Read2_paths"] = args.read2_path
+    report_data["Run parameters"]["Cell barcode"][
+        "First position"
+    ] = chemistry_def.cell_barcode_start
+    report_data["Run parameters"]["Cell barcode"][
+        "Last position"
+    ] = chemistry_def.cell_barcode_end
+    report_data["Run parameters"]["UMI barcode"][
+        "First position"
+    ] = chemistry_def.umi_barcode_start
+    report_data["Run parameters"]["UMI barcode"][
+        "Last position"
+    ] = chemistry_def.umi_barcode_end
+    report_data["Expected cells"] = args.expected_cells
+    report_data["Tags max errors"] = maximum_distance
+    report_data["Start trim"] = chemistry_def.R2_trim_start
+
+    with open(
+        os.path.join(args.outfolder, "run_report.yaml"), "w", encoding="utf-8"
+    ) as report_file:
+        yaml.dump(report_data, report_file, default_flow_style=False, sort_keys=False)
 
 
 def write_chunks_to_disk(
     args,
     read1_paths,
     read2_paths,
-    R2_min_length,
+    r2_min_length,
     n_reads_per_chunk,
     chemistry_def,
     ordered_tags,
@@ -303,7 +304,7 @@ def write_chunks_to_disk(
         args(argparse): All parsed arguments.
         read1_paths (list): List of R1 fastq.gz paths.
         read2_paths (list): List of R2 fastq.gz paths.
-        R2_min_length (int):  Minimum length of read2 sequences.
+        r2_min_length (int):  Minimum length of read2 sequences.
         n_reads_per_chunk (int): How many reads per chunk.
         chemistry_def (namedtuple): Hols all the information about the chemistry definition.
         ordered_tags (list): List of namedtuple tags.
@@ -324,8 +325,8 @@ def write_chunks_to_disk(
     temp_path = os.path.abspath(args.temp_path)
     input_queue = []
     temp_files = []
-    R1_too_short = 0
-    R2_too_short = 0
+    r1_too_short = 0
+    r2_too_short = 0
     total_reads = 0
     total_reads_written = 0
     enough_reads = False
@@ -348,7 +349,7 @@ def write_chunks_to_disk(
 
         if enough_reads:
             break
-        print("Reading reads from files: {}, {}".format(read1_path, read2_path))
+        print(f"Reading reads from files: {read1_path}, {read2_path}")
         with gzip.open(read1_path, "rt") as textfile1, gzip.open(
             read2_path, "rt"
         ) as textfile2:
@@ -359,11 +360,11 @@ def write_chunks_to_disk(
 
                 read1 = read1.strip()
                 if len(read1) < chemistry_def.umi_barcode_end:
-                    R1_too_short += 1
+                    r1_too_short += 1
                     # The entire read is skipped
                     continue
-                if len(read2) < R2_min_length:
-                    R2_too_short += 1
+                if len(read2) < r2_min_length:
+                    r2_too_short += 1
                     # The entire read is skipped
                     continue
 
@@ -373,7 +374,7 @@ def write_chunks_to_disk(
 
                 read2_sliced = read2[
                     chemistry_def.R2_trim_start : (
-                        R2_min_length + chemistry_def.R2_trim_start
+                        r2_min_length + chemistry_def.R2_trim_start
                     )
                 ]
                 chunked_file_object.write(
@@ -426,7 +427,7 @@ def write_chunks_to_disk(
     return (
         input_queue,
         temp_files,
-        R1_too_short,
-        R2_too_short,
+        r1_too_short,
+        r2_too_short,
         total_reads,
     )

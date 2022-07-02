@@ -1,6 +1,8 @@
+"""Setup.py file
+"""
 import setuptools
 
-with open("README.md", "r") as fh:
+with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
@@ -28,7 +30,9 @@ setuptools.setup(
         "pandas>=0.23.4",
         "pybktree==1.1",
         "cython>=0.29.17",
-        "pyyaml==6.0"
+        "pyyaml==6.0",
+        "pooch==1.6.0",
     ],
     python_requires=">=3.8",
+    data_files=[("report_template", ["templates/report.json"])],
 )
