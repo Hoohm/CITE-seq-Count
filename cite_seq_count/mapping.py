@@ -1,13 +1,13 @@
+"""Mapping module. Holds all code related to mapping reads
+"""
 import time
 import csv
-
 import sys
 import os
-import Levenshtein
 
-from collections import Counter
-from collections import defaultdict
-from collections import namedtuple
+from collections import Counter, defaultdict
+
+import Levenshtein
 
 # pylint: disable=no-name-in-module
 from multiprocess import Pool
@@ -70,7 +70,7 @@ def map_data(input_queue, unmapped_id, args):
     return final_results, umis_per_cell, reads_per_cell, merged_no_match
 
 
-def find_best_match(TAG_seq, tags, maximum_distance):
+def find_best_match(tag_seq, tags, maximum_distance):
     """
     Find the best match from the list of tags.
 
@@ -79,7 +79,7 @@ def find_best_match(TAG_seq, tags, maximum_distance):
     If no matches found returns 'unmapped'.
     We add 1
     Args:
-        TAG_seq (string): Sequence from R2 already start trimmed
+        tag_seq (string): Sequence from R2 already start trimmed
         tags (dict): A dictionary with the TAGs as keys and TAG Names as values.
         maximum_distance (int): Maximum distance given by the user.
 
@@ -90,7 +90,7 @@ def find_best_match(TAG_seq, tags, maximum_distance):
     best_score = maximum_distance
     for tag in tags:
         # pylint: disable=no-member
-        score = Levenshtein.hamming(tag.sequence, TAG_seq[: len(tag.sequence)])
+        score = Levenshtein.hamming(tag.sequence, tag_seq[: len(tag.sequence)])
         if score == 0:
             # Best possible match
             return tag.id
@@ -101,7 +101,7 @@ def find_best_match(TAG_seq, tags, maximum_distance):
     return best_match
 
 
-def find_best_match_shift(TAG_seq, tags):
+def find_best_match_shift(tag_seq, tags):
     """
     Find the best match from the list of tags with sliding window.
     Only works with exact match.
@@ -109,7 +109,7 @@ def find_best_match_shift(TAG_seq, tags):
     If no matches found returns 'unmapped'.
 
     Args:
-        TAG_seq (string): Sequence from R2 already start trimmed
+        tag_seq (string): Sequence from R2 already start trimmed
         tags (dict): A dictionary with the TAGs as keys and TAG Names as values.
 
     Returns:
@@ -117,7 +117,7 @@ def find_best_match_shift(TAG_seq, tags):
     """
     best_match = "unmapped"
     for tag in tags:
-        if tag.sequence in TAG_seq:
+        if tag.sequence in tag_seq:
             return tag.name
     return best_match
 
@@ -141,30 +141,32 @@ def map_reads(mapping_input):
     """
     # Initiate values
     (filename, tags, debug, maximum_distance, sliding_window) = mapping_input
-    print("Started mapping in child process {}".format(os.getpid()))
+    print(f"Started mapping in child process {os.getpid()}")
     results = {}
     no_match = Counter()
-    n = 1
+    n_reads = 1
 
     unmapped_id = len(tags)
     # Progress info
-    t = time.time()
-    with open(filename, "r") as input_file:
+    current_time = time.time()
+    with open(filename, encoding="utf-8") as input_file:
         reads = csv.reader(input_file)
         for read in reads:
             cell_barcode = read[0]
             # This change in bytes is required by umi_tools for umi correction
             UMI = bytes(read[1], "ascii")
             read2 = read[2]
-            if n % 1000000 == 0:
+            if n_reads % 1000000 == 0:
                 print(
                     "Processed 1,000,000 reads in {}. Total "
                     "reads: {:,} in child {}".format(
-                        secondsToText.secondsToText(time.time() - t), n, os.getpid()
+                        secondsToText.secondsToText(time.time() - current_time),
+                        n_reads,
+                        os.getpid(),
                     )
                 )
                 sys.stdout.flush()
-                t = time.time()
+                current_time = time.time()
 
             if cell_barcode not in results:
                 results[cell_barcode] = defaultdict(Counter)
@@ -181,9 +183,9 @@ def map_reads(mapping_input):
 
             if debug:
                 print(
-                    "cell_barcode:{0}\tUMI:{1}\tTAG_seq:{2}\n"
-                    "cell barcode length:{3}\tUMI length:{4}\tTAG sequence length:{5}\n"
-                    "Best match is: {6}\n".format(
+                    "cell_barcode:{}\tUMI:{}\ttag_seq:{}\n"
+                    "cell barcode length:{}\tUMI length:{}\tTAG sequence length:{}\n"
+                    "Best match is: {}\n".format(
                         cell_barcode,
                         UMI,
                         read2,
@@ -194,10 +196,10 @@ def map_reads(mapping_input):
                     )
                 )
                 sys.stdout.flush()
-            n += 1
+            n_reads += 1
         print(
             "Mapping done for process {}. Processed {:,} reads".format(
-                os.getpid(), n - 1
+                os.getpid(), n_reads - 1
             )
         )
         sys.stdout.flush()

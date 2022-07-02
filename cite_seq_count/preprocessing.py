@@ -31,7 +31,7 @@ def parse_filtered_list_csv(filename, barcode_length):
     barcodes = set(barcodes_pd.iloc[:, 0])
 
     out_set = set()
-    barcode_pattern = regex.compile(r"^[ATGC]{{{}}}".format(barcode_length))
+    barcode_pattern = regex.compile(fr"^[ATGC]{{{barcode_length}}}")
     for barcode in barcodes:
         checked_barcode = barcode.strip(STRIP_CHARS)
         if barcode_pattern.match(checked_barcode):
@@ -69,7 +69,7 @@ def parse_cell_list_csv(filename, barcode_length):
         sys.exit(
             "Your translation file only holds 1 column or is tab delimited instead of csv."
         )
-    barcode_pattern = regex.compile(r"^[ATGC]{{{}}}".format(barcode_length))
+    barcode_pattern = regex.compile(fr"^[ATGC]{{{barcode_length}}}")
 
     header = data.columns
     set_dif = set(REQUIRED_HEADER) - set(header)
@@ -348,7 +348,7 @@ def pre_run_checks(read1_paths, chemistry_def, longest_tag_len, args):
 
     # Print a statement if multiple files are run.
     if number_of_samples != 1:
-        print("Detected {} pairs of files to run on.".format(number_of_samples))
+        print(f"Detected {number_of_samples} pairs of files to run on.")
 
     if args.sliding_window:
         R2_min_length = read2_lengths[0]

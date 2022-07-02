@@ -52,7 +52,7 @@ def fetch_definitions():
     Load some sample gravity data to use in your docs.
     """
     fname = DEFINITIONS_DB.fetch("definitions.json")
-    with open(fname, "r") as json_file:
+    with open(fname) as json_file:
         data = json_file.read()
     json_data = json.loads(data)
     return json_data

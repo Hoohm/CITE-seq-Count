@@ -170,7 +170,7 @@ def correct_cells_filtered_set(
     barcode_tree = pybktree.BKTree(Levenshtein.hamming, filtered_set)
     barcodes = set(umis_per_cell)
     print("Selecting reference candidates")
-    print("Processing {:,} cell barcodes".format(len(barcodes)))
+    print(f"Processing {len(barcodes):,} cell barcodes")
 
     # Run with one process
     true_to_false = find_true_to_false_map(
@@ -262,7 +262,7 @@ def check_filtered_cells(filtered_cells, expected_cells, umis_per_cell):
     if filtered_cells is None:
         top_cells_tuple = umis_per_cell.most_common(expected_cells)
         # Select top cells based on total umis per cell
-        filtered_cells = set([pair[0] for pair in top_cells_tuple])
+        filtered_cells = {pair[0] for pair in top_cells_tuple}
     return filtered_cells
 
 
@@ -362,7 +362,7 @@ def correct_umis_in_cells(umi_correction_input):
                 corrected_umis += temp_corrected_umis
             elif n_umis > max_umis:
                 clustered_cells.add(cell_barcode)
-    print("Finished correcting umis in child {}".format(os.getpid()))
+    print(f"Finished correcting umis in child {os.getpid()}")
     return (final_results, corrected_umis, clustered_cells)
 
 

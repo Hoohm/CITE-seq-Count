@@ -4,23 +4,13 @@ Author: Patrick Roelli
 """
 import sys
 import os
-import logging
 import time
 
 from cite_seq_count import preprocessing, argsparser, mapping, processing, chemistry, io
 
 
 def main():
-    # Create logger and stream handler
-    logger = logging.getLogger("cite_seq_count")
-    logger.setLevel(logging.CRITICAL)
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.CRITICAL)
-    formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
+    """Main function"""
 
     start_time = time.time()
     parser = argsparser.get_args()
@@ -60,7 +50,7 @@ def main():
         args=args, chemistry=chemistry_def, translation_dict=translation_dict
     )
     # Checks before chunking.
-    (n_reads, R2_min_length, maximum_distance) = preprocessing.pre_run_checks(
+    (n_reads, r2_min_length, maximum_distance) = preprocessing.pre_run_checks(
         read1_paths=read1_paths,
         chemistry_def=chemistry_def,
         longest_tag_len=longest_tag_len,
@@ -71,14 +61,14 @@ def main():
     (
         input_queue,
         temp_files,
-        R1_too_short,
-        R2_too_short,
+        r1_too_short,
+        r2_too_short,
         total_reads,
     ) = io.write_chunks_to_disk(
         args=args,
         read1_paths=read1_paths,
         read2_paths=read2_paths,
-        R2_min_length=R2_min_length,
+        r2_min_length=r2_min_length,
         n_reads_per_chunk=n_reads,
         chemistry_def=chemistry_def,
         ordered_tags=ordered_tags,
@@ -92,7 +82,7 @@ def main():
     # Check if 99% of the reads are unmapped.
     mapping.check_unmapped(
         no_match=merged_no_match,
-        too_short=R1_too_short + R2_too_short,
+        too_short=r1_too_short + r2_too_short,
         total_reads=total_reads,
         start_trim=chemistry_def.R2_trim_start,
     )
@@ -207,16 +197,14 @@ def main():
     # Create report and write it to disk
     io.create_report(
         total_reads=total_reads,
-        reads_per_cell=reads_per_cell,
         no_match=merged_no_match,
         version=argsparser.get_package_version(),
         start_time=start_time,
-        ordered_tags=ordered_tags,
         umis_corrected=umis_corrected,
         bcs_corrected=bcs_corrected,
         bad_cells=clustered_cells,
-        R1_too_short=R1_too_short,
-        R2_too_short=R2_too_short,
+        r1_too_short=r1_too_short,
+        r2_too_short=r2_too_short,
         args=args,
         chemistry_def=chemistry_def,
         maximum_distance=maximum_distance,

@@ -63,10 +63,10 @@ def secondsToText(secs, lang="EN"):
         filter(
             lambda x: bool(x),
             [
-                "{0} {1}".format(days, days_text) if days else "",
-                "{0} {1}".format(hours, hours_text) if hours else "",
-                "{0} {1}".format(minutes, minutes_text) if minutes else "",
-                "{0:.4} {1}".format(seconds, seconds_text) if seconds else "",
+                f"{days} {days_text}" if days else "",
+                f"{hours} {hours_text}" if hours else "",
+                f"{minutes} {minutes_text}" if minutes else "",
+                f"{seconds:.4} {seconds_text}" if seconds else "",
             ],
         )
     )

@@ -1,14 +1,24 @@
-import pkg_resources
+"""Functions for argument parsing
+"""
+
 import sys
 import tempfile
 
-from argparse import ArgumentParser, ArgumentTypeError, RawTextHelpFormatter, FileType
+from argparse import ArgumentParser, ArgumentTypeError, RawTextHelpFormatter
+
+import pkg_resources
+
 
 # pylint: disable=no-name-in-module
 from multiprocess import cpu_count
 
 
 def get_package_version():
+    """Return package version
+
+    Returns:
+        str: Package version as string
+    """
     version = pkg_resources.require("cite_seq_count")[0].version
     return version
 
@@ -17,15 +27,15 @@ def chunk_size_limit(chunk_size: int) -> int:
     """Validates chunk_size limits"""
     max_size = 2147483647
     try:
-        f = int(chunk_size)
+        chunk_value = int(chunk_size)
     except ValueError:
-        raise ArgumentTypeError("Chunk size must be an int")
-    if f < 1 or f > max_size:
+        raise SystemExit("Chunk size must be an int")
+    if chunk_value < 1 or chunk_value > max_size:
         raise ArgumentTypeError(
             "Argument must be < " + str(max_size) + "and > " + str(1)
         )
     else:
-        return f
+        return chunk_value
 
 
 def thread_default():
@@ -197,7 +207,7 @@ def get_args():
                 "A csv file containning a translation list of all potential barcodes\n\n"
                 "\tExample:\n"
                 "whitelist,translation\n"
-                "\tAAACCCAAGAAACACT,AAACCCATCAAACACT\n\AAACCCAAGAAACCAT,AAACCCATCAAACCAT\n\AAACCCAAGAAACCCA,AAACCCATCAAACCCA\n\n"
+                "\tAAACCCAAGAAACACT,AAACCCATCAAACACT\n\\AAACCCAAGAAACCAT,AAACCCATCAAACCAT\n\\AAACCCAAGAAACCCA,AAACCCATCAAACCCA\n\n"
             ),
         )
 
@@ -318,7 +328,7 @@ def get_args():
     parser.add_argument(
         "--version",
         action="version",
-        version="CITE-seq-Count v{}".format(get_package_version()),
+        version=f"CITE-seq-Count v{get_package_version()}",
         help="Print version number.",
     )
     # Finally! Too many options XD

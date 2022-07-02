@@ -203,7 +203,7 @@ def load_report_template() -> dict:
     Returns:
         dict: Dict for the report
     """
-    with open(file=JSON_REPORT_PATH, encoding="utf-8", mode="r") as json_in:
+    with open(file=JSON_REPORT_PATH, encoding="utf-8") as json_in:
         try:
             report_dict = json.load(json_in)
         except json.JSONDecodeError:
