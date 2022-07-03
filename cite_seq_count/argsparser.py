@@ -38,7 +38,7 @@ def chunk_size_limit(chunk_size: int) -> int:
         return chunk_value
 
 
-def thread_default():
+def thread_default() -> int:
     """
     Set number of threads default.
 
@@ -53,7 +53,7 @@ def thread_default():
         return 1
 
 
-def get_args():
+def get_args() -> ArgumentParser:
     """
     Get args.
     """

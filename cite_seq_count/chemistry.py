@@ -28,7 +28,7 @@ class Chemistry:
     cell_barcode_end: int
     umi_barcode_start: int
     umi_barcode_end: int
-    R2_trim_start: int
+    r2_trim_start: int
     translation_list_path: str
 
 
@@ -52,7 +52,7 @@ def fetch_definitions():
     Load some sample gravity data to use in your docs.
     """
     fname = DEFINITIONS_DB.fetch("definitions.json")
-    with open(fname) as json_file:
+    with open(fname, encoding="utf-8") as json_file:
         data = json_file.read()
     json_data = json.loads(data)
     return json_data
@@ -116,7 +116,7 @@ def get_chemistry_definition(chemistry_short_name):
         umi_barcode_end=chemistry_defs["barcode_structure_indexes"]["umi_barcode"][
             "R1"
         ]["stop"],
-        R2_trim_start=chemistry_defs["sequence_structure_indexes"]["R2"]["start"] - 1,
+        r2_trim_start=chemistry_defs["sequence_structure_indexes"]["R2"]["start"] - 1,
         translation_list_path=path,
     )
     return chemistry_def
@@ -129,7 +129,7 @@ def create_chemistry_definition(args):
         cell_barcode_end=args.cb_last,
         umi_barcode_start=args.umi_first,
         umi_barcode_end=args.umi_last,
-        R2_trim_start=args.start_trim,
+        r2_trim_start=args.start_trim,
         translation_list_path=args.translation_list,
     )
     return chemistry_def

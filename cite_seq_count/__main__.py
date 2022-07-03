@@ -84,7 +84,7 @@ def main():
         no_match=merged_no_match,
         too_short=r1_too_short + r2_too_short,
         total_reads=total_reads,
-        start_trim=chemistry_def.R2_trim_start,
+        start_trim=chemistry_def.r2_trim_start,
     )
 
     # Remove temp chunks

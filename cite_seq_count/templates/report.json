@@ -2,32 +2,32 @@
   "Date": "",
   "Running time": "",
   "CITE-seq-Count Version": "",
-  "Reads processed": "",
-  "Percentage mapped": "",
-  "Percentage unmapped": "",
-  "Percentage too short": "",
-  "r1_too_short": "",
-  "r2_too_short": "",
-  "Uncorrected cells": "",
+  "Reads processed": 0,
+  "Percentage mapped": 0,
+  "Percentage unmapped": 0,
+  "Percentage too short": 0,
+  "r1_too_short": 0,
+  "r2_too_short": 0,
+  "Uncorrected cells": 0,
   "Correction": {
-    "Cell barcodes collapsing threshold": "",
-    "Cell barcodes corrected": "",
-    "UMI collapsing threshold": "",
-    "UMIs corrected": ""
+    "Cell barcodes collapsing threshold": 0,
+    "Cell barcodes corrected": 0,
+    "UMI collapsing threshold": 0,
+    "UMIs corrected": 0
   },
   "Run parameters": {
     "Read1_paths": "",
-    "Read2_paths": ""
-  },
-  "Cell barcode": {
-    "First position": "",
-    "Last position": ""
-  },
-  "UMI barcode": {
-    "First position": "",
-    "Last position": ""
-  },
-  "Expected cells": "",
-  "Tags max errors": "",
-  "Start trim": ""
+    "Read2_paths": "",
+    "Cell barcode": {
+      "First position": 0,
+      "Last position": 0
+    },
+    "UMI barcode": {
+      "First position": 0,
+      "Last position": 0
+    },
+    "Expected cells": 0,
+    "Tags max errors": 0,
+    "Start trim": 0
+  }
 }

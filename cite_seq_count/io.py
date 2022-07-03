@@ -9,9 +9,11 @@ import datetime
 import tempfile
 import json
 
-from collections import namedtuple
+from collections import namedtuple, Counter
 from itertools import islice
+from typing import Tuple
 
+import scipy
 import pkg_resources
 import yaml
 import pandas as pd
@@ -22,26 +24,26 @@ from cite_seq_count import secondsToText
 JSON_REPORT_PATH = pkg_resources.resource_filename(__name__, "templates/report.json")
 
 
-def blocks(files, size=65536):
+def blocks(file, size: int = 65536):
     """
     A fast way of counting the lines of a large file.
     Ref:
         https://stackoverflow.com/a/9631635/9178565
 
     Args:
-        files (io.handler): A file handler
+        file (io.handler): A file handler
         size (int): Block size
     Returns:
         A generator
     """
     while True:
-        partial_file = files.read(size)
+        partial_file = file.read(size)
         if not partial_file:
             break
         yield partial_file
 
 
-def get_n_lines(file_path):
+def get_n_lines(file_path: str) -> int:
     """
     Determines how many lines have to be processed
     depending on options and number of available lines.
@@ -64,7 +66,7 @@ def get_n_lines(file_path):
     return n_lines
 
 
-def get_read_paths(read1_path, read2_path):
+def get_read_paths(read1_path: str, read2_path: str) -> Tuple[str, str]:
     """
     Splits up 2 comma-separated strings of input files into list of files
     to process. Ensures both lists are equal in length.
@@ -96,7 +98,7 @@ def get_read_paths(read1_path, read2_path):
     return (_read1_path, _read2_path)
 
 
-def get_csv_reader_from_path(filename, sep="\t"):
+def get_csv_reader_from_path(filename: str, sep: str = "\t") -> csv.reader:
     """
     Returns a csv_reader object for a file weather it's a flat file or compressed.
 
@@ -116,7 +118,12 @@ def get_csv_reader_from_path(filename, sep="\t"):
 
 
 def write_to_files(
-    sparse_matrix, filtered_cells, ordered_tags, data_type, outfolder, translation_dict
+    sparse_matrix: scipy.sparse.base.spmatrix,
+    filtered_cells: set,
+    ordered_tags: dict,
+    data_type: str,
+    outfolder: str,
+    translation_dict: dict,
 ):
     """Write the umi and read sparse matrices to file in gzipped mtx format.
 
@@ -158,7 +165,13 @@ def write_to_files(
     os.remove(os.path.join(prefix, "matrix.mtx"))
 
 
-def write_dense(sparse_matrix, ordered_tags, columns, outfolder, filename):
+def write_dense(
+    sparse_matrix: scipy.sparse.base.spmatrix,
+    ordered_tags: dict,
+    columns: set,
+    outfolder: str,
+    filename: str,
+):
     """
     Writes a dense matrix in a csv format
 
@@ -178,7 +191,9 @@ def write_dense(sparse_matrix, ordered_tags, columns, outfolder, filename):
     pandas_dense.to_csv(os.path.join(outfolder, filename), sep="\t")
 
 
-def write_unmapped(merged_no_match, top_unknowns, outfolder, filename):
+def write_unmapped(
+    merged_no_match: Counter, top_unknowns: int, outfolder: str, filename: str
+):
     """
     Writes a list of top unmapped sequences
 
@@ -214,18 +229,18 @@ def load_report_template() -> dict:
 
 
 def create_report(
-    total_reads,
-    no_match,
-    version,
+    total_reads: int,
+    no_match: Counter,
+    version: str,
     start_time,
-    umis_corrected,
-    bcs_corrected,
+    umis_corrected: int,
+    bcs_corrected: int,
     bad_cells,
-    r1_too_short,
-    r2_too_short,
+    r1_too_short: int,
+    r2_too_short: int,
     args,
     chemistry_def,
-    maximum_distance,
+    maximum_distance: int,
 ):
     """
     Creates a report with details about the run in a yaml format.
@@ -255,8 +270,8 @@ def create_report(
     report_data["Percentage mapped"] = mapped_perc
     report_data["Percentage unmapped"] = unmapped_perc
     report_data["Percentage too short"] = too_short_perc
-    report_data["Percentage too short"]["r1_too_short"] = r1_too_short
-    report_data["Percentage too short"]["r2_too_short"] = r2_too_short
+    report_data["r1_too_short"] = r1_too_short
+    report_data["r2_too_short"] = r2_too_short
     report_data["Uncorrected cells"] = len(bad_cells)
     report_data["Correction"]["Cell barcodes collapsing threshold"] = args.bc_threshold
     report_data["Correction"]["Cell barcodes corrected"] = bcs_corrected
@@ -278,7 +293,7 @@ def create_report(
     ] = chemistry_def.umi_barcode_end
     report_data["Expected cells"] = args.expected_cells
     report_data["Tags max errors"] = maximum_distance
-    report_data["Start trim"] = chemistry_def.R2_trim_start
+    report_data["Start trim"] = chemistry_def.r2_trim_start
 
     with open(
         os.path.join(args.outfolder, "run_report.yaml"), "w", encoding="utf-8"
@@ -373,8 +388,8 @@ def write_chunks_to_disk(
                 ]
 
                 read2_sliced = read2[
-                    chemistry_def.R2_trim_start : (
-                        r2_min_length + chemistry_def.R2_trim_start
+                    chemistry_def.r2_trim_start : (
+                        r2_min_length + chemistry_def.r2_trim_start
                     )
                 ]
                 chunked_file_object.write(
