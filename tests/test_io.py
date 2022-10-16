@@ -80,7 +80,7 @@ def test_write_to_files_wo_translation(data, tmpdir):
     )
     file_path = os.path.join(tmpdir, "without_translation", "umi_count/matrix.mtx.gz")
     with gzip.open(file_path, "rb") as mtx_file:
-        assert isinstance(scipy.io.mmread(mtx_file), scipy.sparse.coo.coo_matrix)
+        assert isinstance(scipy.io.mmread(mtx_file), scipy.sparse.coo_matrix)
     assert md5_sums[barcodes_path] == md5(barcodes_path)
     assert md5_sums[features_path] == md5(features_path)
     assert md5_sums[mtx_path] == md5(mtx_path)
@@ -113,7 +113,7 @@ def test_write_to_files_with_translation(data, tmpdir):
     )
     file_path = os.path.join(tmpdir, "with_translation", "umi_count/matrix.mtx.gz")
     with gzip.open(file_path, "rb") as mtx_file:
-        assert isinstance(scipy.io.mmread(mtx_file), scipy.sparse.coo.coo_matrix)
+        assert isinstance(scipy.io.mmread(mtx_file), scipy.sparse.coo_matrix)
     assert md5_sums[barcodes_path] == md5(barcodes_path)
     assert md5_sums[features_path] == md5(features_path)
     assert md5_sums[mtx_path] == md5(mtx_path)

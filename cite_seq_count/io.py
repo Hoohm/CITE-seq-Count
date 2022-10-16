@@ -118,7 +118,7 @@ def get_csv_reader_from_path(filename: str, sep: str = "\t") -> csv.reader:
 
 
 def write_to_files(
-    sparse_matrix: scipy.sparse.base.spmatrix,
+    sparse_matrix: scipy.sparse.coo_matrix,
     filtered_cells: set,
     ordered_tags: dict,
     data_type: str,
@@ -166,7 +166,7 @@ def write_to_files(
 
 
 def write_dense(
-    sparse_matrix: scipy.sparse.base.spmatrix,
+    sparse_matrix: scipy.sparse.coo_matrix,
     ordered_tags: dict,
     columns: set,
     outfolder: str,

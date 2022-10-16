@@ -1,17 +1,19 @@
+"""Sets of functions to preprocess the data"""
+
 import csv
 import gzip
 import sys
+from collections import namedtuple
+from itertools import combinations, islice
 import regex
 import Levenshtein
-import umi_tools.whitelist_methods as whitelist_methods
-
-from cite_seq_count.io import get_csv_reader_from_path, get_n_lines
-from collections import namedtuple
-from itertools import combinations
-from itertools import islice
-
-
 from pandas import read_csv
+from cite_seq_count.io import get_n_lines
+
+
+REQUIRED_TAGS_HEADER = ["sequence", "feature_name"]
+REQUIRED_TRANSLATION_HEADER = ["reference", "translation"]
+STRIP_CHARS = '"0123456789- \t\n'
 
 
 def parse_filtered_list_csv(filename, barcode_length):
@@ -25,22 +27,19 @@ def parse_filtered_list_csv(filename, barcode_length):
     Returns:
         set: A set of barcodes
     """
-    STRIP_CHARS = '"0123456789- \t\n'
     barcodes_pd = read_csv(filename)
 
     barcodes = set(barcodes_pd.iloc[:, 0])
 
     out_set = set()
-    barcode_pattern = regex.compile(fr"^[ATGC]{{{barcode_length}}}")
+    barcode_pattern = regex.compile(rf"^[ATGC]{{{barcode_length}}}")
     for barcode in barcodes:
         checked_barcode = barcode.strip(STRIP_CHARS)
         if barcode_pattern.match(checked_barcode):
             out_set.add(checked_barcode)
         else:
             sys.exit(
-                "Only ATGC barcodes are accepted in the filtered list. Please delete entry {}".format(
-                    checked_barcode
-                )
+                f"Only ATGC barcodes are accepted in the filtered list. Please delete entry {checked_barcode}"
             )
 
     return out_set
@@ -60,23 +59,19 @@ def parse_cell_list_csv(filename, barcode_length):
         set: The set of white-listed barcodes.
 
     """
-    STRIP_CHARS = '"0123456789- \t\n'
-    REQUIRED_HEADER = ["reference", "translation"]
-
     data = read_csv(filename, dtype={"reference": str, "translation": str})
     if data.shape[1] != 2:
         print(data.head())
         sys.exit(
             "Your translation file only holds 1 column or is tab delimited instead of csv."
         )
-    barcode_pattern = regex.compile(fr"^[ATGC]{{{barcode_length}}}")
+    barcode_pattern = regex.compile(rf"^[ATGC]{{{barcode_length}}}")
 
     header = data.columns
-    set_dif = set(REQUIRED_HEADER) - set(header)
+    set_dif = set(REQUIRED_TRANSLATION_HEADER) - set(header)
     if len(set_dif) != 0:
-        raise SystemExit(
-            "The header is missing {}. Exiting".format(",".join(list(set_dif)))
-        )
+        set_diff_string = ",".join(list(set_dif))
+        raise SystemExit(f"The header is missing {set_diff_string}. Exiting")
 
     # Prepare and validate data
 
@@ -85,15 +80,11 @@ def parse_cell_list_csv(filename, barcode_length):
 
     if any(data["reference"].map(lambda x: not barcode_pattern.match(x))):
         sys.exit(
-            "Barcode(s) in reference column don't match [ATGC] or a length of {}. Please check.".format(
-                barcode_length
-            )
+            f"Barcode(s) in reference column don't match [ATGC] or a length of {barcode_length}. Please check."
         )
     if any(data["translation"].map(lambda x: not barcode_pattern.match(x))):
         sys.exit(
-            "Barcode(s) in translation column don't match [ATGC] or a length of {}. Please check.".format(
-                barcode_length
-            )
+            f"Barcode(s) in translation column don't match [ATGC] or a length of {barcode_length}. Please check."
         )
 
     translation_dict = dict(zip(data.translation, data.reference))
@@ -119,33 +110,34 @@ def parse_tags_csv(file_name):
         dict: A dictionary using sequences as keys and feature names as values.
 
     """
-    REQUIRED_HEADER = ["sequence", "feature_name"]
     atgc_test = regex.compile("^[ATGC]{1,}$")
 
     try:
-        with open(file_name) as csvfile:
+        with open(file_name, mode="r", encoding="utf-8") as csvfile:
             csv_reader = csv.reader(csvfile)
-    except Exception as e:
-        sys.exit(e)
-    with open(file_name) as csvfile:
+    except IOError:
+        sys.exit(f"Cannot read file {file_name}")
+    with open(file_name, mode="r", encoding="utf-8") as csvfile:
         csv_reader = csv.reader(csvfile)
         tags = {}
         header = next(csv_reader)
-        set_dif = set(REQUIRED_HEADER) - set(header)
+        set_dif = set(REQUIRED_TAGS_HEADER) - set(header)
         if len(set_dif) != 0:
-            raise SystemExit(
-                "The header is missing {}. Exiting".format(",".join(list(set_dif)))
-            )
+            set_diff_string = ",".join(list(set_dif))
+            raise SystemExit(f"The header is missing {set_diff_string}. Exiting")
         sequence_id = header.index("sequence")
         feature_id = header.index("feature_name")
         for i, row in enumerate(csv_reader):
+            # Allow for optional columns
+            if len(row) < len(REQUIRED_TAGS_HEADER):
+                raise SystemExit(
+                    f"Row number: {i+1} is incomplete. Please check the csv Tags file."
+                )
             sequence = row[sequence_id].strip()
 
             if not regex.match(atgc_test, sequence):
                 raise SystemExit(
-                    "Sequence {} on line {} is not only composed of ATGC. Exiting".format(
-                        sequence, i
-                    )
+                    f"Sequence {sequence} on line {i} is not only composed of ATGC. Exiting"
                 )
             tags[sequence] = row[feature_id].strip()
     return tags
@@ -194,11 +186,11 @@ def check_tags(tags, maximum_distance):
 
     # Check if the distance is big enoughbetween tags
     offending_pairs = []
-    for a, b in combinations(seq_list, 2):
+    for tag_a, tag_b in combinations(seq_list, 2):
         # pylint: disable=no-member
-        distance = Levenshtein.distance(a, b)
+        distance = Levenshtein.distance(tag_a, tag_b)
         if distance <= (maximum_distance - 1):
-            offending_pairs.append([a, b, distance])
+            offending_pairs.append([tag_a, tag_b, distance])
     # If offending pairs are found, print them all.
     if offending_pairs:
         print(
@@ -208,11 +200,7 @@ def check_tags(tags, maximum_distance):
             "Offending case(s):\n"
         )
         for pair in offending_pairs:
-            print(
-                "\t{tag1}\n\t{tag2}\n\tDistance = {distance}\n".format(
-                    tag1=pair[0], tag2=pair[1], distance=pair[2]
-                )
-            )
+            print(f"\t{pair[0]}\n\t{pair[1]}\n\tDistance = {pair[2]}\n")
         sys.exit("Exiting the application.\n")
 
     return (tag_list, longest_tag_len)
@@ -351,12 +339,12 @@ def pre_run_checks(read1_paths, chemistry_def, longest_tag_len, args):
         print(f"Detected {number_of_samples} pairs of files to run on.")
 
     if args.sliding_window:
-        R2_min_length = read2_lengths[0]
+        r2_min_length = read2_lengths[0]
         maximum_distance = 0
     else:
-        R2_min_length = longest_tag_len
+        r2_min_length = longest_tag_len
         maximum_distance = args.max_error
-    return n_reads, R2_min_length, maximum_distance
+    return n_reads, r2_min_length, maximum_distance
 
 
 def get_filtered_list(args, chemistry, translation_dict):

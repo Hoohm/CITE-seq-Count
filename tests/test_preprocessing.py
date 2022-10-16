@@ -1,13 +1,15 @@
-import pytest
-import io
-from cite_seq_count import preprocessing
+"""Test function preprocessing of the module"""
+
 import glob
-from collections import namedtuple, OrderedDict
-from itertools import islice
+from collections import namedtuple
+
+import pytest
+from cite_seq_count import preprocessing
 
 
 @pytest.fixture
 def data():
+    """Load up data for testing"""
 
     pytest.passing_csv = "tests/test_data/tags/pass/*.csv"
     pytest.failing_csv = "tests/test_data/tags/fail/*.csv"
@@ -21,7 +23,9 @@ def data():
     pytest.correct_tags_path = "tests/test_data/tags/pass/correct.csv"
 
     # Create some variables to compare to
-    pytest.correct_reference_translation_list = set(["ACTGTTTTATTGGCCT","TTCATCCTTTAGGGAT"])
+    pytest.correct_reference_translation_list = set(
+        ["ACTGTTTTATTGGCCT", "TTCATCCTTTAGGGAT"]
+    )
     pytest.correct_tags = {
         "AGGACCATCCAA": "CITE_LEN_12_1",
         "ACATGTTACCGT": "CITE_LEN_12_2",
@@ -51,12 +55,18 @@ def data():
 
 
 def test_csv_parser(data):
+    """Test the csv parser
+
+    Args:
+        data (_type_): _description_
+    """
     passing_files = glob.glob(pytest.passing_csv)
     for file_path in passing_files:
         preprocessing.parse_tags_csv(file_path)
     with pytest.raises(SystemExit):
         failing_files = glob.glob(pytest.failing_csv)
         for file_path in failing_files:
+            print(file_path)
             preprocessing.parse_tags_csv(file_path)
 
 

@@ -23,15 +23,11 @@ def main():
     # Check a few path before doing anything
     if not os.access(args.temp_path, os.W_OK):
         sys.exit(
-            "Temp folder: {} is not writable. Please check permissions and/or change temp folder.".format(
-                args.temp_path
-            )
+            f"Temp folder: {args.temp_path} is not writable. Please check permissions and/or change temp folder."
         )
     if not os.access(os.path.dirname(os.path.abspath(args.outfolder)), os.W_OK):
         sys.exit(
-            "Output folder: {} is not writable. Please check permissions and/or change output folder.".format(
-                args.outfolder
-            )
+            f"Output folder: {args.outfolder} is not writable. Please check permissions and/or change output folder."
         )
 
     # Get chemistry defs
@@ -75,7 +71,7 @@ def main():
         maximum_distance=maximum_distance,
     )
     # Map the data
-    (final_results, umis_per_cell, reads_per_cell, merged_no_match) = mapping.map_data(
+    (final_results, umis_per_cell, _, merged_no_match) = mapping.map_data(
         input_queue=input_queue, unmapped_id=len(ordered_tags), args=args
     )
 

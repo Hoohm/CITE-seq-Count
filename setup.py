@@ -32,6 +32,7 @@ setuptools.setup(
         "cython>=0.29.17",
         "pyyaml==6.0",
         "pooch==1.6.0",
+        "six==1.16.0",
     ],
     python_requires=">=3.8",
     data_files=[("report_template", ["templates/report.json"])],
