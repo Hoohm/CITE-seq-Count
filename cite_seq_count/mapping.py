@@ -212,7 +212,5 @@ def check_unmapped(no_match, too_short, total_reads, start_trim):
     sum_unmapped = sum(no_match.values()) + too_short
     if sum_unmapped / total_reads > float(0.99):
         sys.exit(
-            """More than 99% of your data is unmapped.\nPlease check that your --start_trim {} parameter is correct and that your tags file is properly formatted""".format(
-                start_trim
-            )
+            f"More than 99% of your data is unmapped.\nPlease check that your --start_trim {start_trim} parameter is correct and that your tags file is properly formatted"
         )
