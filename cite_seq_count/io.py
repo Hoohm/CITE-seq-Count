@@ -12,6 +12,9 @@ import json
 from collections import namedtuple, Counter
 from itertools import islice
 from typing import Tuple
+from pathlib import Path
+from os import access, R_OK
+
 
 import scipy
 import pkg_resources
@@ -164,6 +167,19 @@ def write_to_files(
             shutil.copyfileobj(mtx_in, mtx_gz)
     os.remove(os.path.join(prefix, "matrix.mtx"))
 
+def check_file(file_str:str) -> Path:
+    """Check that a file exists and is readable
+
+    Args:
+        file_str (str): Path to the file as a string
+
+    Returns:
+        Path: Path to the file
+    """
+    file_path = Path(file_str)
+    if file_path.exists and access(file_path, R_OK):
+        return file_path
+
 
 def write_dense(
     sparse_matrix: scipy.sparse.coo_matrix,
@@ -187,7 +203,7 @@ def write_dense(
     index = []
     for tag in ordered_tags:
         index.append(tag.name)
-    pandas_dense = pd.DataFrame(sparse_matrix.todense(), columns=columns, index=index)
+    pandas_dense = pd.DataFrame(sparse_matrix.todense(), columns=list(columns), index=index)
     pandas_dense.to_csv(os.path.join(outfolder, filename), sep="\t")
 
 

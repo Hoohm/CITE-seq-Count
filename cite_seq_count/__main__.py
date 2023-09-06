@@ -86,6 +86,7 @@ def main():
     # Remove temp chunks
     for file_path in temp_files:
         os.remove(file_path)
+
     # Check that we have a filtered cell list to work on
     filtered_cells = processing.check_filtered_cells(
         filtered_cells=filtered_cells,

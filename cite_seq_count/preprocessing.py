@@ -1,51 +1,26 @@
 """Sets of functions to preprocess the data"""
 
-import csv
+
 import gzip
 import sys
-from collections import namedtuple
 from itertools import combinations, islice
-import regex
 import Levenshtein
-from pandas import read_csv
-from cite_seq_count.io import get_n_lines
 
+
+from cite_seq_count.io import get_n_lines, check_file
+import polars as pl
+from pandas import read_csv
 
 REQUIRED_TAGS_HEADER = ["sequence", "feature_name"]
-REQUIRED_TRANSLATION_HEADER = ["reference", "translation"]
+REQUIRED_CELLS_REF_HEADER = ["reference"]
+OPTIONAL_CELLS_REF_HEADER = ["translation"]
+FEATURE_NAME = "feature_name"
+SEQUENCE = "sequence"
+REQUIRED_TAGS_HEADER = [FEATURE_NAME, SEQUENCE]
 STRIP_CHARS = '"0123456789- \t\n'
 
 
-def parse_filtered_list_csv(filename, barcode_length):
-    """
-    Reads in a one column, no header list of barcodes and returns a set.
-
-    Args:
-        filename(str): file path
-        barcode_length(int): Barcode expected length
-
-    Returns:
-        set: A set of barcodes
-    """
-    barcodes_pd = read_csv(filename)
-
-    barcodes = set(barcodes_pd.iloc[:, 0])
-
-    out_set = set()
-    barcode_pattern = regex.compile(rf"^[ATGC]{{{barcode_length}}}")
-    for barcode in barcodes:
-        checked_barcode = barcode.strip(STRIP_CHARS)
-        if barcode_pattern.match(checked_barcode):
-            out_set.add(checked_barcode)
-        else:
-            sys.exit(
-                f"Only ATGC barcodes are accepted in the filtered list. Please delete entry {checked_barcode}"
-            )
-
-    return out_set
-
-
-def parse_cell_list_csv(filename, barcode_length):
+def parse_cell_list_csv(filename: str, barcode_length: int) -> pl.DataFrame:
     """Reads white-listed barcodes from a CSV file.
 
     The function accepts plain barcodes or even 10X style barcodes with the
@@ -59,39 +34,52 @@ def parse_cell_list_csv(filename, barcode_length):
         set: The set of white-listed barcodes.
 
     """
-    data = read_csv(filename, dtype={"reference": str, "translation": str})
-    if data.shape[1] != 2:
-        print(data.head())
-        sys.exit(
-            "Your translation file only holds 1 column or is tab delimited instead of csv."
-        )
-    barcode_pattern = regex.compile(rf"^[ATGC]{{{barcode_length}}}")
+    file_path = check_file(filename)
+    cells_pl = pl.read_csv(file_path)
+    barcode_pattern = rf"^[ATGC]{{{barcode_length}}}"
 
-    header = data.columns
-    set_dif = set(REQUIRED_TRANSLATION_HEADER) - set(header)
+    header = cells_pl.columns
+    set_dif = set(REQUIRED_CELLS_REF_HEADER) - set(header)
     if len(set_dif) != 0:
         set_diff_string = ",".join(list(set_dif))
         raise SystemExit(f"The header is missing {set_diff_string}. Exiting")
-
-    # Prepare and validate data
-
-    data["reference"] = data["reference"].map(lambda x: x.rstrip(STRIP_CHARS))
-    data["translation"] = data["translation"].map(lambda x: x.rstrip(STRIP_CHARS))
-
-    if any(data["reference"].map(lambda x: not barcode_pattern.match(x))):
-        sys.exit(
-            f"Barcode(s) in reference column don't match [ATGC] or a length of {barcode_length}. Please check."
-        )
-    if any(data["translation"].map(lambda x: not barcode_pattern.match(x))):
-        sys.exit(
-            f"Barcode(s) in translation column don't match [ATGC] or a length of {barcode_length}. Please check."
+    if OPTIONAL_CELLS_REF_HEADER in header:
+        with_translation = True
+    else:
+        with_translation = False
+    # Prepare and validate cells_pl
+    if with_translation:
+        cells_pl = cells_pl.with_columns(
+            reference=pl.col("reference").str.strip(STRIP_CHARS),
+            translation=pl.col("translation").str.strip(STRIP_CHARS),
         )
 
-    translation_dict = dict(zip(data.translation, data.reference))
-    return translation_dict
+    else:
+        cells_pl = cells_pl.with_columns(
+            reference=pl.col("reference").str.strip(STRIP_CHARS),
+        )
+
+    check_sequence_pattern(
+        df=cells_pl,
+        pattern=barcode_pattern,
+        column_name="reference",
+        file_type="Cell reference",
+        expected_pattern="ATGC",
+    )
+
+    if with_translation:
+        check_sequence_pattern(
+            df=cells_pl,
+            pattern=barcode_pattern,
+            column_name="translation",
+            file_type="Cell reference",
+            expected_pattern="ATGC",
+        )
+
+    return cells_pl
 
 
-def parse_tags_csv(file_name):
+def parse_tags_csv(file_name: str) -> pl.DataFrame:
     """Reads the TAGs from a CSV file. Checks that the header contains
     necessary strings and if sequences are made of ATGC
 
@@ -104,46 +92,75 @@ def parse_tags_csv(file_name):
         TTCCGCCTCTCTTTG,Hashtag_3
 
     Args:
-        file_name (file): TAGs file name.
+        file_name (str): file path as a tring
 
     Returns:
-        dict: A dictionary using sequences as keys and feature names as values.
-
+        pl.DataFrame: polars dataframe with the csv content
     """
-    atgc_test = regex.compile("^[ATGC]{1,}$")
 
-    try:
-        with open(file_name, mode="r", encoding="utf-8") as csvfile:
-            csv_reader = csv.reader(csvfile)
-    except IOError:
-        sys.exit(f"Cannot read file {file_name}")
-    with open(file_name, mode="r", encoding="utf-8") as csvfile:
-        csv_reader = csv.reader(csvfile)
-        tags = {}
-        header = next(csv_reader)
-        set_dif = set(REQUIRED_TAGS_HEADER) - set(header)
-        if len(set_dif) != 0:
-            set_diff_string = ",".join(list(set_dif))
-            raise SystemExit(f"The header is missing {set_diff_string}. Exiting")
-        sequence_id = header.index("sequence")
-        feature_id = header.index("feature_name")
-        for i, row in enumerate(csv_reader):
-            # Allow for optional columns
-            if len(row) < len(REQUIRED_TAGS_HEADER):
-                raise SystemExit(
-                    f"Row number: {i+1} is incomplete. Please check the csv Tags file."
-                )
-            sequence = row[sequence_id].strip()
+    atgc_test = "^[ATGC]{1,}$"
 
-            if not regex.match(atgc_test, sequence):
-                raise SystemExit(
-                    f"Sequence {sequence} on line {i} is not only composed of ATGC. Exiting"
-                )
-            tags[sequence] = row[feature_id].strip()
-    return tags
+    file_path = check_file(file_str=file_name)
+
+    data_pl = pl.read_csv(file_path)
+    file_header = set(data_pl.columns)
+    set_diff = set(REQUIRED_TAGS_HEADER).difference(file_header)
+    if len(set_diff) != 0:
+        set_diff_str = " AND ".join(set_diff)
+        raise SystemExit(
+            f"The header of the tags file at {file_path} is missing the following header(s) {set_diff_str}"
+        )
+    for column in REQUIRED_TAGS_HEADER:
+        if not data_pl.filter(pl.col([column]) is None).is_empty():
+            raise SystemExit(
+                f"Column {column} is missing a value. Please fix the CSV file."
+            )
+    check_sequence_pattern(
+        df=data_pl,
+        pattern=atgc_test,
+        column_name=SEQUENCE,
+        file_type="tags",
+        expected_pattern="ATGC",
+    )
+
+    return data_pl
 
 
-def check_tags(tags, maximum_distance):
+def check_sequence_pattern(
+    df: pl.DataFrame,
+    pattern: str,
+    column_name: str,
+    file_type: str,
+    expected_pattern: str,
+) -> None:
+    """Check that a column of a polars df matches a given pattern and exit if not
+
+    Args:
+        df (pl.DataFrame): Df holding the info to be tested
+        pattern (str): Regex pattern to be tested
+        column_name (str): Which column to test
+        file_type (str): File type for the error raised
+        expected_pattern (str): Human readable pattern to be raised
+
+    Raises:
+        SystemExit: Exists if some patterns don't match
+    """
+    regex_test = df.with_columns(
+        pl.col(column_name).str.contains(pattern).alias("regex")
+    )
+    if not regex_test.select(pl.col("regex").all()).get_column("regex").item():
+        sequences = (
+            regex_test.filter(pl.col("regex") == False)
+            .get_column(column_name)
+            .to_list()
+        )
+        sequences_str = "\n".join(sequences)
+        raise SystemExit(
+            f"Some sequences in the {file_type} file is not only composed of the proper pattern {expected_pattern}.\nHere are the sequences{sequences_str}"
+        )
+
+
+def check_tags(tags_pl: pl.DataFrame, maximum_distance: int) -> int:
     """Evaluates the distance between the TAGs based on the `maximum distance`
     argument provided.
 
@@ -157,36 +174,13 @@ def check_tags(tags, maximum_distance):
             between two TAGs.
 
     Returns:
-        list: An ordered list of namedtuples
         int: the length of the longest TAG
 
     """
-    tag = namedtuple("tag", ["name", "sequence", "id"])
-    longest_tag_len = 0
-    seq_list = []
-    tag_list = []
-    for i, tag_seq in enumerate(sorted(tags, key=len, reverse=True)):
-        safe_name = sanitize_name(tags[tag_seq])
-
-        # for index, tag_name in enumerate(ordered_tags):
-        tag_list.append(
-            tag(
-                name=safe_name,
-                sequence=tag_seq,
-                id=i,
-            )
-        )
-        if len(tag_seq) > longest_tag_len:
-            longest_tag_len = len(tag_seq)
-        seq_list.append(tag_seq)
-    # tag_list.append(tag(name="unmapped", sequence="UNKNOWN", id=i + 1,))
-    # If only one TAG is provided, then no distances to compare.
-    if len(tags) == 1:
-        return (tag_list, longest_tag_len)
 
     # Check if the distance is big enoughbetween tags
     offending_pairs = []
-    for tag_a, tag_b in combinations(seq_list, 2):
+    for tag_a, tag_b in combinations(tags_pl["sequence"], 2):
         # pylint: disable=no-member
         distance = Levenshtein.distance(tag_a, tag_b)
         if distance <= (maximum_distance - 1):
@@ -202,21 +196,9 @@ def check_tags(tags, maximum_distance):
         for pair in offending_pairs:
             print(f"\t{pair[0]}\n\t{pair[1]}\n\tDistance = {pair[2]}\n")
         sys.exit("Exiting the application.\n")
+    longest_tag_len = max(tags_pl["sequence"].str.n_chars())
 
-    return (tag_list, longest_tag_len)
-
-
-def sanitize_name(string):
-    """
-    Transforms special characters that are not compatible with namedtuples
-
-    Args:
-        string(str): a string from a feature name
-
-    Returns:
-        str: modified string
-    """
-    return string.replace("-", "_")
+    return longest_tag_len
 
 
 def get_read_length(filename):

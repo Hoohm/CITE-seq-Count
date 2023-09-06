@@ -1,14 +1,8 @@
 """This module is holding code for all the remote fetching on the chemistries database."""
-import requests
-import sys
 import os
-import gzip
-import io
 import pooch
-import csv
 import json
 
-from collections import namedtuple
 
 from dataclasses import dataclass
 

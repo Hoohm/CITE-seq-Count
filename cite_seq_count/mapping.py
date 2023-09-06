@@ -6,7 +6,7 @@ import sys
 import os
 
 from collections import Counter, defaultdict
-
+import numpy as np
 import Levenshtein
 
 # pylint: disable=no-name-in-module
@@ -68,6 +68,10 @@ def map_data(input_queue, unmapped_id, args):
     ) = merge_results(parallel_results=parallel_results[0], unmapped_id=unmapped_id)
 
     return final_results, umis_per_cell, reads_per_cell, merged_no_match
+
+def fast_dict_getter(seq, tags, unmapped_id):
+    return tags.get(seq, unmapped_id)
+
 
 
 def find_best_match(tag_seq, tags, maximum_distance):
@@ -145,8 +149,11 @@ def map_reads(mapping_input):
     results = {}
     no_match = Counter()
     n_reads = 1
-
-    unmapped_id = len(tags)
+    new_tags = {}
+    vec_dict_mapper = np.vectorize(fast_dict_getter)
+    for i in tags:
+        new_tags[i.sequence] = i.id
+        unmapped_id = len(tags)
     # Progress info
     current_time = time.time()
     with open(filename, encoding="utf-8") as input_file:
@@ -174,7 +181,7 @@ def map_reads(mapping_input):
             if sliding_window:
                 best_match = find_best_match_shift(read2, tags)
             else:
-                best_match = find_best_match(read2, tags, maximum_distance)
+                best_match = fast_dict_getter(read2, new_tags, len(tags))
 
             results[cell_barcode][best_match][UMI] += 1
 

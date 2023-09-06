@@ -24,7 +24,7 @@ setuptools.setup(
         "python-levenshtein>=0.12.0",
         "scipy>=1.1.0",
         "multiprocess>=0.70.6.1",
-        "umi_tools==1.1.1",
+        "umi_tools==1.1.4",
         "pytest>=6.0.0",
         "pytest-dependency==0.4.0",
         "pandas>=0.23.4",
@@ -35,5 +35,5 @@ setuptools.setup(
         "six==1.16.0",
     ],
     python_requires=">=3.8",
-    data_files=[("report_template", ["templates/report.json"])],
+    package_data={"report_template": ["templates/*.json"]},
 )
