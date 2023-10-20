@@ -69,9 +69,9 @@ def data():
 
     pytest.sliding_window = False
     pytest.sequence_pool = []
-    pytest.tags_tuple = preprocessing.check_tags(
-        preprocessing.parse_tags_csv("tests/test_data/tags/pass/correct.csv"), 5
-    )[0]
+    pytest.tags_tuple = preprocessing.parse_tags_csv(
+        preprocessing.parse_tags_csv("tests/test_data/tags/pass/correct.csv")
+    )
     pytest.mapping_input = namedtuple(
         "mapping_input",
         ["filename", "tags", "debug", "maximum_distance", "sliding_window"],

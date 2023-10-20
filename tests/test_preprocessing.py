@@ -79,13 +79,13 @@ def test_parse_reference_list_csv(data):
     passing_files = glob.glob(pytest.passing_reference_list_csv)
     for file_path in passing_files:
         assert_frame_equal(
-            left=preprocessing.parse_cell_list_csv(file_path, 16),
+            left=preprocessing.parse_barcode_reference(file_path, 16),
             right=pytest.correct_reference_translation_list,
         )
     with pytest.raises(SystemExit):
         failing_files = glob.glob(pytest.failing_reference_list_csv)
         for file_path in failing_files:
-            preprocessing.parse_cell_list_csv(file_path, 16)
+            preprocessing.parse_barcode_reference(file_path, 16)
 
 
 def test_check_distance_too_big_between_tags(data):

@@ -10,6 +10,7 @@ import tempfile
 import json
 
 from collections import namedtuple, Counter
+from argparse import ArgumentParser
 from itertools import islice
 from typing import Tuple
 from pathlib import Path
@@ -20,14 +21,15 @@ import scipy
 import pkg_resources
 import yaml
 import pandas as pd
-
+import polars as pl
 from scipy import io
 from cite_seq_count import secondsToText
+from cite_seq_count.chemistry import Chemistry
 
 JSON_REPORT_PATH = pkg_resources.resource_filename(__name__, "templates/report.json")
 
 
-def blocks(file, size: int = 65536):
+def blocks(file: Path, size: int = 65536):
     """
     A fast way of counting the lines of a large file.
     Ref:
@@ -46,7 +48,7 @@ def blocks(file, size: int = 65536):
         yield partial_file
 
 
-def get_n_lines(file_path: str) -> int:
+def get_n_lines(file_path: Path) -> int:
     """
     Determines how many lines have to be processed
     depending on options and number of available lines.
@@ -123,7 +125,7 @@ def get_csv_reader_from_path(filename: str, sep: str = "\t") -> csv.reader:
 def write_to_files(
     sparse_matrix: scipy.sparse.coo_matrix,
     filtered_cells: set,
-    ordered_tags: dict,
+    parsed_tags: dict,
     data_type: str,
     outfolder: str,
     translation_dict: dict,
@@ -133,7 +135,7 @@ def write_to_files(
     Args:
         sparse_matrix (dok_matrix): Results in a sparse matrix.
         filtered_cells (set): Set of cells that are selected for output.
-        ordered_tags (dict): Tags in order with indexes as values.
+        parsed_tags (dict): Tags in order with indexes as values.
         data_type (string): A string definning if the data is umi or read based.
         outfolder (string): Path to the output folder.
     """
@@ -158,7 +160,7 @@ def write_to_files(
             else:
                 barcode_file.write(f"{barcode}\n".encode())
     with gzip.open(os.path.join(prefix, "features.tsv.gz"), "wb") as feature_file:
-        for feature in ordered_tags:
+        for feature in parsed_tags:
             feature_file.write(f"{feature.sequence}\t{feature.name}\n".encode())
         if data_type == "read":
             feature_file.write("{}\t{}\n".format("UNKNOWN", "unmapped").encode())
@@ -167,8 +169,9 @@ def write_to_files(
             shutil.copyfileobj(mtx_in, mtx_gz)
     os.remove(os.path.join(prefix, "matrix.mtx"))
 
-def check_file(file_str:str) -> Path:
-    """Check that a file exists and is readable
+
+def check_file(file_str: str) -> Path:
+    """Check that a file exists and is readable.
 
     Args:
         file_str (str): Path to the file as a string
@@ -183,7 +186,7 @@ def check_file(file_str:str) -> Path:
 
 def write_dense(
     sparse_matrix: scipy.sparse.coo_matrix,
-    ordered_tags: dict,
+    parsed_tags: dict,
     columns: set,
     outfolder: str,
     filename: str,
@@ -201,9 +204,11 @@ def write_dense(
     prefix = os.path.join(outfolder)
     os.makedirs(prefix, exist_ok=True)
     index = []
-    for tag in ordered_tags:
+    for tag in parsed_tags:
         index.append(tag.name)
-    pandas_dense = pd.DataFrame(sparse_matrix.todense(), columns=list(columns), index=index)
+    pandas_dense = pd.DataFrame(
+        sparse_matrix.todense(), columns=list(columns), index=index
+    )
     pandas_dense.to_csv(os.path.join(outfolder, filename), sep="\t")
 
 
@@ -254,8 +259,8 @@ def create_report(
     bad_cells,
     r1_too_short: int,
     r2_too_short: int,
-    args,
-    chemistry_def,
+    args: ArgumentParser,
+    chemistry_def: Chemistry,
     maximum_distance: int,
 ):
     """
@@ -318,13 +323,13 @@ def create_report(
 
 
 def write_chunks_to_disk(
-    args,
-    read1_paths,
-    read2_paths,
-    r2_min_length,
-    n_reads_per_chunk,
-    chemistry_def,
-    ordered_tags,
+    args: ArgumentParser,
+    read1_paths: list[Path],
+    read2_paths: list[Path],
+    r2_min_length: int,
+    n_reads_per_chunk: int,
+    chemistry_def: Chemistry,
+    parsed_tags: pl.DataFrame,
     maximum_distance,
 ):
     """
@@ -338,7 +343,7 @@ def write_chunks_to_disk(
         r2_min_length (int):  Minimum length of read2 sequences.
         n_reads_per_chunk (int): How many reads per chunk.
         chemistry_def (namedtuple): Hols all the information about the chemistry definition.
-        ordered_tags (list): List of namedtuple tags.
+        parsed_tags (list): List of namedtuple tags.
         maximum_distance (int): Maximum hamming distance for mapping.
     """
     mapping_input = namedtuple(
@@ -377,7 +382,6 @@ def write_chunks_to_disk(
     reads_written = 0
 
     for read1_path, read2_path in zip(read1_paths, read2_paths):
-
         if enough_reads:
             break
         print(f"Reading reads from files: {read1_path}, {read2_path}")
@@ -424,7 +428,7 @@ def write_chunks_to_disk(
                     input_queue.append(
                         mapping_input(
                             filename=chunked_file_object.name,
-                            tags=ordered_tags,
+                            tags=parsed_tags,
                             debug=args.debug,
                             maximum_distance=maximum_distance,
                             sliding_window=args.sliding_window,
@@ -449,7 +453,7 @@ def write_chunks_to_disk(
         input_queue.append(
             mapping_input(
                 filename=chunked_file_object.name,
-                tags=ordered_tags,
+                tags=parsed_tags,
                 debug=args.debug,
                 maximum_distance=maximum_distance,
                 sliding_window=args.sliding_window,
@@ -458,6 +462,96 @@ def write_chunks_to_disk(
     return (
         input_queue,
         temp_files,
+        r1_too_short,
+        r2_too_short,
+        total_reads,
+    )
+
+
+def write_mapping_input(
+    args: ArgumentParser,
+    read1_paths: list[Path],
+    read2_paths: list[Path],
+    r2_min_length: int,
+    chemistry_def: Chemistry,
+):
+    """
+    Writes chunked files of reads to disk and prepares parallel
+    processing queue parameters.
+
+    Args:
+        args(argparse): All parsed arguments.
+        read1_paths (list): List of R1 fastq.gz paths.
+        read2_paths (list): List of R2 fastq.gz paths.
+        r2_min_length (int):  Minimum length of read2 sequences.
+        chemistry_def (namedtuple): Hols all the information about the chemistry definition.
+        parsed_tags (list): List of namedtuple tags.
+        maximum_distance (int): Maximum hamming distance for mapping.
+    """
+    print("Writing chunks to disk")
+
+    temp_path = os.path.abspath(args.temp_path)
+    r1_too_short = 0
+    r2_too_short = 0
+    total_reads = 0
+    total_reads_written = 0
+
+    barcode_slice = slice(
+        chemistry_def.cell_barcode_start - 1, chemistry_def.cell_barcode_end
+    )
+    umi_slice = slice(
+        chemistry_def.umi_barcode_start - 1, chemistry_def.umi_barcode_end
+    )
+
+    temp_file = tempfile.NamedTemporaryFile(
+        "w", dir=temp_path, suffix="_csc", delete=False
+    )
+    reads_written = 0
+
+    for read1_path, read2_path in zip(read1_paths, read2_paths):
+        print(f"Reading reads from files: {read1_path}, {read2_path}")
+        with gzip.open(read1_path, "rt") as textfile1, gzip.open(
+            read2_path, "rt"
+        ) as textfile2:
+            secondlines = islice(zip(textfile1, textfile2), 1, None, 4)
+
+            for read1, read2 in secondlines:
+                total_reads += 1
+
+                read1 = read1.strip()
+                if len(read1) < chemistry_def.umi_barcode_end:
+                    r1_too_short += 1
+                    # The entire read is skipped
+                    continue
+                if len(read2) < r2_min_length:
+                    r2_too_short += 1
+                    # The entire read is skipped
+                    continue
+
+                read1_sliced = read1[
+                    chemistry_def.cell_barcode_start - 1 : chemistry_def.umi_barcode_end
+                ]
+
+                read2_sliced = read2[
+                    chemistry_def.r2_trim_start : (
+                        r2_min_length + chemistry_def.r2_trim_start
+                    )
+                ]
+                temp_file.write(
+                    "{},{},{}\n".format(
+                        read1_sliced[barcode_slice],
+                        read1_sliced[umi_slice],
+                        read2_sliced,
+                    )
+                )
+
+                reads_written += 1
+                total_reads_written += 1
+
+    temp_file.close()
+
+    return (
+        temp_file,
         r1_too_short,
         r2_too_short,
         total_reads,

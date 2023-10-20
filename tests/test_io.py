@@ -48,7 +48,7 @@ def data():
     pytest.sparse_matrix = test_matrix
     pytest.filtered_cells = ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"]
     tag = namedtuple("tag", ["name", "sequence", "id"])
-    pytest.ordered_tags_map = [
+    pytest.parsed_tags_map = [
         tag(name="test1", sequence="CGTA", id=0),
         tag(name="test2", sequence="CGTA", id=1),
         tag(name="test3", sequence="CGTA", id=2),
@@ -73,7 +73,7 @@ def test_write_to_files_wo_translation(data, tmpdir):
     io.write_to_files(
         pytest.sparse_matrix,
         pytest.filtered_cells,
-        pytest.ordered_tags_map,
+        pytest.parsed_tags_map,
         pytest.data_type,
         output_path,
         translation_dict=False,
@@ -106,7 +106,7 @@ def test_write_to_files_with_translation(data, tmpdir):
     io.write_to_files(
         pytest.sparse_matrix,
         pytest.filtered_cells,
-        pytest.ordered_tags_map,
+        pytest.parsed_tags_map,
         pytest.data_type,
         output_path,
         translation_dict=translation_dict,
@@ -131,7 +131,7 @@ def test_write_to_dense_wo_translation(data, tmpdir):
 
     io.write_dense(
         sparse_matrix=pytest.sparse_matrix,
-        ordered_tags=pytest.ordered_tags_map,
+        parsed_tags=pytest.parsed_tags_map,
         columns=pytest.filtered_cells,
         outfolder=output_path,
         filename=csv_name,

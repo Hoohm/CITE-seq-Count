@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.6
+#!/usr/bin/env python3.11
 """
 Author: Patrick Roelli
 """
@@ -23,28 +23,25 @@ def main():
     # Check a few path before doing anything
     if not os.access(args.temp_path, os.W_OK):
         sys.exit(
-            f"Temp folder: {args.temp_path} is not writable. Please check permissions and/or change temp folder."
+            f"Temp folder: {args.temp_path} is not writable."
+            f"Please check permissions and/or change temp folder."
         )
     if not os.access(os.path.dirname(os.path.abspath(args.outfolder)), os.W_OK):
         sys.exit(
-            f"Output folder: {args.outfolder} is not writable. Please check permissions and/or change output folder."
+            f"Output folder: {args.outfolder} is not writable."
+            f"Please check permissions and/or change output folder."
         )
 
     # Get chemistry defs
-    (translation_dict, chemistry_def) = chemistry.setup_chemistry(args)
+    (barcode_reference, chemistry_def) = chemistry.setup_chemistry(args)
 
     # Load TAGs/ABs.
-    ab_map = preprocessing.parse_tags_csv(args.tags)
-    ordered_tags, longest_tag_len = preprocessing.check_tags(ab_map, args.max_error)
+    parsed_tags = preprocessing.parse_tags_csv(args.tags)
+    longest_tag_len = preprocessing.check_tags(parsed_tags, args.max_error)
 
     # Identify input file(s)
     read1_paths, read2_paths = io.get_read_paths(args.read1_path, args.read2_path)
 
-    # Check filtered input list
-    # If a translation is given, will return the translated version
-    filtered_cells = preprocessing.get_filtered_list(
-        args=args, chemistry=chemistry_def, translation_dict=translation_dict
-    )
     # Checks before chunking.
     (n_reads, r2_min_length, maximum_distance) = preprocessing.pre_run_checks(
         read1_paths=read1_paths,
@@ -52,60 +49,47 @@ def main():
         longest_tag_len=longest_tag_len,
         args=args,
     )
-
-    # Chunk the data to disk before mapping
     (
-        input_queue,
-        temp_files,
+        temp_file,
         r1_too_short,
         r2_too_short,
         total_reads,
-    ) = io.write_chunks_to_disk(
+    ) = io.write_mapping_input(
         args=args,
         read1_paths=read1_paths,
         read2_paths=read2_paths,
         r2_min_length=r2_min_length,
-        n_reads_per_chunk=n_reads,
         chemistry_def=chemistry_def,
-        ordered_tags=ordered_tags,
+    )
+
+    mapped_reads = mapping.map_reads_hybrid(
+        mapping_input_file=temp_file,
+        parsed_tags=parsed_tags,
         maximum_distance=maximum_distance,
     )
-    # Map the data
-    (final_results, umis_per_cell, _, merged_no_match) = mapping.map_data(
-        input_queue=input_queue, unmapped_id=len(ordered_tags), args=args
-    )
-
+    # Remove temp file
+    os.remove(temp_file)
     # Check if 99% of the reads are unmapped.
-    mapping.check_unmapped(
-        no_match=merged_no_match,
-        too_short=r1_too_short + r2_too_short,
-        total_reads=total_reads,
-        start_trim=chemistry_def.r2_trim_start,
-    )
+    mapping.check_unmapped(mapped_reads=mapped_reads)
 
-    # Remove temp chunks
-    for file_path in temp_files:
-        os.remove(file_path)
-
-    # Check that we have a filtered cell list to work on
-    filtered_cells = processing.check_filtered_cells(
-        filtered_cells=filtered_cells,
-        expected_cells=args.expected_cells,
-        umis_per_cell=umis_per_cell,
+    # Check filtered input list
+    # If a translation is given, will return the translated version
+    barcode_subset, enable_barcode_correction = preprocessing.get_barcode_subset(
+        args=args,
+        chemistry=chemistry_def,
+        barcode_reference=barcode_reference,
+        mapped_reads=mapped_reads,
     )
 
     # Correct cell barcodes
-    if args.bc_threshold > 0:
+    if args.bc_threshold > 0 and enable_barcode_correction:
         (
-            final_results,
-            umis_per_cell,
+            mapped_reads,
             bcs_corrected,
-        ) = processing.run_cell_barcode_correction(
-            final_results=final_results,
-            umis_per_cell=umis_per_cell,
-            ordered_tags=ordered_tags,
-            filtered_set=filtered_cells,
-            args=args,
+        ) = processing.correct_barcodes(
+            mapped_reads=mapped_reads,
+            barcode_subset=barcode_subset,
+            collapsing_threshold=args.bc_threshold,
         )
     else:
         print("Skipping cell barcode correction")
@@ -114,14 +98,14 @@ def main():
     # Create sparse matrices for reads results
     read_results_matrix = processing.generate_sparse_matrices(
         final_results=final_results,
-        ordered_tags=ordered_tags,
+        parsed_tags=parsed_tags,
         filtered_cells=filtered_cells,
     )
     # Write reads to file
     io.write_to_files(
         sparse_matrix=read_results_matrix,
         filtered_cells=filtered_cells,
-        ordered_tags=ordered_tags,
+        parsed_tags=parsed_tags,
         data_type="read",
         outfolder=args.outfolder,
         translation_dict=translation_dict,
@@ -137,7 +121,7 @@ def main():
         ) = processing.run_umi_correction(
             final_results=final_results,
             filtered_cells=filtered_cells,
-            unmapped_id=len(ordered_tags),
+            unmapped_id=len(parsed_tags),
             args=args,
         )
     else:
@@ -153,13 +137,13 @@ def main():
         # Create sparse clustered cells matrix
         umi_clustered_matrix = processing.generate_sparse_matrices(
             final_results=final_results,
-            ordered_tags=ordered_tags,
+            parsed_tags=parsed_tags,
             filtered_cells=clustered_cells,
         )
         # Write uncorrected cells to dense output
         io.write_dense(
             sparse_matrix=umi_clustered_matrix,
-            ordered_tags=ordered_tags,
+            parsed_tags=parsed_tags,
             columns=clustered_cells,
             outfolder=os.path.join(args.outfolder, "uncorrected_cells"),
             filename="dense_umis.tsv",
@@ -167,7 +151,7 @@ def main():
     # Generate the UMI count matrix
     umi_results_matrix = processing.generate_sparse_matrices(
         final_results=final_results,
-        ordered_tags=ordered_tags,
+        parsed_tags=parsed_tags,
         filtered_cells=filtered_cells,
         umi_counts=True,
     )
@@ -176,7 +160,7 @@ def main():
     io.write_to_files(
         sparse_matrix=umi_results_matrix,
         filtered_cells=filtered_cells,
-        ordered_tags=ordered_tags,
+        parsed_tags=parsed_tags,
         data_type="umi",
         outfolder=args.outfolder,
         translation_dict=translation_dict,
@@ -212,7 +196,7 @@ def main():
         print("Writing dense format output")
         io.write_dense(
             sparse_matrix=umi_results_matrix,
-            ordered_tags=ordered_tags,
+            parsed_tags=parsed_tags,
             columns=filtered_cells,
             outfolder=args.outfolder,
             filename="dense_umis.tsv",

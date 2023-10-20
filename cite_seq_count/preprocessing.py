@@ -4,23 +4,43 @@
 import gzip
 import sys
 from itertools import combinations, islice
+from collections import Counter
+from argparse import ArgumentParser
+from pathlib import Path
 import Levenshtein
-
-
-from cite_seq_count.io import get_n_lines, check_file
 import polars as pl
-from pandas import read_csv
+import umi_tools.whitelist_methods as whitelist_method
+from cite_seq_count.io import get_n_lines, check_file
+from cite_seq_count.chemistry import Chemistry
 
-REQUIRED_TAGS_HEADER = ["sequence", "feature_name"]
+s
+
+
+# REQUIRED_TAGS_HEADER = ["sequence", "feature_name"]
 REQUIRED_CELLS_REF_HEADER = ["reference"]
 OPTIONAL_CELLS_REF_HEADER = ["translation"]
-FEATURE_NAME = "feature_name"
-SEQUENCE = "sequence"
-REQUIRED_TAGS_HEADER = [FEATURE_NAME, SEQUENCE]
+# Polars column names
+# Tags input
+FEATURE_NAME_COLUMN = "feature_name"
+SEQUENCE_COLUMN = "sequence"
+REQUIRED_TAGS_HEADER = [FEATURE_NAME_COLUMN, SEQUENCE_COLUMN]
+# Reads input
+BARCODE_COLUMN = "barcode"
+CORRECTED_BARCODE_COLUMN = "corrected_barcode"
+UMI_COLUMN = "umi"
+R2_COLUMN = "r2"
+# Barcode input
+REFERENCE_COLUMN = "reference"
+TRANSLATION_COLUMN = "translation"
+WHITELIST_COLUMN = "whitelist"
 STRIP_CHARS = '"0123456789- \t\n'
 
+UNMAPPED_NAME = "unmapped"
 
-def parse_cell_list_csv(filename: str, barcode_length: int) -> pl.DataFrame:
+
+def parse_barcode_reference(
+    filename: str, barcode_length: int, required_header: str
+) -> pl.DataFrame:
     """Reads white-listed barcodes from a CSV file.
 
     The function accepts plain barcodes or even 10X style barcodes with the
@@ -35,11 +55,11 @@ def parse_cell_list_csv(filename: str, barcode_length: int) -> pl.DataFrame:
 
     """
     file_path = check_file(filename)
-    cells_pl = pl.read_csv(file_path)
+    barcodes_pl = pl.read_csv(file_path.absolute())
     barcode_pattern = rf"^[ATGC]{{{barcode_length}}}"
 
-    header = cells_pl.columns
-    set_dif = set(REQUIRED_CELLS_REF_HEADER) - set(header)
+    header = barcodes_pl.columns
+    set_dif = set(required_header) - set(header)
     if len(set_dif) != 0:
         set_diff_string = ",".join(list(set_dif))
         raise SystemExit(f"The header is missing {set_diff_string}. Exiting")
@@ -47,36 +67,36 @@ def parse_cell_list_csv(filename: str, barcode_length: int) -> pl.DataFrame:
         with_translation = True
     else:
         with_translation = False
-    # Prepare and validate cells_pl
+    # Prepare and validate barcodes_pl
     if with_translation:
-        cells_pl = cells_pl.with_columns(
-            reference=pl.col("reference").str.strip(STRIP_CHARS),
-            translation=pl.col("translation").str.strip(STRIP_CHARS),
+        barcodes_pl = barcodes_pl.with_columns(
+            reference=pl.col(REFERENCE_COLUMN).str.strip_chars(STRIP_CHARS),
+            translation=pl.col(TRANSLATION_COLUMN).str.strip_chars(STRIP_CHARS),
         )
 
     else:
-        cells_pl = cells_pl.with_columns(
-            reference=pl.col("reference").str.strip(STRIP_CHARS),
+        barcodes_pl = barcodes_pl.with_columns(
+            reference=pl.col(REFERENCE_COLUMN).str.strip_chars(STRIP_CHARS),
         )
 
     check_sequence_pattern(
-        df=cells_pl,
+        df=barcodes_pl,
         pattern=barcode_pattern,
-        column_name="reference",
-        file_type="Cell reference",
+        column_name=REFERENCE_COLUMN,
+        file_type="Barcode reference",
         expected_pattern="ATGC",
     )
 
     if with_translation:
         check_sequence_pattern(
-            df=cells_pl,
+            df=barcodes_pl,
             pattern=barcode_pattern,
-            column_name="translation",
-            file_type="Cell reference",
+            column_name=TRANSLATION_COLUMN,
+            file_type="Barcode reference",
             expected_pattern="ATGC",
         )
 
-    return cells_pl
+    return barcodes_pl
 
 
 def parse_tags_csv(file_name: str) -> pl.DataFrame:
@@ -106,9 +126,12 @@ def parse_tags_csv(file_name: str) -> pl.DataFrame:
     file_header = set(data_pl.columns)
     set_diff = set(REQUIRED_TAGS_HEADER).difference(file_header)
     if len(set_diff) != 0:
+        print(set_diff)
+        print(len(set_diff))
         set_diff_str = " AND ".join(set_diff)
         raise SystemExit(
-            f"The header of the tags file at {file_path} is missing the following header(s) {set_diff_str}"
+            f"The header of the tags file at {file_path}"
+            f"is missing the following header(s) {set_diff_str}"
         )
     for column in REQUIRED_TAGS_HEADER:
         if not data_pl.filter(pl.col([column]) is None).is_empty():
@@ -118,7 +141,7 @@ def parse_tags_csv(file_name: str) -> pl.DataFrame:
     check_sequence_pattern(
         df=data_pl,
         pattern=atgc_test,
-        column_name=SEQUENCE,
+        column_name=SEQUENCE_COLUMN,
         file_type="tags",
         expected_pattern="ATGC",
     )
@@ -150,13 +173,15 @@ def check_sequence_pattern(
     )
     if not regex_test.select(pl.col("regex").all()).get_column("regex").item():
         sequences = (
-            regex_test.filter(pl.col("regex") == False)
+            regex_test.filter(pl.col("regex") is False)
             .get_column(column_name)
             .to_list()
         )
         sequences_str = "\n".join(sequences)
         raise SystemExit(
-            f"Some sequences in the {file_type} file is not only composed of the proper pattern {expected_pattern}.\nHere are the sequences{sequences_str}"
+            f"Some sequences in the {file_type} file is not only composed"
+            f"of the proper pattern {expected_pattern}.\n"
+            f"Here are the sequences{sequences_str}"
         )
 
 
@@ -177,10 +202,16 @@ def check_tags(tags_pl: pl.DataFrame, maximum_distance: int) -> int:
         int: the length of the longest TAG
 
     """
-
-    # Check if the distance is big enoughbetween tags
+    # TODO: Decide to keep or delete.
+    # # Check that all tags are the same length
+    # if tags_pl[SEQUENCE_COLUMN].str.lengths().unique().shape[0] != 1:
+    #     SystemExit(
+    #         "Tag sequences have different lengths. Version 2 can only run with one
+    #          length. Please use an older version"
+    #     )
+    # Check if the distance is big enough between tags
     offending_pairs = []
-    for tag_a, tag_b in combinations(tags_pl["sequence"], 2):
+    for tag_a, tag_b in combinations(tags_pl[SEQUENCE_COLUMN], 2):
         # pylint: disable=no-member
         distance = Levenshtein.distance(tag_a, tag_b)
         if distance <= (maximum_distance - 1):
@@ -196,12 +227,12 @@ def check_tags(tags_pl: pl.DataFrame, maximum_distance: int) -> int:
         for pair in offending_pairs:
             print(f"\t{pair[0]}\n\t{pair[1]}\n\tDistance = {pair[2]}\n")
         sys.exit("Exiting the application.\n")
-    longest_tag_len = max(tags_pl["sequence"].str.n_chars())
+    longest_tag_len = max(tags_pl[SEQUENCE_COLUMN].str.n_chars())
 
     return longest_tag_len
 
 
-def get_read_length(filename):
+def get_read_length(filename: Path):
     """Check wether SEQUENCE lengths are consistent in
     the first 1000 reads from a FASTQ file and return
     the length.
@@ -220,31 +251,16 @@ def get_read_length(filename):
             read_length = len(sequence.rstrip())
             if temp_length != read_length:
                 sys.exit(
-                    "[ERROR] Sequence length in {} is not consistent. Please, trim all "
-                    "sequences at the same length.\n"
-                    "Exiting the application.\n".format(filename)
+                    f"[ERROR] Sequence length in {filename} is not consistent."
+                    f" Please, trim all sequences at the same length.\n"
+                    f"Exiting the application.\n"
                 )
     return read_length
 
 
-def translate_barcodes(cell_set, translation_dict):
-    """Translate a list of barcode using a mapping translation
-    Args:
-        cell_set (set): A set of barcodes
-        translation_dict (dict): A dict providing a simple key value translation
-
-    Returns:
-        translated_barcodes (set): A set of translated barcodes
-    """
-
-    translated_barcodes = set()
-    for translated_barcode in translation_dict.keys():
-        if translation_dict[translated_barcode] in cell_set:
-            translated_barcodes.add(translated_barcode)
-    return translated_barcodes
-
-
-def check_barcodes_lengths(read1_length, cb_first, cb_last, umi_first, umi_last):
+def check_barcodes_lengths(
+    read1_length: int, cb_first: int, cb_last: int, umi_first: int, umi_last: int
+):
     """Check Read1 length against CELL and UMI barcodes length.
 
     Args:
@@ -266,15 +282,19 @@ def check_barcodes_lengths(read1_length, cb_first, cb_last, umi_first, umi_last)
         )
     elif barcode_umi_length < read1_length:
         print(
-            "[WARNING] Read1 length is {}bp but you are using {}bp for Cell "
-            "and UMI barcodes combined.\nThis might lead to wrong cell "
-            "attribution and skewed umi counts.\n".format(
-                read1_length, barcode_umi_length
-            )
+            f"[WARNING] Read1 length is {read1_length}bp"
+            f"but you are using {barcode_umi_length}bp for Cell "
+            f"and UMI barcodes combined.\nThis might lead to wrong cell "
+            f"attribution and skewed umi counts.\n"
         )
 
 
-def pre_run_checks(read1_paths, chemistry_def, longest_tag_len, args):
+def pre_run_checks(
+    read1_paths: list[Path],
+    chemistry_def: dict,
+    longest_tag_len: int,
+    args: ArgumentParser,
+):
     """Checks that the chemistry is properly set and defines how many reads to process
 
     Args:
@@ -329,29 +349,63 @@ def pre_run_checks(read1_paths, chemistry_def, longest_tag_len, args):
     return n_reads, r2_min_length, maximum_distance
 
 
-def get_filtered_list(args, chemistry, translation_dict):
+def get_barcode_subset(
+    args: ArgumentParser,
+    chemistry: Chemistry,
+    barcode_reference: pl.DataFrame | None,
+    mapped_reads: pl.DataFrame,
+):
     """
-    Determines what mode to use for cell barcode correction.
-    Args:
-        args(argparse): All arguments
-
-    Returns:
-        set if we have a filtered list
-        None if we want correction and we have not a list
-        False if we deactivation filtering
+    Generate the barcode list used for barcode correction and subsetting
     """
+    enable_barcode_correction = True
     if args.filtered_cells:
-        filtered_set = parse_filtered_list_csv(
-            args.filtered_cells,
-            (chemistry.cell_barcode_end - chemistry.cell_barcode_start),
+        barcode_subset = parse_barcode_reference(
+            filename=args.filtered_cells,
+            barcode_length=(chemistry.cell_barcode_end - chemistry.cell_barcode_start),
+            required_header=WHITELIST_COLUMN,
         )
-        # Do we need to translate the list?
-        if args.translation_list:
-            # get the translation
-            translated_set = translate_barcodes(
-                cell_set=filtered_set, translation_dict=translation_dict
-            )
-            return translated_set
-        return filtered_set
     else:
-        return None
+        n_barcodes = args.expected_barcodes
+        if barcode_reference is not None:
+            barcode_subset = (
+                mapped_reads.filter(
+                    pl.col(BARCODE_COLUMN).str.is_in(
+                        barcode_reference[REFERENCE_COLUMN]
+                    )
+                )
+                .group_by(BARCODE_COLUMN)
+                .agg(pl.count())
+                .sort("count", descending=True)
+                .head(n_barcodes * 1.2)
+                .drop("count")
+                .rename({SEQUENCE_COLUMN: WHITELIST_COLUMN})
+            )
+        else:
+            raw_barcodes_dict = (
+                mapped_reads.filter(
+                    (~pl.col(BARCODE_COLUMN).str.count_matches("N"))
+                    & (pl.col(FEATURE_NAME_COLUMN) != UNMAPPED_NAME)
+                )
+                .group_by(BARCODE_COLUMN)
+                .agg(pl.count())
+                .sort("count", descending=True)
+            ).to_dict()
+            barcode_counter = Counter(
+                zip(raw_barcodes_dict[BARCODE_COLUMN], raw_barcodes_dict["count"])
+            )
+            true_barcodes = whitelist_method.getKneeEstimateDensity(
+                cell_barcode_counts=barcode_counter, expect_cells=n_barcodes
+            )
+            barcode_subset = pl.DataFrame(
+                true_barcodes, schema={WHITELIST_COLUMN: pl.Utf8}
+            )
+
+    if n_barcodes > barcode_subset.shape[0]:
+        print(
+            f"Number of expected cells, {n_barcodes}, is higher "
+            f"than number of cells found {barcode_subset.shape[0]}.\nNot performing "
+            f"cell barcode correction"
+        )
+        enable_barcode_correction = False
+    return barcode_subset, enable_barcode_correction

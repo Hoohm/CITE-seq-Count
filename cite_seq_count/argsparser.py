@@ -62,8 +62,8 @@ def get_args() -> ArgumentParser:
         prog="CITE-seq-Count",
         formatter_class=RawTextHelpFormatter,
         description=(
-            "This package counts matching antibody tags from paired fastq "
-            "files. Version {}".format(get_package_version())
+            f"This package counts matching antibody tags from paired fastq "
+            f"files. Version {get_package_version}"
         ),
     )
 
@@ -175,39 +175,44 @@ def get_args() -> ArgumentParser:
     )
     # Cell filtering group. We ask for either number of expected cells or a pre-filtered list of cells.
 
-    cells_filtering = parser.add_mutually_exclusive_group(required=True)
+    barcodes = parser.add_mutually_exclusive_group(required=True)
 
-    cells_filtering.add_argument(
-        "-n_cells",
-        "--expected_cells",
-        dest="expected_cells",
+    barcodes.add_argument(
+        "-n_barcodes",
+        "--expected_barcodes",
+        dest="expected_barcodes",
         type=int,
-        help=("Number of expected cells from your run."),
+        help=("Number of expected barcodes from your run."),
         default=0,
     )
-    cells_filtering.add_argument(
-        "-fl",
+    barcodes.add_argument(
+        "-fb",
         "-wl",
-        "--filtered_cells",
-        dest="filtered_cells",
+        "--filtered_barcodes",
+        dest="filtered_barcodes",
         type=str,
-        help=("A specific list of cells to look for."),
+        help=(
+            "A path to a specific list of barcodes to look for."
+            "\tExample:\n"
+            "\twhitelist\n"
+            "\tAAACCCAAGAAACACT\nAAACCCAAGAAACCAT\nAAACCCAAGAAACCCA\n"
+        ),
         default=False,
     )
 
     if "--chemistry" not in sys.argv:
         barcodes.add_argument(
-            "-tl",
-            "--translation_list",
-            dest="translation_list",
+            "-br",
+            "--barcode_reference",
+            dest="barcode_reference",
             required=False,
             type=str,
             default=False,
             help=(
-                "A csv file containning a translation list of all potential barcodes\n\n"
+                "A csv file containning a barcode reference list of all potential barcodes\n\n"
                 "\tExample:\n"
-                "whitelist,translation\n"
-                "\tAAACCCAAGAAACACT,AAACCCATCAAACACT\n\\AAACCCAAGAAACCAT,AAACCCATCAAACCAT\n\\AAACCCAAGAAACCCA,AAACCCATCAAACCCA\n\n"
+                "reference\n"
+                "\tAAACCCAAGAAACACT\nAAACCCAAGAAACCAT\nAAACCCAAGAAACCCA\n"
             ),
         )
 
