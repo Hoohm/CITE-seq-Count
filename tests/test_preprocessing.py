@@ -1,7 +1,6 @@
 """Test function preprocessing of the module"""
 
 import glob
-from collections import namedtuple
 
 import pytest
 import polars as pl

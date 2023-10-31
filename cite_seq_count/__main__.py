@@ -10,7 +10,7 @@ from cite_seq_count import preprocessing, argsparser, mapping, processing, chemi
 
 
 def main():
-    """Main function"""
+    """Main"""
 
     start_time = time.time()
     parser = argsparser.get_args()
@@ -61,35 +61,34 @@ def main():
         r2_min_length=r2_min_length,
         chemistry_def=chemistry_def,
     )
-
-    mapped_reads = mapping.map_reads_hybrid(
-        mapping_input_file=temp_file,
-        parsed_tags=parsed_tags,
-        maximum_distance=maximum_distance,
+    input_df, barcodes_df, r2_df = preprocessing.split_data_input(
+        mapping_input_path=temp_file
     )
     # Remove temp file
     os.remove(temp_file)
-    # Check if 99% of the reads are unmapped.
-    mapping.check_unmapped(mapped_reads=mapped_reads)
+    mapped_r2_df = mapping.map_reads_hybrid(
+        r2_df=r2_df,
+        parsed_tags=parsed_tags,
+        maximum_distance=maximum_distance,
+    )
 
-    # Check filtered input list
-    # If a translation is given, will return the translated version
     barcode_subset, enable_barcode_correction = preprocessing.get_barcode_subset(
-        args=args,
+        barcode_whitelist=args.filtered_barcodes,
+        expected_barcodes=args.expected_barcodes,
         chemistry=chemistry_def,
         barcode_reference=barcode_reference,
-        mapped_reads=mapped_reads,
+        barcodes_df=barcodes_df,
     )
 
     # Correct cell barcodes
     if args.bc_threshold > 0 and enable_barcode_correction:
         (
-            mapped_reads,
+            barcode_corrected_df,
             bcs_corrected,
-        ) = processing.correct_barcodes(
-            mapped_reads=mapped_reads,
-            barcode_subset=barcode_subset,
-            collapsing_threshold=args.bc_threshold,
+        ) = processing.correct_barcodes_pl(
+            barcodes_df=barcodes_df,
+            barcode_subset_df=barcode_subset,
+            hamming_distance=args.bc_threshold,
         )
     else:
         print("Skipping cell barcode correction")

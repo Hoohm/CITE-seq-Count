@@ -25,7 +25,6 @@ class Chemistry:
     umi_barcode_end: int
     r2_trim_start: int
     barcode_reference_path: str
-    holds_translation: bool
 
 
 DEFINITIONS_DB = pooch.create(
@@ -113,7 +112,7 @@ def get_chemistry_definition(chemistry_short_name: str) -> Chemistry:
             "R1"
         ]["stop"],
         r2_trim_start=chemistry_defs["sequence_structure_indexes"]["R2"]["start"] - 1,
-        translation_list_path=path,
+        barcode_reference_path=path,
     )
     return chemistry_def
 
@@ -127,7 +126,6 @@ def create_chemistry_definition(args: ArgumentParser) -> Chemistry:
         umi_barcode_end=args.umi_last,
         r2_trim_start=args.start_trim,
         barcode_reference_path=args.barcode_reference,
-        holds_translation=args.has_translation,
     )
     return chemistry_def
 
@@ -140,6 +138,7 @@ def setup_chemistry(args: ArgumentParser) -> tuple[pl.DataFrame | None, Chemistr
             barcode_length=chemistry_def.cell_barcode_end
             - chemistry_def.cell_barcode_start
             + 1,
+            required_header=["reference"],
         )
     else:
         chemistry_def = create_chemistry_definition(args)
@@ -148,6 +147,7 @@ def setup_chemistry(args: ArgumentParser) -> tuple[pl.DataFrame | None, Chemistr
             barcode_reference = preprocessing.parse_barcode_reference(
                 filename=args.barcode_reference,
                 barcode_length=args.cb_last - args.cb_first + 1,
+                required_header=["reference"],
             )
         else:
             barcode_reference = None

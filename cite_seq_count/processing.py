@@ -3,6 +3,7 @@ import Levenshtein
 import pybktree
 
 import polars as pl
+from rapidfuzz import distance
 
 from collections import namedtuple
 
@@ -19,6 +20,7 @@ from cite_seq_count.preprocessing import (
     WHITELIST_COLUMN,
     BARCODE_COLUMN,
     CORRECTED_BARCODE_COLUMN,
+    R2_COLUMN,
 )
 
 # Unit Barcode correction
@@ -43,15 +45,65 @@ def find_original_barcode(barcode: str, barcode_tree: pybktree.BKTree, distance:
     return barcode
 
 
+def merge_results(
+    mapped_r2_df: pl.DataFrame,
+    corrected_barcodes_df: pl.DataFrame,
+    input_df: pl.DataFrame,
+):
+    merged = (
+        input_df.join(mapped_r2_df, on=R2_COLUMN, how="inner")
+        .join(corrected_barcodes_df.drop("count"), on=BARCODE_COLUMN, how="inner")
+        .drop([R2_COLUMN, BARCODE_COLUMN])
+    )
+    return merged
+
+
+def correct_barcodes_pl(
+    barcodes_df: pl.DataFrame, barcode_subset_df: pl.DataFrame, hamming_distance: int
+) -> tuple[pl.DataFrame, int]:
+    print("Correcting barcodes")
+    joined = (
+        barcodes_df.sort(BARCODE_COLUMN)
+        .join_asof(
+            barcode_subset_df.sort(WHITELIST_COLUMN),
+            left_on=BARCODE_COLUMN,
+            right_on=WHITELIST_COLUMN,
+        )
+        .with_columns(
+            pl.when(pl.col(BARCODE_COLUMN) == pl.col(WHITELIST_COLUMN))
+            .then(False)
+            .otherwise(True)
+            .alias(CORRECTED_BARCODE_COLUMN)
+        )
+        .filter(~pl.col(WHITELIST_COLUMN).is_null())
+    )
+    joined = (
+        pl.concat(
+            [
+                joined,
+                joined.map_rows(
+                    lambda x: distance.Hamming.distance(s1=x[0], s2=x[2])
+                ).rename({"map": "hamming_distance"}),
+            ],
+            how="horizontal",
+        )
+        .filter(pl.col("hamming_distance") <= hamming_distance)
+        .drop("hamming_distance")
+    )
+    n_corrected_barcodes = joined.filter(pl.col(CORRECTED_BARCODE_COLUMN)).shape[0]
+    print("Barcodes corrected")
+    return joined.drop(CORRECTED_BARCODE_COLUMN), n_corrected_barcodes
+
+
 def correct_barcodes(
-    mapped_reads: pl.DataFrame,
+    barcodes_df: pl.DataFrame,
     barcode_subset: pl.DataFrame,
     collapsing_threshold: int,
 ):
     """Correct barcodes based on a given whitelist
 
     Args:
-        mapped_reads (pl.DataFrame): Mapped reads
+        barcodes_df (pl.DataFrame): All barcodes
         barcode_subset (pl.DataFrame): Given whitelist
         collapsing_threshold (int): Hamming distance to correct on
 
@@ -65,7 +117,7 @@ def correct_barcodes(
     )
     print("Finding original barcodes")
     barcode_mapping = (
-        mapped_reads.select(pl.col(BARCODE_COLUMN))
+        barcodes_df.select(pl.col(BARCODE_COLUMN))
         .unique()
         .filter(~pl.col(BARCODE_COLUMN).is_in(barcode_subset[WHITELIST_COLUMN]))
         .with_columns(
@@ -83,7 +135,7 @@ def correct_barcodes(
         .drop(BARCODE_COLUMN)
     )
     print("Collapsing wrong barcodes with original barcodes")
-    mapped_reads_barcode_corrected = mapped_reads.join(
+    mapped_reads_barcode_corrected = barcodes_df.join(
         barcode_mapping.drop(BARCODE_COLUMN),
         left_on=BARCODE_COLUMN,
         right_on=CORRECTED_BARCODE_COLUMN,

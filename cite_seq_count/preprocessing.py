@@ -13,8 +13,6 @@ import umi_tools.whitelist_methods as whitelist_method
 from cite_seq_count.io import get_n_lines, check_file
 from cite_seq_count.chemistry import Chemistry
 
-s
-
 
 # REQUIRED_TAGS_HEADER = ["sequence", "feature_name"]
 REQUIRED_CELLS_REF_HEADER = ["reference"]
@@ -349,27 +347,49 @@ def pre_run_checks(
     return n_reads, r2_min_length, maximum_distance
 
 
+def split_data_input(mapping_input_path: Path):
+    input_df = (
+        pl.read_csv(
+            mapping_input_path,
+            has_header=False,
+            new_columns=[BARCODE_COLUMN, UMI_COLUMN, R2_COLUMN],
+        )
+        .group_by([BARCODE_COLUMN, UMI_COLUMN, R2_COLUMN])
+        .agg(pl.count())
+    )
+
+    barcodes_df = (
+        input_df.select([BARCODE_COLUMN, "count"])
+        .group_by(BARCODE_COLUMN)
+        .agg(pl.sum("count"))
+    )
+    r2_df = input_df.select(R2_COLUMN).unique()
+
+    return input_df, barcodes_df, r2_df
+
+
 def get_barcode_subset(
-    args: ArgumentParser,
+    barcode_whitelist: Path,
+    expected_barcodes: int,
     chemistry: Chemistry,
     barcode_reference: pl.DataFrame | None,
-    mapped_reads: pl.DataFrame,
+    barcodes_df: pl.DataFrame,
 ):
     """
     Generate the barcode list used for barcode correction and subsetting
     """
     enable_barcode_correction = True
-    if args.filtered_cells:
+    if barcode_whitelist:
         barcode_subset = parse_barcode_reference(
-            filename=args.filtered_cells,
+            filename=expected_barcodes,
             barcode_length=(chemistry.cell_barcode_end - chemistry.cell_barcode_start),
             required_header=WHITELIST_COLUMN,
         )
     else:
-        n_barcodes = args.expected_barcodes
+        n_barcodes = barcode_whitelist
         if barcode_reference is not None:
             barcode_subset = (
-                mapped_reads.filter(
+                barcodes_df.filter(
                     pl.col(BARCODE_COLUMN).str.is_in(
                         barcode_reference[REFERENCE_COLUMN]
                     )
@@ -383,10 +403,7 @@ def get_barcode_subset(
             )
         else:
             raw_barcodes_dict = (
-                mapped_reads.filter(
-                    (~pl.col(BARCODE_COLUMN).str.count_matches("N"))
-                    & (pl.col(FEATURE_NAME_COLUMN) != UNMAPPED_NAME)
-                )
+                barcodes_df.filter(~pl.col(BARCODE_COLUMN).str.contains("N"))
                 .group_by(BARCODE_COLUMN)
                 .agg(pl.count())
                 .sort("count", descending=True)
@@ -394,12 +411,12 @@ def get_barcode_subset(
             barcode_counter = Counter(
                 zip(raw_barcodes_dict[BARCODE_COLUMN], raw_barcodes_dict["count"])
             )
-            true_barcodes = whitelist_method.getKneeEstimateDensity(
-                cell_barcode_counts=barcode_counter, expect_cells=n_barcodes
+            true_barcodes = whitelist_method.getKneeEstimateDistance(
+                cell_barcode_counts=barcode_counter, cell_number=n_barcodes
             )
             barcode_subset = pl.DataFrame(
-                true_barcodes, schema={WHITELIST_COLUMN: pl.Utf8}
-            )
+                true_barcodes, schema={WHITELIST_COLUMN: pl.Utf8, "counts": pl.UInt32}
+            ).drop("counts")
 
     if n_barcodes > barcode_subset.shape[0]:
         print(

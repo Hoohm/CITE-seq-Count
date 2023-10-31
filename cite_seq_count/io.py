@@ -506,6 +506,7 @@ def write_mapping_input(
     temp_file = tempfile.NamedTemporaryFile(
         "w", dir=temp_path, suffix="_csc", delete=False
     )
+    temp_file_path = temp_file.name
     reads_written = 0
 
     for read1_path, read2_path in zip(read1_paths, read2_paths):
@@ -551,7 +552,7 @@ def write_mapping_input(
     temp_file.close()
 
     return (
-        temp_file,
+        temp_file_path,
         r1_too_short,
         r2_too_short,
         total_reads,
