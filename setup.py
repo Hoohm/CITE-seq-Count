@@ -33,7 +33,8 @@ setuptools.setup(
         "pyyaml==6.0",
         "pooch==1.6.0",
         "six==1.16.0",
+        "polars"
     ],
-    python_requires=">=3.8",
+    python_requires=">=3.10",
     package_data={"report_template": ["templates/*.json"]},
 )
