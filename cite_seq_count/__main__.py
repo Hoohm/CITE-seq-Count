@@ -94,6 +94,8 @@ def main():
         print("Skipping cell barcode correction")
         bcs_corrected = 0
 
+    ###### HERE IT STOPS WORKING ##########
+
     # Create sparse matrices for reads results
     read_results_matrix = processing.generate_sparse_matrices(
         final_results=final_results,

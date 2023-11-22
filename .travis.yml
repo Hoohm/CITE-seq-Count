@@ -19,11 +19,10 @@ install:
   - conda config --add channels defaults
   - conda config --add channels conda-forge
   - conda config --add channels bioconda
-  - conda install -c bioconda -c conda-forge snakemake
-  - conda create -q -n snakemake snakemake>=5.3.1 python=3.6
+  - conda create -q -n snakemake 'snakemake>=5.3.1' 'python>=3.10'
 
 script:
-  - python3.6 setup.py install
+  - pip install .
   - pytest
 
 after_success:

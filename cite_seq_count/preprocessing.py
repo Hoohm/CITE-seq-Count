@@ -57,7 +57,7 @@ def parse_barcode_reference(
     barcode_pattern = rf"^[ATGC]{{{barcode_length}}}"
 
     header = barcodes_pl.columns
-    set_dif = set(required_header) - set(header)
+    set_dif = set([required_header]) - set(header)
     if len(set_dif) != 0:
         set_diff_string = ",".join(list(set_dif))
         raise SystemExit(f"The header is missing {set_diff_string}. Exiting")
@@ -74,7 +74,7 @@ def parse_barcode_reference(
 
     else:
         barcodes_pl = barcodes_pl.with_columns(
-            reference=pl.col(REFERENCE_COLUMN).str.strip_chars(STRIP_CHARS),
+            reference=pl.col(required_header).str.strip_chars(STRIP_CHARS),
         )
 
     check_sequence_pattern(
@@ -110,7 +110,7 @@ def parse_tags_csv(file_name: str) -> pl.DataFrame:
         TTCCGCCTCTCTTTG,Hashtag_3
 
     Args:
-        file_name (str): file path as a tring
+        file_name (str): file path as a string
 
     Returns:
         pl.DataFrame: polars dataframe with the csv content
@@ -381,16 +381,17 @@ def get_barcode_subset(
     enable_barcode_correction = True
     if barcode_whitelist:
         barcode_subset = parse_barcode_reference(
-            filename=expected_barcodes,
+            filename=barcode_whitelist,
             barcode_length=(chemistry.cell_barcode_end - chemistry.cell_barcode_start),
             required_header=WHITELIST_COLUMN,
         )
+        n_barcodes = len(barcode_subset) # ???
     else:
-        n_barcodes = barcode_whitelist
+        n_barcodes = expected_barcodes
         if barcode_reference is not None:
             barcode_subset = (
                 barcodes_df.filter(
-                    pl.col(BARCODE_COLUMN).str.is_in(
+                    pl.col(BARCODE_COLUMN).is_in(
                         barcode_reference[REFERENCE_COLUMN]
                     )
                 )
@@ -399,7 +400,7 @@ def get_barcode_subset(
                 .sort("count", descending=True)
                 .head(n_barcodes * 1.2)
                 .drop("count")
-                .rename({SEQUENCE_COLUMN: WHITELIST_COLUMN})
+                .rename({BARCODE_COLUMN: WHITELIST_COLUMN})
             )
         else:
             raw_barcodes_dict = (
