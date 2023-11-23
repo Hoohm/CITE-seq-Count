@@ -97,6 +97,7 @@ def map_reads(
     start_trim,
     maximum_distance,
     sliding_window,
+    store_read_ids,
 ):
     """Read through R1/R2 files and generate a islice starting at a specific index.
 
@@ -117,13 +118,16 @@ def map_reads(
         start_trim (int): Number of bases to trim at the start.
         maximum_distance (int): Maximum distance given by the user.
         sliding_window (bool): A bool enabling a sliding window search
+        store_read_ids (bool): A bool enabling storage of read ids
 
     Returns:
         results (dict): A dict of dict of Counters with the mapping results.
+        readsid_per_cell (dict): A dict of array where keys are cells and array contains read ids
         no_match (Counter): A counter with unmapped sequences.
     """
     # Initiate values
     results = {}
+    readsid_per_cell = {}
     no_match = Counter()
     n = 1
     t = time.time()
@@ -131,11 +135,18 @@ def map_reads(
         read2_path, "rt"
     ) as textfile2:
 
-        # Read all 2nd lines from 4 line chunks. If first_n not None read only 4 times the given amount.
-        secondlines = islice(
-            zip(textfile1, textfile2), indexes[0] * 4 + 1, indexes[1] * 4 + 1, 4
+        # Read all lines. If first_n not None read only 4 times the given amount.
+        lines = islice(
+            zip(textfile1, textfile2), indexes[0] * 4, indexes[1] * 4 + 1
         )
-        for read1, read2 in secondlines:
+        for i, (read1, read2) in enumerate(lines):
+            if i % 4 == 0:
+                # This is the read_id:
+                readid = read1.strip().split()[0]
+                continue
+            elif i % 4 in [2, 3]:
+                # This is '+' or qual
+                continue
             read1 = read1.strip()
             read2 = read2.strip()
 
@@ -159,6 +170,9 @@ def map_reads(
 
             if cell_barcode not in results:
                 results[cell_barcode] = defaultdict(Counter)
+            if store_read_ids:
+                if cell_barcode not in readsid_per_cell:
+                    readsid_per_cell[cell_barcode] = []
 
             if sliding_window:
                 best_match = find_best_match_shift(TAG_seq, tags, maximum_distance)
@@ -166,6 +180,8 @@ def map_reads(
                 best_match = find_best_match(TAG_seq, tags, maximum_distance)
 
             results[cell_barcode][best_match][UMI] += 1
+            if store_read_ids:
+                readsid_per_cell[cell_barcode].append(readid)
 
             if best_match == "unmapped":
                 no_match[TAG_seq] += 1
@@ -193,7 +209,7 @@ def map_reads(
         "Mapping done for process {}. Processed {:,} reads".format(os.getpid(), n - 1)
     )
     sys.stdout.flush()
-    return (results, no_match)
+    return (results, readsid_per_cell, no_match)
 
 
 def merge_results(parallel_results):
@@ -204,17 +220,20 @@ def merge_results(parallel_results):
 
     Returns:
         merged_results (dict): Results combined as a dict of dict of Counters
+        readsid_per_cell (dict): A dict of array where keys are cells and array contains read ids
         umis_per_cell (Counter): Total umis per cell as a Counter
         reads_per_cell (Counter): Total reads per cell as a Counter
         merged_no_match (Counter): Unmapped tags as a Counter
     """
     merged_results = {}
+    readsid_per_cell = {}
     merged_no_match = Counter()
     umis_per_cell = Counter()
     reads_per_cell = Counter()
     for chunk in parallel_results:
         mapped = chunk[0]
-        unmapped = chunk[1]
+        reads = chunk[1]
+        unmapped = chunk[2]
         for cell_barcode in mapped:
             if cell_barcode not in merged_results:
                 merged_results[cell_barcode] = defaultdict(Counter)
@@ -227,8 +246,14 @@ def merge_results(parallel_results):
                         ][UMI]
                         umis_per_cell[cell_barcode] += len(mapped[cell_barcode][TAG])
                         reads_per_cell[cell_barcode] += mapped[cell_barcode][TAG][UMI]
+        for cell_barcode in reads:
+            if cell_barcode not in readsid_per_cell:
+                readsid_per_cell[cell_barcode] = []
+            readsid_per_cell[cell_barcode] += reads[cell_barcode]
+
+
         merged_no_match.update(unmapped)
-    return (merged_results, umis_per_cell, reads_per_cell, merged_no_match)
+    return (merged_results, readsid_per_cell, umis_per_cell, reads_per_cell, merged_no_match)
 
 
 def correct_umis(final_results, collapsing_threshold, top_cells, max_umis):
@@ -292,7 +317,7 @@ def update_umi_counts(UMIclusters, cell_tag_counts):
     return (cell_tag_counts, temp_corrected_umis)
 
 
-def collapse_cells(true_to_false, umis_per_cell, final_results, ab_map):
+def collapse_cells(true_to_false, umis_per_cell, final_results, readsid_per_cell, ab_map):
     """
     Collapses cell barcodes based on the mapping true_to_false
 
@@ -300,11 +325,13 @@ def collapse_cells(true_to_false, umis_per_cell, final_results, ab_map):
         true_to_false (dict): Mapping between the reference and the "mutated" barcodes.
         umis_per_cell (Counter): Counter of number of umis per cell.
         final_results (dict): Dict of dict of Counters with mapping results.
+        readsid_per_cell (dict): A dict of array where keys are cells and array contains read ids
         ab_map (dict): Dict of the TAGS.
 
     Returns:
         umis_per_cell (Counter): Counter of number of umis per cell.
         final_results (dict): Same as input but with corrected cell barcodes.
+        readsid_per_cell (dict): Same as input but with corrected cell barcodes.
         corrected_barcodes (int): How many cell barcodes have been corrected.
     """
     print("Collapsing cell barcodes")
@@ -315,6 +342,8 @@ def collapse_cells(true_to_false, umis_per_cell, final_results, ab_map):
             final_results[real_barcode] = defaultdict()
             for TAG in ab_map:
                 final_results[real_barcode][TAG] = Counter()
+        if real_barcode not in readsid_per_cell:
+            readsid_per_cell[real_barcode] = []
         for fake_barcode in true_to_false[real_barcode]:
             temp = final_results.pop(fake_barcode)
             corrected_barcodes += 1
@@ -326,11 +355,16 @@ def collapse_cells(true_to_false, umis_per_cell, final_results, ab_map):
             umis_per_cell[real_barcode] += temp_umi_counts
             # reads_per_cell[real_barcode] += temp_read_counts
 
-    return (umis_per_cell, final_results, corrected_barcodes)
+            if fake_barcode in readsid_per_cell:
+                temp2 = readsid_per_cell.pop(fake_barcode)
+                readsid_per_cell[real_barcode] += temp2
+
+    return (umis_per_cell, final_results, readsid_per_cell, corrected_barcodes)
 
 
 def correct_cells(
     final_results,
+    readsid_per_cell,
     reads_per_cell,
     umis_per_cell,
     collapsing_threshold,
@@ -342,13 +376,15 @@ def correct_cells(
     
     Args:
         final_results (dict): Dict of dict of Counters with mapping results.
+        readsid_per_cell (dict): A dict of array where keys are cells and array contains read ids
         umis_per_cell (Counter): Counter of number of umis per cell.
-        collapsing_threshold (int): Max distance between umis.
+        collapsing_threshold (int): Max distance between cells.
         expected_cells (int): Number of expected cells.
         ab_map (dict): Dict of the TAGS.
     
     Returns:
-        final_results (dict): Same as input but with corrected umis.
+        final_results (dict): Same as input but with corrected cell barcodes.
+        readsid_per_cell (dict): Same as input but with corrected cell barcodes.
         umis_per_cell (Counter): Counter of umis per cell after cell barcode correction
         corrected_umis (int): How many umis have been corrected.
     """
@@ -361,31 +397,39 @@ def correct_cells(
         plotfile_prefix=False,
     )
 
-    (umis_per_cell, final_results, corrected_barcodes) = collapse_cells(
+    (umis_per_cell, final_results, readsid_per_cell, corrected_barcodes) = collapse_cells(
         true_to_false=true_to_false,
         umis_per_cell=umis_per_cell,
         final_results=final_results,
+        readsid_per_cell=readsid_per_cell,
         ab_map=ab_map,
     )
-    return (final_results, umis_per_cell, corrected_barcodes)
+    return (final_results, readsid_per_cell, umis_per_cell, corrected_barcodes)
 
 
 def correct_cells_whitelist(
-    final_results, umis_per_cell, whitelist, collapsing_threshold, ab_map
+    final_results,
+    readsid_per_cell,
+    umis_per_cell,
+    whitelist,
+    collapsing_threshold,
+    ab_map
 ):
     """
     Corrects cell barcodes.
     
     Args:
         final_results (dict): Dict of dict of Counters with mapping results.
+        readsid_per_cell (dict): A dict of array where keys are cells and array contains read ids
         umis_per_cell (Counter): Counter of UMIs per cell.
         whitelist (set): The whitelist reference given by the user.
-        collapsing_threshold (int): Max distance between umis.
+        collapsing_threshold (int): Max distance between cell barcodes.
         ab_map (OrederedDict): Tags in an ordered dict.
 
     
     Returns:
-        final_results (dict): Same as input but with corrected umis.
+        final_results (dict): Same as input but with corrected cell barcodes.
+        readsid_per_cell (dict): Same as input but with corrected cell barcodes.
         umis_per_cell (Counter): Updated UMI counts after correction.
         corrected_barcodes (int): How many umis have been corrected.
     """
@@ -403,10 +447,10 @@ def correct_cells_whitelist(
         whitelist=whitelist,
         collapsing_threshold=collapsing_threshold,
     )
-    (umis_per_cell, final_results, corrected_barcodes) = collapse_cells(
-        true_to_false, umis_per_cell, final_results, ab_map
+    (umis_per_cell, final_results, readsid_per_cell, corrected_barcodes) = collapse_cells(
+        true_to_false, umis_per_cell, final_results, readsid_per_cell, ab_map
     )
-    return (final_results, umis_per_cell, corrected_barcodes)
+    return (final_results, readsid_per_cell, umis_per_cell, corrected_barcodes)
 
 
 def find_true_to_false_map(
