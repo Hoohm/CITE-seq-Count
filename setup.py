@@ -21,19 +21,16 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ),
     install_requires=[
-        "python-levenshtein>=0.12.0",
         "scipy>=1.1.0",
-        "multiprocess>=0.70.6.1",
         "umi_tools==1.1.4",
         "pytest>=6.0.0",
         "pytest-dependency==0.4.0",
-        "pandas>=0.23.4",
-        "pybktree==1.1",
         "cython>=0.29.17",
         "pyyaml==6.0",
         "pooch==1.6.0",
         "six==1.16.0",
+        "polars== 0.19.14"
     ],
-    python_requires=">=3.8",
+    python_requires="==3.11.6",
     package_data={"report_template": ["templates/*.json"]},
 )

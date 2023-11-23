@@ -76,16 +76,16 @@ def correct_barcodes_pl(
             .alias(CORRECTED_BARCODE_COLUMN)
         )
         .filter(~pl.col(WHITELIST_COLUMN).is_null())
-    )
-    joined = (
-        pl.concat(
-            [
-                joined,
-                joined.map_rows(
-                    lambda x: distance.Hamming.distance(s1=x[0], s2=x[2])
-                ).rename({"map": "hamming_distance"}),
-            ],
-            how="horizontal",
+    ).with_columns(
+        pl.struct(
+            pl.col(BARCODE_COLUMN),
+            pl.col(WHITELIST_COLUMN)
+            .map_elements(
+                lambda x: distance.Hamming.distance(
+                    x[BARCODE_COLUMN], x[WHITELIST_COLUMN]
+                )
+            )
+            .alias("hamming_distance"),
         )
         .filter(pl.col("hamming_distance") <= hamming_distance)
         .drop("hamming_distance")
@@ -93,55 +93,6 @@ def correct_barcodes_pl(
     n_corrected_barcodes = joined.filter(pl.col(CORRECTED_BARCODE_COLUMN)).shape[0]
     print("Barcodes corrected")
     return joined.drop(CORRECTED_BARCODE_COLUMN), n_corrected_barcodes
-
-
-def correct_barcodes(
-    barcodes_df: pl.DataFrame,
-    barcode_subset: pl.DataFrame,
-    collapsing_threshold: int,
-):
-    """Correct barcodes based on a given whitelist
-
-    Args:
-        barcodes_df (pl.DataFrame): All barcodes
-        barcode_subset (pl.DataFrame): Given whitelist
-        collapsing_threshold (int): Hamming distance to correct on
-
-    Returns:
-        mapped_reads_barcode_corrected (pl.DataFrame): Barcode corrected mapped reads
-        n_corrected_barcodes (int): Number of corrected barcodes
-    """
-    print("Generating barcode tree from reference list")
-    barcode_tree = pybktree.BKTree(
-        Levenshtein.hamming, barcode_subset[WHITELIST_COLUMN].to_list()
-    )
-    print("Finding original barcodes")
-    barcode_mapping = (
-        barcodes_df.select(pl.col(BARCODE_COLUMN))
-        .unique()
-        .filter(~pl.col(BARCODE_COLUMN).is_in(barcode_subset[WHITELIST_COLUMN]))
-        .with_columns(
-            pl.col(BARCODE_COLUMN)
-            .map_elements(
-                lambda x: find_original_barcode(
-                    x, barcode_tree=barcode_tree, distance=collapsing_threshold
-                )
-            )
-            .alias(CORRECTED_BARCODE_COLUMN)
-        )
-        .with_columns(
-            barcode_corrected=pl.col(BARCODE_COLUMN) == pl.col(CORRECTED_BARCODE_COLUMN)
-        )
-        .drop(BARCODE_COLUMN)
-    )
-    print("Collapsing wrong barcodes with original barcodes")
-    mapped_reads_barcode_corrected = barcodes_df.join(
-        barcode_mapping.drop(BARCODE_COLUMN),
-        left_on=BARCODE_COLUMN,
-        right_on=CORRECTED_BARCODE_COLUMN,
-    ).drop("corrected")
-    n_corrected_barcodes = barcode_mapping.filter(pl.col("corrected")).shape[0]
-    return mapped_reads_barcode_corrected, n_corrected_barcodes
 
 
 # UMI correction section
