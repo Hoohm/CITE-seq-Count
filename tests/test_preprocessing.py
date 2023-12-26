@@ -5,7 +5,8 @@ import glob
 import pytest
 import polars as pl
 from polars.testing import assert_frame_equal
-from cite_seq_count import preprocessing
+from cite_seq_count.preprocessing import parse_barcode_reference, parse_tags_csv, check_tags
+from cite_seq_count.constants import REFERENCE_COLUMN
 
 
 @pytest.fixture
@@ -66,11 +67,11 @@ def test_csv_parser(data):
     """
     passing_files = glob.glob(pytest.passing_csv)
     for file_path in passing_files:
-        preprocessing.parse_tags_csv(file_path)
+        parse_tags_csv(file_path)
     with pytest.raises(SystemExit):
         failing_files = glob.glob(pytest.failing_csv)
         for file_path in failing_files:
-            preprocessing.parse_tags_csv(file_path)
+            parse_tags_csv(file_path)
 
 
 @pytest.mark.dependency()
@@ -78,15 +79,15 @@ def test_parse_reference_list_csv(data):
     passing_files = glob.glob(pytest.passing_reference_list_csv)
     for file_path in passing_files:
         assert_frame_equal(
-            left=preprocessing.parse_barcode_reference(file_path, 16),
+            left=parse_barcode_reference(file_path, 16, [REFERENCE_COLUMN]),
             right=pytest.correct_reference_translation_list,
         )
     with pytest.raises(SystemExit):
         failing_files = glob.glob(pytest.failing_reference_list_csv)
         for file_path in failing_files:
-            preprocessing.parse_barcode_reference(file_path, 16)
+            parse_barcode_reference(file_path, 16, [REFERENCE_COLUMN])
 
 
 def test_check_distance_too_big_between_tags(data):
     with pytest.raises(SystemExit):
-        preprocessing.check_tags(pytest.correct_tag_pl, 8)
+        check_tags(pytest.correct_tag_pl, 8)

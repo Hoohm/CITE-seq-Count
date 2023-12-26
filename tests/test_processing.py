@@ -1,34 +1,62 @@
 import pytest
 from collections import namedtuple
 from cite_seq_count import processing
+import polars as pl
+from polars.testing import assert_frame_equal
 
 
 @pytest.fixture
 def data():
-    from collections import Counter
-
     tag = namedtuple("tag", ["name", "sequence", "id"])
-    pytest.tags = [
-        tag(name="test1", sequence="CGTACGTAGCCTAGC", id=0),
-        tag(name="test2", sequence="CGTAGCTCG", id=1),
-    ]
-    pytest.results = {
-        "ACTGTTTTATTGGCCT": {
-            0: Counter({b"CATTAGTGGT": 3, b"CATTAGTGGG": 2, b"CATTCGTGGT": 1})
-        },
-        "TTCATAAGGTAGGGAT": {
-            1: Counter({b"TAGCTTAGTA": 3, b"TAGCTTAGTC": 2, b"GCGATGCATA": 1})
-        },
-    }
-    pytest.corrected_results = {
-        "ACTGTTTTATTGGCCT": {0: Counter({b"CATTAGTGGT": 6})},
-        "TTCATAAGGTAGGGAT": {1: Counter({b"TAGCTTAGTA": 5, b"GCGATGCATA": 1})},
-    }
-    pytest.umis_per_cell = Counter({"ACTGTTTTATTGGCCT": 1, "TTCATAAGGTAGGGAT": 2})
-    pytest.reads_per_cell = Counter({"ACTGTTTTATTGGCCT": 3, "TTCATAAGGTAGGGAT": 6})
+
+    pytest.barcodes_df = pl.DataFrame(
+        {
+            "barcode": [
+                "TACATATTCTTTACTG",
+                "AACATATTCTTTACTG",
+                "CACATATTCTTTACTG",
+                "GACATATTCTTTACTG",
+                "TACATATTCTTTACTA",
+                "TACATATTCTTTACTC",
+                "TACATATTCTTTACTT",
+                "TAGAGGGAGGTCAAGC",
+                "TAGAGGGACGTCAAGC",
+                "TAGAGGGATGTCAAGC",
+                "TAGAGGGAAGTCAAGC",
+            ],
+            "count": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        }
+    )
+
+    pytest.barcode_subset_df = pl.DataFrame(
+        {"whitelist": ["TACATATTCTTTACTG", "TAGAGGGAAGTCAAGC"]}
+    )
+
+    pytest.corrected_barcodes_df = pl.DataFrame(
+        {
+            "barcode": [
+                "TAGAGGGAAGTCAAGC",
+                "TACATATTCTTTACTG",
+            ],
+            "count": [4, 7],
+        }
+    )
+
     pytest.expected_cells = 2
     pytest.collapsing_threshold = 1
     pytest.max_umis = 20000
+
+
+@pytest.mark.dependency()
+def test_correct_barcodes(data):
+    corrected_barcodes, _, _ = processing.correct_barcodes_pl(
+        barcodes_df=pytest.barcodes_df,
+        barcode_subset_df=pytest.barcode_subset_df,
+        hamming_distance=1,
+    )
+    assert_frame_equal(
+        pytest.corrected_barcodes_df, corrected_barcodes, check_row_order=False
+    )
 
 
 @pytest.mark.dependency()
@@ -45,18 +73,6 @@ def test_correct_umis(data):
                 pytest.corrected_results[cell_barcode][TAG].values()
             )
     assert n_corrected == 3
-
-
-@pytest.mark.dependency(depends=["test_correct_umis"])
-def test_correct_cells(data):
-    processing.correct_cells_no_translation_list(
-        pytest.corrected_results,
-        pytest.reads_per_cell,
-        pytest.umis_per_cell,
-        pytest.expected_cells,
-        pytest.collapsing_threshold,
-        pytest.tags,
-    )
 
 
 @pytest.mark.dependency(depends=["test_correct_umis"])

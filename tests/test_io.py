@@ -2,7 +2,7 @@ import pytest
 import os
 import gzip
 import scipy
-from cite_seq_count import io
+from cite_seq_count.io import get_n_lines, write_to_files, write_dense, get_read_paths
 from collections import namedtuple
 import numpy as np
 
@@ -70,7 +70,7 @@ def test_write_to_files_wo_translation(data, tmpdir):
         mtx_path: "3ea98c44d88a947215bace0c72ac1303",
     }
 
-    io.write_to_files(
+    write_to_files(
         pytest.sparse_matrix,
         pytest.filtered_cells,
         pytest.parsed_tags_map,
@@ -103,7 +103,7 @@ def test_write_to_files_with_translation(data, tmpdir):
         mtx_path: "3ea98c44d88a947215bace0c72ac1303",
     }
 
-    io.write_to_files(
+    write_to_files(
         pytest.sparse_matrix,
         pytest.filtered_cells,
         pytest.parsed_tags_map,
@@ -129,7 +129,7 @@ def test_write_to_dense_wo_translation(data, tmpdir):
         csv_path: "fef502237900ec386d100169fa1fab7c",
     }
 
-    io.write_dense(
+    write_dense(
         sparse_matrix=pytest.sparse_matrix,
         parsed_tags=pytest.parsed_tags_map,
         columns=pytest.filtered_cells,
@@ -142,13 +142,13 @@ def test_write_to_dense_wo_translation(data, tmpdir):
 
 @pytest.mark.dependency()
 def test_get_n_lines(data):
-    assert io.get_n_lines(pytest.correct_R1_path) == (200 * 4)
+    assert get_n_lines(pytest.correct_R1_path) == (200 * 4)
 
 
 @pytest.mark.dependency()
 def test_corrrect_multipath(data):
     assert (
-        io.get_read_paths(pytest.correct_R1_multipath, pytest.correct_R2_multipath)
+        get_read_paths(pytest.correct_R1_multipath, pytest.correct_R2_multipath)
         == pytest.correct_multipath_result
     )
 
@@ -156,10 +156,10 @@ def test_corrrect_multipath(data):
 @pytest.mark.dependency(depends=["test_get_n_lines"])
 def test_incorrrect_multipath(data):
     with pytest.raises(SystemExit):
-        io.get_read_paths(pytest.correct_R1_multipath, pytest.incorrect_R2_multipath)
+        get_read_paths(pytest.correct_R1_multipath, pytest.incorrect_R2_multipath)
 
 
 @pytest.mark.dependency(depends=["test_get_n_lines"])
 def test_get_n_lines_not_multiple_of_4(data):
     with pytest.raises(SystemExit):
-        io.get_n_lines(pytest.corrupt_R1_path)
+        get_n_lines(pytest.corrupt_R1_path)

@@ -1,10 +1,9 @@
 """Mapping module. Holds all code related to mapping reads
 """
-from pathlib import Path
 import polars as pl
 from rapidfuzz import fuzz, process, distance
 
-from cite_seq_count.preprocessing import (
+from cite_seq_count.constants import (
     SEQUENCE_COLUMN,
     R2_COLUMN,
     FEATURE_NAME_COLUMN,

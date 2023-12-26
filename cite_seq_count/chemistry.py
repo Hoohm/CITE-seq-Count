@@ -6,7 +6,7 @@ import json
 
 from dataclasses import dataclass
 from argparse import ArgumentParser
-from cite_seq_count import preprocessing
+from cite_seq_count.preprocessing import parse_barcode_reference
 import polars as pl
 
 GLOBAL_LINK_RAW = "https://raw.githubusercontent.com/Hoohm/scg_lib_structs/10xv3_totalseq_b/chemistries/"
@@ -133,7 +133,7 @@ def create_chemistry_definition(args: ArgumentParser) -> Chemistry:
 def setup_chemistry(args: ArgumentParser) -> tuple[pl.DataFrame | None, Chemistry]:
     if args.chemistry_id:
         chemistry_def = get_chemistry_definition(args.chemistry_id)
-        barcode_reference = preprocessing.parse_barcode_reference(
+        barcode_reference = parse_barcode_reference(
             filename=chemistry_def.barcode_reference_path,
             barcode_length=chemistry_def.cell_barcode_end
             - chemistry_def.cell_barcode_start
@@ -144,7 +144,7 @@ def setup_chemistry(args: ArgumentParser) -> tuple[pl.DataFrame | None, Chemistr
         chemistry_def = create_chemistry_definition(args)
         if args.barcode_reference:
             print("Loading barcode reference")
-            barcode_reference = preprocessing.parse_barcode_reference(
+            barcode_reference = parse_barcode_reference(
                 filename=args.barcode_reference,
                 barcode_length=args.cb_last - args.cb_first + 1,
                 required_header=["reference"],

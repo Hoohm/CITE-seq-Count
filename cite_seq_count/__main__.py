@@ -61,7 +61,7 @@ def main():
         r2_min_length=r2_min_length,
         chemistry_def=chemistry_def,
     )
-    input_df, barcodes_df, r2_df = preprocessing.split_data_input(
+    main_df, barcodes_df, r2_df = preprocessing.split_data_input(
         mapping_input_path=temp_file
     )
     # Remove temp file
@@ -83,16 +83,20 @@ def main():
     # Correct cell barcodes
     if args.bc_threshold > 0 and enable_barcode_correction:
         (
-            barcode_corrected_df,
-            bcs_corrected,
+            barcodes_with_correction_df,
+            n_bcs_corrected,
+            mapped_barcodes,
         ) = processing.correct_barcodes_pl(
             barcodes_df=barcodes_df,
             barcode_subset_df=barcode_subset,
             hamming_distance=args.bc_threshold,
         )
+        main_df = processing.update_main_df(
+            main_df=main_df, mapped_barcodes=mapped_barcodes
+        )
     else:
         print("Skipping cell barcode correction")
-        bcs_corrected = 0
+        n_bcs_corrected = 0
 
     # Create sparse matrices for reads results
     read_results_matrix = processing.generate_sparse_matrices(

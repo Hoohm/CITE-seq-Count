@@ -3,7 +3,7 @@ import random
 import copy
 from collections import Counter, namedtuple
 from cite_seq_count import mapping
-from cite_seq_count import preprocessing
+from cite_seq_count.preprocessing import parse_tags_csv
 
 
 def complete_poly_A(seq, final_length=40):
@@ -69,8 +69,8 @@ def data():
 
     pytest.sliding_window = False
     pytest.sequence_pool = []
-    pytest.tags_tuple = preprocessing.parse_tags_csv(
-        preprocessing.parse_tags_csv("tests/test_data/tags/pass/correct.csv")
+    pytest.tags_tuple = parse_tags_csv(
+        parse_tags_csv("tests/test_data/tags/pass/correct.csv")
     )
     pytest.mapping_input = namedtuple(
         "mapping_input",

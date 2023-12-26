@@ -11,29 +11,20 @@ import Levenshtein
 import polars as pl
 import umi_tools.whitelist_methods as whitelist_method
 from cite_seq_count.io import get_n_lines, check_file
-from cite_seq_count.chemistry import Chemistry
-
-
-# REQUIRED_TAGS_HEADER = ["sequence", "feature_name"]
-REQUIRED_CELLS_REF_HEADER = ["reference"]
-OPTIONAL_CELLS_REF_HEADER = ["translation"]
-# Polars column names
-# Tags input
-FEATURE_NAME_COLUMN = "feature_name"
-SEQUENCE_COLUMN = "sequence"
-REQUIRED_TAGS_HEADER = [FEATURE_NAME_COLUMN, SEQUENCE_COLUMN]
-# Reads input
-BARCODE_COLUMN = "barcode"
-CORRECTED_BARCODE_COLUMN = "corrected_barcode"
-UMI_COLUMN = "umi"
-R2_COLUMN = "r2"
-# Barcode input
-REFERENCE_COLUMN = "reference"
-TRANSLATION_COLUMN = "translation"
-WHITELIST_COLUMN = "whitelist"
-STRIP_CHARS = '"0123456789- \t\n'
-
-UNMAPPED_NAME = "unmapped"
+from cite_seq_count.constants import (
+    SEQUENCE_COLUMN,
+    R2_COLUMN,
+    FEATURE_NAME_COLUMN,
+    BARCODE_COLUMN,
+    UMI_COLUMN,
+    UNMAPPED_NAME,
+    REQUIRED_TAGS_HEADER,
+    REFERENCE_COLUMN,
+    TRANSLATION_COLUMN,
+    OPTIONAL_CELLS_REF_HEADER,
+    STRIP_CHARS,
+    WHITELIST_COLUMN
+)
 
 
 def parse_barcode_reference(
@@ -348,7 +339,7 @@ def pre_run_checks(
 
 
 def split_data_input(mapping_input_path: Path):
-    input_df = (
+    main_df = (
         pl.read_csv(
             mapping_input_path,
             has_header=False,
@@ -359,19 +350,19 @@ def split_data_input(mapping_input_path: Path):
     )
 
     barcodes_df = (
-        input_df.select([BARCODE_COLUMN, "count"])
+        main_df.select([BARCODE_COLUMN, "count"])
         .group_by(BARCODE_COLUMN)
         .agg(pl.sum("count"))
     )
-    r2_df = input_df.select(R2_COLUMN).unique()
+    r2_df = main_df.select(R2_COLUMN).unique()
 
-    return input_df, barcodes_df, r2_df
+    return main_df, barcodes_df, r2_df
 
 
 def get_barcode_subset(
     barcode_whitelist: Path,
     expected_barcodes: int,
-    chemistry: Chemistry,
+    chemistry,
     barcode_reference: pl.DataFrame | None,
     barcodes_df: pl.DataFrame,
 ):

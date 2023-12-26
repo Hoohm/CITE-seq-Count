@@ -24,7 +24,6 @@ import pandas as pd
 import polars as pl
 from scipy import io
 from cite_seq_count import secondsToText
-from cite_seq_count.chemistry import Chemistry
 
 JSON_REPORT_PATH = pkg_resources.resource_filename(__name__, "templates/report.json")
 
@@ -260,7 +259,7 @@ def create_report(
     r1_too_short: int,
     r2_too_short: int,
     args: ArgumentParser,
-    chemistry_def: Chemistry,
+    chemistry_def,
     maximum_distance: int,
 ):
     """
@@ -328,7 +327,7 @@ def write_chunks_to_disk(
     read2_paths: list[Path],
     r2_min_length: int,
     n_reads_per_chunk: int,
-    chemistry_def: Chemistry,
+    chemistry_def,
     parsed_tags: pl.DataFrame,
     maximum_distance,
 ):
@@ -473,7 +472,7 @@ def write_mapping_input(
     read1_paths: list[Path],
     read2_paths: list[Path],
     r2_min_length: int,
-    chemistry_def: Chemistry,
+    chemistry_def,
 ):
     """
     Writes chunked files of reads to disk and prepares parallel
