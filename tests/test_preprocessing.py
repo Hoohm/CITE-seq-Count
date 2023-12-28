@@ -5,7 +5,12 @@ import glob
 import pytest
 import polars as pl
 from polars.testing import assert_frame_equal
-from cite_seq_count.preprocessing import parse_barcode_reference, parse_tags_csv, check_tags
+from cite_seq_count.preprocessing import (
+    parse_barcode_reference,
+    parse_tags_csv,
+    check_tags,
+    find_knee_estimated_barcodes,
+)
 from cite_seq_count.constants import REFERENCE_COLUMN
 
 
@@ -54,6 +59,12 @@ def data():
             ],
         }
     )
+    pytest.barcodes_df = pl.DataFrame(
+        {
+            "barcode": ["ATGCCC", "ATGCTT", "CCGCCC", "ATATCC", "ATATGG"],
+            "count": [200, 200, 200, 20, 10],
+        }
+    )
     pytest.barcode_slice = slice(0, 16)
     pytest.umi_slice = slice(16, 26)
     pytest.barcode_umi_length = 26
@@ -91,3 +102,7 @@ def test_parse_reference_list_csv(data):
 def test_check_distance_too_big_between_tags(data):
     with pytest.raises(SystemExit):
         check_tags(pytest.correct_tag_pl, 8)
+
+
+def test_find_knee_estimated_barcodes(data):
+    find_knee_estimated_barcodes(barcodes_df=pytest.barcodes_df)

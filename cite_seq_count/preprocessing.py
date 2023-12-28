@@ -9,21 +9,22 @@ from argparse import ArgumentParser
 from pathlib import Path
 import Levenshtein
 import polars as pl
+import numpy as np
+import numpy.matlib as npm
 import umi_tools.whitelist_methods as whitelist_method
 from cite_seq_count.io import get_n_lines, check_file
 from cite_seq_count.constants import (
     SEQUENCE_COLUMN,
     R2_COLUMN,
-    FEATURE_NAME_COLUMN,
     BARCODE_COLUMN,
     UMI_COLUMN,
-    UNMAPPED_NAME,
     REQUIRED_TAGS_HEADER,
     REFERENCE_COLUMN,
     TRANSLATION_COLUMN,
     OPTIONAL_CELLS_REF_HEADER,
     STRIP_CHARS,
-    WHITELIST_COLUMN
+    WHITELIST_COLUMN,
+    COUNT_COLUMN,
 )
 
 
@@ -134,7 +135,6 @@ def parse_tags_csv(file_name: str) -> pl.DataFrame:
         file_type="tags",
         expected_pattern="ATGC",
     )
-
     return data_pl
 
 
@@ -338,7 +338,23 @@ def pre_run_checks(
     return n_reads, r2_min_length, maximum_distance
 
 
-def split_data_input(mapping_input_path: Path):
+def split_data_input(
+    mapping_input_path: Path,
+) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
+    """Read in all the input data and split it into three dataframes.
+
+    Reduce the size of the data by grouping on barcodes, umis and sequences.
+    The function splits the data into three main dataframes.
+    1. main_df is the dataframe holding the links between the other dfs
+    2. barcodes_df holds only the barcode information for barcode correction
+    3. r2_df only holds the sequences for mapping
+
+    Args:
+        mapping_input_path (Path): Path to the csv file containing all the input data
+
+    Returns:
+        tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]: Three dfs described above
+    """
     main_df = (
         pl.read_csv(
             mapping_input_path,
@@ -350,9 +366,9 @@ def split_data_input(mapping_input_path: Path):
     )
 
     barcodes_df = (
-        main_df.select([BARCODE_COLUMN, "count"])
+        main_df.select([BARCODE_COLUMN, COUNT_COLUMN])
         .group_by(BARCODE_COLUMN)
-        .agg(pl.sum("count"))
+        .agg(pl.sum(COUNT_COLUMN))
     )
     r2_df = main_df.select(R2_COLUMN).unique()
 
@@ -361,23 +377,33 @@ def split_data_input(mapping_input_path: Path):
 
 def get_barcode_subset(
     barcode_whitelist: Path,
-    expected_barcodes: int,
+    n_barcodes: int,
     chemistry,
     barcode_reference: pl.DataFrame | None,
     barcodes_df: pl.DataFrame,
 ):
-    """
-    Generate the barcode list used for barcode correction and subsetting
+    """Generate the barcode list used for barcode correction and subsetting
+
+    Args:
+        barcode_whitelist (Path): Barcode whitelist df (can hold translation column)
+        expected_barcodes (int): Number of expected barcodes from user
+        chemistry (_type_): Chemistry definition
+        barcode_reference (pl.DataFrame | None): Specific subset given by the user
+        barcodes_df (pl.DataFrame): Barcodes from the input data
+
+    Returns:
+        _type_: _description_
     """
     enable_barcode_correction = True
+    # Whitelist: True
     if barcode_whitelist:
         barcode_subset = parse_barcode_reference(
-            filename=expected_barcodes,
+            filename=barcode_whitelist,
             barcode_length=(chemistry.cell_barcode_end - chemistry.cell_barcode_start),
             required_header=WHITELIST_COLUMN,
         )
     else:
-        n_barcodes = barcode_whitelist
+        # Whitelist: False, Reference: True
         if barcode_reference is not None:
             barcode_subset = (
                 barcodes_df.filter(
@@ -393,21 +419,8 @@ def get_barcode_subset(
                 .rename({SEQUENCE_COLUMN: WHITELIST_COLUMN})
             )
         else:
-            raw_barcodes_dict = (
-                barcodes_df.filter(~pl.col(BARCODE_COLUMN).str.contains("N"))
-                .group_by(BARCODE_COLUMN)
-                .agg(pl.count())
-                .sort("count", descending=True)
-            ).to_dict()
-            barcode_counter = Counter(
-                zip(raw_barcodes_dict[BARCODE_COLUMN], raw_barcodes_dict["count"])
-            )
-            true_barcodes = whitelist_method.getKneeEstimateDistance(
-                cell_barcode_counts=barcode_counter, cell_number=n_barcodes
-            )
-            barcode_subset = pl.DataFrame(
-                true_barcodes, schema={WHITELIST_COLUMN: pl.Utf8, "counts": pl.UInt32}
-            ).drop("counts")
+            # Whitelist: False, Reference: False
+            barcode_subset = find_knee_estimated_barcodes(barcodes_df=barcodes_df)
 
     if n_barcodes > barcode_subset.shape[0]:
         print(
@@ -417,3 +430,17 @@ def get_barcode_subset(
         )
         enable_barcode_correction = False
     return barcode_subset, enable_barcode_correction
+
+
+def find_knee_estimated_barcodes(barcodes_df):
+    raw_barcodes_dict = barcodes_df.filter(
+        ~pl.col(BARCODE_COLUMN).str.contains("N")
+    ).sort("count", descending=True)
+    barcode_counter = Counter()
+    barcode_counts = dict(raw_barcodes_dict.iter_rows())
+    barcode_counter.update(barcode_counts)
+    true_barcodes = whitelist_method.getKneeEstimateDistance(
+        cell_barcode_counts=barcode_counter
+    )
+    barcode_subset = pl.DataFrame(true_barcodes, schema={WHITELIST_COLUMN: pl.Utf8})
+    return barcode_subset

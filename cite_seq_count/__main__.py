@@ -23,12 +23,12 @@ def main():
     # Check a few path before doing anything
     if not os.access(args.temp_path, os.W_OK):
         sys.exit(
-            f"Temp folder: {args.temp_path} is not writable."
+            f"Temp folder: {args.temp_path} is not writeable."
             f"Please check permissions and/or change temp folder."
         )
     if not os.access(os.path.dirname(os.path.abspath(args.outfolder)), os.W_OK):
         sys.exit(
-            f"Output folder: {args.outfolder} is not writable."
+            f"Output folder: {args.outfolder} is not writeable."
             f"Please check permissions and/or change output folder."
         )
 
@@ -74,7 +74,7 @@ def main():
 
     barcode_subset, enable_barcode_correction = preprocessing.get_barcode_subset(
         barcode_whitelist=args.filtered_barcodes,
-        expected_barcodes=args.expected_barcodes,
+        n_barcodes=args.expected_barcodes,
         chemistry=chemistry_def,
         barcode_reference=barcode_reference,
         barcodes_df=barcodes_df,
@@ -83,7 +83,7 @@ def main():
     # Correct cell barcodes
     if args.bc_threshold > 0 and enable_barcode_correction:
         (
-            barcodes_with_correction_df,
+            barcodes_df,
             n_bcs_corrected,
             mapped_barcodes,
         ) = processing.correct_barcodes_pl(
@@ -97,113 +97,72 @@ def main():
     else:
         print("Skipping cell barcode correction")
         n_bcs_corrected = 0
-
-    # Create sparse matrices for reads results
-    read_results_matrix = processing.generate_sparse_matrices(
-        final_results=final_results,
-        parsed_tags=parsed_tags,
-        filtered_cells=filtered_cells,
+    read_counts = processing.generate_mtx_counts(
+        main_df=main_df,
+        barcode_subset=barcodes_df,
+        mapped_r2_df=mapped_r2_df,
+        data_type="read",
     )
     # Write reads to file
-    io.write_to_files(
-        sparse_matrix=read_results_matrix,
-        filtered_cells=filtered_cells,
-        parsed_tags=parsed_tags,
+    io.write_data_to_mtx(
+        main_df=read_counts,
+        tags_df=parsed_tags,
+        barcodes_df=barcode_subset,
         data_type="read",
-        outfolder=args.outfolder,
-        translation_dict=translation_dict,
+        outpath=args.outfolder,
     )
+    # TODO: add clustered cells filter: Max UMIs per cell per feature: 20000
+    print("UMI correction not implemented yet")
+    # Don't correct
+    umis_corrected = 0
+    clustered_cells = []
+    # TODO: Write out to mtx and csv clustered cells
 
-    # UMI correction
-    if args.umi_threshold != 0:
-        # Correct UMIS
-        (
-            final_results,
-            umis_corrected,
-            clustered_cells,
-        ) = processing.run_umi_correction(
-            final_results=final_results,
-            filtered_cells=filtered_cells,
-            unmapped_id=len(parsed_tags),
-            args=args,
-        )
-    else:
-        # Don't correct
-        umis_corrected = 0
-        clustered_cells = []
-
-    if len(clustered_cells) > 0:
-        # Remove clustered cells from the top cells
-        for cell_barcode in clustered_cells:
-            filtered_cells.remove(cell_barcode)
-
-        # Create sparse clustered cells matrix
-        umi_clustered_matrix = processing.generate_sparse_matrices(
-            final_results=final_results,
-            parsed_tags=parsed_tags,
-            filtered_cells=clustered_cells,
-        )
-        # Write uncorrected cells to dense output
-        io.write_dense(
-            sparse_matrix=umi_clustered_matrix,
-            parsed_tags=parsed_tags,
-            columns=clustered_cells,
-            outfolder=os.path.join(args.outfolder, "uncorrected_cells"),
-            filename="dense_umis.tsv",
-        )
     # Generate the UMI count matrix
-    umi_results_matrix = processing.generate_sparse_matrices(
-        final_results=final_results,
-        parsed_tags=parsed_tags,
-        filtered_cells=filtered_cells,
-        umi_counts=True,
+    umi_counts = processing.generate_mtx_counts(
+        main_df=main_df,
+        barcode_subset=barcodes_df,
+        mapped_r2_df=mapped_r2_df,
+        data_type="umi",
     )
 
     # Write umis to file
-    io.write_to_files(
-        sparse_matrix=umi_results_matrix,
-        filtered_cells=filtered_cells,
-        parsed_tags=parsed_tags,
+    io.write_data_to_mtx(
+        main_df=read_counts,
+        tags_df=parsed_tags,
+        barcodes_df=barcode_subset,
         data_type="umi",
-        outfolder=args.outfolder,
-        translation_dict=translation_dict,
+        outpath=args.outfolder,
     )
 
-    # Write unmapped sequences
-    if len(merged_no_match) > 0:
-        io.write_unmapped(
-            merged_no_match=merged_no_match,
-            top_unknowns=args.unknowns_top,
-            outfolder=args.outfolder,
-            filename=args.unmapped_file,
-        )
-
-    # Create report and write it to disk
-    io.create_report(
-        total_reads=total_reads,
-        no_match=merged_no_match,
-        version=argsparser.get_package_version(),
-        start_time=start_time,
-        umis_corrected=umis_corrected,
-        bcs_corrected=bcs_corrected,
-        bad_cells=clustered_cells,
-        r1_too_short=r1_too_short,
-        r2_too_short=r2_too_short,
-        args=args,
-        chemistry_def=chemistry_def,
-        maximum_distance=maximum_distance,
-    )
-
-    # Write dense matrix to disk if requested
-    if args.dense:
-        print("Writing dense format output")
-        io.write_dense(
-            sparse_matrix=umi_results_matrix,
-            parsed_tags=parsed_tags,
-            columns=filtered_cells,
-            outfolder=args.outfolder,
-            filename="dense_umis.tsv",
-        )
+    # TODO: Write unmapped sequences
+    # TODO: rewrite reporting
+    # # Create report and write it to disk
+    # io.create_report(
+    #     total_reads=total_reads,
+    #     no_match=merged_no_match,
+    #     version=argsparser.get_package_version(),
+    #     start_time=start_time,
+    #     umis_corrected=umis_corrected,
+    #     bcs_corrected=bcs_corrected,
+    #     bad_cells=clustered_cells,
+    #     r1_too_short=r1_too_short,
+    #     r2_too_short=r2_too_short,
+    #     args=args,
+    #     chemistry_def=chemistry_def,
+    #     maximum_distance=maximum_distance,
+    # )
+    # TODO: Rewrite dense format output
+    # # Write dense matrix to disk if requested
+    # if args.dense:
+    #     print("Writing dense format output")
+    #     io.write_dense(
+    #         sparse_matrix=umi_results_matrix,
+    #         parsed_tags=parsed_tags,
+    #         columns=filtered_cells,
+    #         outfolder=args.outfolder,
+    #         filename="dense_umis.tsv",
+    #     )
 
 
 if __name__ == "__main__":

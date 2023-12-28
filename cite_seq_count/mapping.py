@@ -7,13 +7,11 @@ from cite_seq_count.constants import (
     SEQUENCE_COLUMN,
     R2_COLUMN,
     FEATURE_NAME_COLUMN,
-    BARCODE_COLUMN,
-    UMI_COLUMN,
     UNMAPPED_NAME,
 )
 
 
-def find_best_match_rapid(tag_seq, tags_list, maximum_distance):
+def find_best_match_fast(tag_seq, tags_list, maximum_distance):
     choices = tags_list[SEQUENCE_COLUMN].to_list()
     features = tags_list[FEATURE_NAME_COLUMN].to_list()
     res = process.extractOne(choices=choices, query=tag_seq, scorer=fuzz.QRatio)
@@ -23,36 +21,21 @@ def find_best_match_rapid(tag_seq, tags_list, maximum_distance):
     return UNMAPPED_NAME
 
 
-def match_generic_string_dfs(
-    ref_df: pl.DataFrame,
-    target_df: pl.DataFrame,
-    left_on: str,
-    right_on: str,
-    hamming_distance: int,
-):
-    corrected_column = "corrected_" + left_on
-    joined = (
-        target_df.sort(left_on)
-        .join_asof(ref_df.sort(right_on), left_on=left_on, right_on=right_on)
-        .with_columns(
-            pl.when(pl.col(left_on) == pl.col(right_on))
-            .then(False)
-            .otherwise(True)
-            .alias(corrected_column)
-        )
-        .with_columns(
-            pl.when(pl.col(corrected_column))
-            .then(distance.Hamming.distance(s1=pl.col(left_on), s2=pl.col(right_on)))
-            .otherwise(0)
-            .alias("hamming_distance")
-        )
-    )
-    return joined
-
-
 def map_reads_hybrid(
     r2_df: pl.DataFrame, parsed_tags: pl.DataFrame, maximum_distance: int
 ) -> pl.DataFrame:
+    """Map sequence data to a tags reference.
+    Using a hybdrid approach where we first join all the data for the exact matches
+    then using a hamming distance calculation to find the closest match
+
+    Args:
+        r2_df (pl.DataFrame): All r2 sequences to map
+        parsed_tags (pl.DataFrame): tags to map to
+        maximum_distance (int): max distance allowed for mismatches
+
+    Returns:
+        pl.DataFrame: Mapped data
+    """
     print("Mapping reads")
     mapped_r2_df = r2_df.join(
         parsed_tags, left_on=R2_COLUMN, right_on=SEQUENCE_COLUMN, how="left"
@@ -61,7 +44,7 @@ def map_reads_hybrid(
         .then(
             pl.col(R2_COLUMN)
             .map_elements(
-                lambda x: find_best_match_rapid(
+                lambda x: find_best_match_fast(
                     x, tags_list=parsed_tags, maximum_distance=maximum_distance
                 )
             )

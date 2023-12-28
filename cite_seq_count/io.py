@@ -24,8 +24,30 @@ import pandas as pd
 import polars as pl
 from scipy import io
 from cite_seq_count import secondsToText
+from cite_seq_count.constants import (
+    FEATURE_NAME_COLUMN,
+    BARCODE_COLUMN,
+    BARCODE_ID_COLUMN,
+    FEATURE_ID_COLUMN,
+    COUNT_COLUMN,
+    MTX_HEADER,
+    FEATURES_MTX,
+    BARCODE_MTX,
+    MATRIX_MTX,
+    TEMP_MTX,
+    UNMAPPED_NAME,
+    SEQUENCE_COLUMN,
+    WHITELIST_COLUMN,
+)
 
 JSON_REPORT_PATH = pkg_resources.resource_filename(__name__, "templates/report.json")
+
+
+def compress_file(in_file: Path, out_file: Path):
+    with open(in_file, "rb") as f_in:
+        with gzip.open(out_file, "wb") as f_out:
+            shutil.copyfileobj(f_in, f_out)
+    os.remove(in_file)
 
 
 def blocks(file: Path, size: int = 65536):
@@ -465,6 +487,47 @@ def write_chunks_to_disk(
         r2_too_short,
         total_reads,
     )
+
+
+def write_data_to_mtx(
+    main_df: pl.DataFrame,
+    tags_df: pl.DataFrame,
+    barcodes_df: pl.DataFrame,
+    data_type: str,
+    outpath: str,
+) -> None:
+    tags_indexed = pl.concat(
+        [
+            tags_df,
+            pl.DataFrame(
+                {FEATURE_NAME_COLUMN: UNMAPPED_NAME, SEQUENCE_COLUMN: "UNKNOWN"}
+            ),
+        ]
+    ).with_row_count(offset=1, name=FEATURE_ID_COLUMN)
+    barcodes_indexed = barcodes_df.with_row_count(offset=1, name=BARCODE_ID_COLUMN)
+    mtx_df = (
+        tags_indexed.join(main_df, on=FEATURE_NAME_COLUMN)
+        .join(barcodes_indexed, left_on=BARCODE_COLUMN, right_on=WHITELIST_COLUMN)
+        .select([FEATURE_ID_COLUMN, BARCODE_ID_COLUMN, COUNT_COLUMN])
+    )
+    data_path = Path(outpath) / f"{data_type}_count"
+    mtx_df.write_csv(include_header=False, file=data_path / TEMP_MTX, separator="\t")
+    # Write out the full MTX matrix
+    with open(data_path / TEMP_MTX, "r") as mtx_in:
+        mtx_main = mtx_in.read()
+        final_mtx = MTX_HEADER + mtx_main
+        with open(data_path / MATRIX_MTX, "wb") as mtx_out:
+            mtx_out.write(final_mtx.encode())
+    os.remove(data_path / TEMP_MTX)
+    # Write ouf features and barcodes
+    tags_indexed.sort(FEATURE_ID_COLUMN).select(FEATURE_NAME_COLUMN).write_csv(
+        file=data_path / "features.csv", include_header=False
+    )
+    compress_file(data_path / "features.csv", FEATURES_MTX)
+    barcodes_indexed.sort(BARCODE_ID_COLUMN).select(WHITELIST_COLUMN).write_csv(
+        file=data_path / "barcodes.csv", include_header=False
+    )
+    compress_file(data_path / "barcodes.csv", BARCODE_MTX)
 
 
 def write_mapping_input(
