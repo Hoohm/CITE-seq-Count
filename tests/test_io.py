@@ -19,7 +19,7 @@ from cite_seq_count.io import (
     write_to_files,
     get_read_paths,
     write_data_to_mtx,
-    create_mtx_df
+    create_mtx_df,
 )
 from collections import namedtuple
 import numpy as np
@@ -154,6 +154,8 @@ def test_write_data_to_mtx(tmp_path):
     assert os.path.exists(os.path.join(outpath, "umi_count", "barcodes.tsv.gz"))
 
     # TODO: Add assertions to validate the content of the output files
+
+
 def test_create_mtx_df():
     # Create test data
     main_df = pl.DataFrame(
@@ -184,22 +186,35 @@ def test_create_mtx_df():
             FEATURE_ID_COLUMN: [1, 2, 3],
             BARCODE_ID_COLUMN: [1, 2, 1],
             COUNT_COLUMN: [10, 20, 30],
-        }, schema={FEATURE_ID_COLUMN: pl.UInt32, BARCODE_ID_COLUMN: pl.UInt32, COUNT_COLUMN: pl.Int64}
+        },
+        schema={
+            FEATURE_ID_COLUMN: pl.UInt32,
+            BARCODE_ID_COLUMN: pl.UInt32,
+            COUNT_COLUMN: pl.Int64,
+        },
     )
     expected_tags_indexed = pl.DataFrame(
         {
             FEATURE_NAME_COLUMN: ["test1", "test2", "test3", UNMAPPED_NAME],
             SEQUENCE_COLUMN: ["CGTA", "CGTA", "CGTA", "UNKNOWN"],
             FEATURE_ID_COLUMN: [1, 2, 3, 4],
-        }, schema={FEATURE_ID_COLUMN: pl.UInt32, SEQUENCE_COLUMN: pl.Utf8, FEATURE_NAME_COLUMN: pl.Utf8}
+        },
+        schema={
+            FEATURE_ID_COLUMN: pl.UInt32,
+            SEQUENCE_COLUMN: pl.Utf8,
+            FEATURE_NAME_COLUMN: pl.Utf8,
+        },
     )
     expected_barcodes_indexed = pl.DataFrame(
         {
             SUBSET_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"],
             BARCODE_ID_COLUMN: [1, 2],
-        }, schema={SUBSET_COLUMN: pl.Utf8, BARCODE_ID_COLUMN: pl.UInt32}
+        },
+        schema={SUBSET_COLUMN: pl.Utf8, BARCODE_ID_COLUMN: pl.UInt32},
     )
 
     assert_frame_equal(mtx_df, expected_mtx_df)
     assert_frame_equal(tags_indexed, expected_tags_indexed, check_column_order=False)
-    assert_frame_equal(barcodes_indexed, expected_barcodes_indexed, check_column_order=False)
+    assert_frame_equal(
+        barcodes_indexed, expected_barcodes_indexed, check_column_order=False
+    )

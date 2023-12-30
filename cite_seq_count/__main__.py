@@ -84,12 +84,14 @@ def main():
     )
     # Remove temp file
     os.remove(temp_file)
-    mapped_r2_df = mapping.map_reads_hybrid(
+    mapped_r2_df, unmapped_r2_df = mapping.map_reads_hybrid(
         r2_df=r2_df,
         parsed_tags=parsed_tags,
         maximum_distance=maximum_distance,
     )
-
+    unmapped_df = processing.summarise_unmapped_df(
+        main_df=main_df, unmapped_r2_df=unmapped_r2_df
+    )
     barcode_subset, enable_barcode_correction = preprocessing.get_barcode_subset(
         barcode_subset=barcode_subset,
         n_barcodes=args.expected_barcodes,
@@ -149,38 +151,34 @@ def main():
         main_df=read_counts,
         tags_df=parsed_tags,
         subset_df=barcode_subset,
+        data_type="read",
+        outpath=args.outfolder,
+    )
+    io.write_data_to_mtx(
+        main_df=umi_counts,
+        tags_df=parsed_tags,
+        subset_df=barcode_subset,
         data_type="umi",
         outpath=args.outfolder,
     )
 
     # TODO: Write unmapped sequences
     # TODO: rewrite reporting
-    # # Create report and write it to disk
-    # io.create_report(
-    #     total_reads=total_reads,
-    #     no_match=merged_no_match,
-    #     version=argsparser.get_package_version(),
-    #     start_time=start_time,
-    #     umis_corrected=umis_corrected,
-    #     bcs_corrected=bcs_corrected,
-    #     bad_cells=clustered_cells,
-    #     r1_too_short=r1_too_short,
-    #     r2_too_short=r2_too_short,
-    #     args=args,
-    #     chemistry_def=chemistry_def,
-    #     maximum_distance=maximum_distance,
-    # )
-    # TODO: Rewrite dense format output
-    # # Write dense matrix to disk if requested
-    # if args.dense:
-    #     print("Writing dense format output")
-    #     io.write_dense(
-    #         sparse_matrix=umi_results_matrix,
-    #         parsed_tags=parsed_tags,
-    #         columns=filtered_cells,
-    #         outfolder=args.outfolder,
-    #         filename="dense_umis.tsv",
-    #     )
+    # Create report and write it to disk
+    io.create_report(
+        total_reads=total_reads,
+        unmapped=unmapped_df,
+        version=argsparser.get_package_version(),
+        start_time=start_time,
+        umis_corrected=umis_corrected,
+        bcs_corrected=n_bcs_corrected,
+        bad_cells=clustered_cells,
+        r1_too_short=r1_too_short,
+        r2_too_short=r2_too_short,
+        args=args,
+        chemistry_def=chemistry_def,
+        maximum_distance=maximum_distance,
+    )
 
 
 if __name__ == "__main__":

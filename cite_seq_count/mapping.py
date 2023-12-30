@@ -4,6 +4,7 @@ import polars as pl
 from rapidfuzz import fuzz, process, distance
 
 from cite_seq_count.constants import (
+    COUNT_COLUMN,
     SEQUENCE_COLUMN,
     R2_COLUMN,
     FEATURE_NAME_COLUMN,
@@ -23,7 +24,7 @@ def find_best_match_fast(tag_seq, tags_list, maximum_distance):
 
 def map_reads_hybrid(
     r2_df: pl.DataFrame, parsed_tags: pl.DataFrame, maximum_distance: int
-) -> pl.DataFrame:
+) -> tuple[pl.DataFrame, pl.DataFrame]:
     """Map sequence data to a tags reference.
     Using a hybdrid approach where we first join all the data for the exact matches
     then using a hamming distance calculation to find the closest match
@@ -52,8 +53,9 @@ def map_reads_hybrid(
         )
         .otherwise(pl.col(FEATURE_NAME_COLUMN))
     )
+    unmapped_r2_df = mapped_r2_df.filter(pl.col(FEATURE_NAME_COLUMN) == UNMAPPED_NAME)
     print("Mapping done")
-    return mapped_r2_df
+    return mapped_r2_df, unmapped_r2_df
 
 
 def check_unmapped(mapped_reads: pl.DataFrame):

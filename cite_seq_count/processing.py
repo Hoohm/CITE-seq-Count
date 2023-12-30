@@ -12,6 +12,7 @@ from cite_seq_count.constants import (
     R2_COLUMN,
     UMI_COLUMN,
     COUNT_COLUMN,
+    UNMAPPED_NAME,
 )
 
 
@@ -84,6 +85,28 @@ def correct_barcodes_pl(
     n_corrected_barcodes = corrected_barcodes_pl.shape[0]
 
     return final_corrected, n_corrected_barcodes, mapped_barcodes
+
+
+def summarise_unmapped_df(main_df: pl.DataFrame, unmapped_r2_df: pl.DataFrame):
+    """Merge main df and unmapped df to get a summary of the unmapped reads
+
+    Args:
+        main_df (pl.DataFrame): _description_
+        unmapped_r2_df (pl.DataFrame): _description_
+    """
+    unmapped_r2_df = (
+        unmapped_r2_df.filter(pl.col(FEATURE_NAME_COLUMN) == UNMAPPED_NAME)
+        .join(main_df, on=R2_COLUMN, how="left")
+        .with_columns(
+            pl.when(pl.col(FEATURE_NAME_COLUMN).is_null())
+            .then(pl.col(R2_COLUMN))
+            .otherwise(pl.col(FEATURE_NAME_COLUMN))
+            .alias(FEATURE_NAME_COLUMN)
+        )
+    )
+    unmapped_df = unmapped_r2_df.group_by(FEATURE_NAME_COLUMN).agg(pl.count())
+
+    return unmapped_df
 
 
 def update_main_df(main_df: pl.DataFrame, mapped_barcodes: dict):

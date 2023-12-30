@@ -276,7 +276,7 @@ def load_report_template() -> dict:
 
 def create_report(
     total_reads: int,
-    no_match: Counter,
+    unmapped: pl.DataFrame,
     version: str,
     start_time,
     umis_corrected: int,
@@ -299,8 +299,7 @@ def create_report(
         args (arg_parse): Arguments provided by the user.
 
     """
-
-    total_unmapped = sum(no_match.values())
+    total_unmapped = unmapped[COUNT_COLUMN][0]
     total_too_short = r1_too_short + r2_too_short
     total_mapped = total_reads - total_unmapped - total_too_short
 
@@ -337,7 +336,7 @@ def create_report(
     report_data["Run parameters"]["UMI barcode"][
         "Last position"
     ] = chemistry_def.umi_barcode_end
-    report_data["Expected cells"] = args.expected_cells
+    report_data["Expected cells"] = args.expected_barcodes
     report_data["Tags max errors"] = maximum_distance
     report_data["Start trim"] = chemistry_def.r2_trim_start
 
@@ -492,7 +491,10 @@ def write_chunks_to_disk(
         total_reads,
     )
 
-def create_mtx_df(main_df:pl.DataFrame, tags_df:pl.DataFrame, subset_df:pl.DataFrame):
+
+def create_mtx_df(
+    main_df: pl.DataFrame, tags_df: pl.DataFrame, subset_df: pl.DataFrame
+):
     tags_indexed = (
         pl.concat(
             [
@@ -514,7 +516,8 @@ def create_mtx_df(main_df:pl.DataFrame, tags_df:pl.DataFrame, subset_df:pl.DataF
         .select([FEATURE_ID_COLUMN, BARCODE_ID_COLUMN, COUNT_COLUMN])
     )
     return mtx_df, tags_indexed, barcodes_indexed
-    
+
+
 def write_data_to_mtx(
     main_df: pl.DataFrame,
     tags_df: pl.DataFrame,
