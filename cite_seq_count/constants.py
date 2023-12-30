@@ -17,7 +17,7 @@ COUNT_COLUMN = "count"
 # Barcode input
 REFERENCE_COLUMN = "reference"
 TRANSLATION_COLUMN = "translation"
-WHITELIST_COLUMN = "whitelist"
+SUBSET_COLUMN = "subset"
 STRIP_CHARS = '"0123456789- \t\n'
 
 # MTX format

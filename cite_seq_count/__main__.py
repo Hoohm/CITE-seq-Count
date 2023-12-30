@@ -6,7 +6,17 @@ import sys
 import os
 import time
 
-from cite_seq_count import preprocessing, argsparser, mapping, processing, chemistry, io
+from scipy import constants
+
+from cite_seq_count import (
+    preprocessing,
+    argsparser,
+    mapping,
+    processing,
+    chemistry,
+    io,
+    constants,
+)
 
 
 def main():
@@ -33,7 +43,15 @@ def main():
         )
 
     # Get chemistry defs
-    (barcode_reference, chemistry_def) = chemistry.setup_chemistry(args)
+    barcode_reference, chemistry_def = chemistry.setup_chemistry(args)
+    if args.subset_path is not None:
+        barcode_subset = preprocessing.parse_barcode_file(
+            filename=args.subset_path,
+            barcode_length=chemistry_def.barcode_length,
+            required_header=[constants.REFERENCE_COLUMN],
+        )
+    else:
+        barcode_subset = None
 
     # Load TAGs/ABs.
     parsed_tags = preprocessing.parse_tags_csv(args.tags)
@@ -47,7 +65,7 @@ def main():
         read1_paths=read1_paths,
         chemistry_def=chemistry_def,
         longest_tag_len=longest_tag_len,
-        args=args,
+        arguments=args,
     )
     (
         temp_file,
@@ -73,7 +91,7 @@ def main():
     )
 
     barcode_subset, enable_barcode_correction = preprocessing.get_barcode_subset(
-        barcode_whitelist=args.filtered_barcodes,
+        barcode_subset=barcode_subset,
         n_barcodes=args.expected_barcodes,
         chemistry=chemistry_def,
         barcode_reference=barcode_reference,
@@ -107,7 +125,7 @@ def main():
     io.write_data_to_mtx(
         main_df=read_counts,
         tags_df=parsed_tags,
-        barcodes_df=barcode_subset,
+        subset_df=barcode_subset,
         data_type="read",
         outpath=args.outfolder,
     )
@@ -130,7 +148,7 @@ def main():
     io.write_data_to_mtx(
         main_df=read_counts,
         tags_df=parsed_tags,
-        barcodes_df=barcode_subset,
+        subset_df=barcode_subset,
         data_type="umi",
         outpath=args.outfolder,
     )

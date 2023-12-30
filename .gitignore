@@ -4,3 +4,5 @@ CITE_seq_Count.egg-info/
 __pycache__
 *.pyc
 .vscode
+.ruff_cache
+.pytest_cache

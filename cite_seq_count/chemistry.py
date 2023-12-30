@@ -5,8 +5,8 @@ import json
 
 
 from dataclasses import dataclass
-from argparse import ArgumentParser
-from cite_seq_count.preprocessing import parse_barcode_reference
+from argparse import Namespace
+from cite_seq_count.preprocessing import parse_barcode_file
 import polars as pl
 
 GLOBAL_LINK_RAW = "https://raw.githubusercontent.com/Hoohm/scg_lib_structs/10xv3_totalseq_b/chemistries/"
@@ -25,6 +25,9 @@ class Chemistry:
     umi_barcode_end: int
     r2_trim_start: int
     barcode_reference_path: str
+
+    def __post_init__(self):
+        self.barcode_length = self.cell_barcode_end - self.umi_barcode_start
 
 
 DEFINITIONS_DB = pooch.create(
@@ -53,7 +56,7 @@ def fetch_definitions() -> dict:
     return json_data
 
 
-def list_chemistries(all_chemistry_defs: str) -> None:
+def list_chemistries(all_chemistry_defs: dict) -> None:
     """
     List all the available chemistries in the database
     Args:
@@ -117,7 +120,7 @@ def get_chemistry_definition(chemistry_short_name: str) -> Chemistry:
     return chemistry_def
 
 
-def create_chemistry_definition(args: ArgumentParser) -> Chemistry:
+def create_chemistry_definition(args: Namespace) -> Chemistry:
     chemistry_def = Chemistry(
         name="custom",
         cell_barcode_start=args.cb_first,
@@ -125,15 +128,15 @@ def create_chemistry_definition(args: ArgumentParser) -> Chemistry:
         umi_barcode_start=args.umi_first,
         umi_barcode_end=args.umi_last,
         r2_trim_start=args.start_trim,
-        barcode_reference_path=args.barcode_reference,
+        barcode_reference_path=args.reference,
     )
     return chemistry_def
 
 
-def setup_chemistry(args: ArgumentParser) -> tuple[pl.DataFrame | None, Chemistry]:
+def setup_chemistry(args: Namespace) -> tuple[pl.DataFrame | None, Chemistry]:
     if args.chemistry_id:
         chemistry_def = get_chemistry_definition(args.chemistry_id)
-        barcode_reference = parse_barcode_reference(
+        barcode_reference = parse_barcode_file(
             filename=chemistry_def.barcode_reference_path,
             barcode_length=chemistry_def.cell_barcode_end
             - chemistry_def.cell_barcode_start
@@ -142,10 +145,10 @@ def setup_chemistry(args: ArgumentParser) -> tuple[pl.DataFrame | None, Chemistr
         )
     else:
         chemistry_def = create_chemistry_definition(args)
-        if args.barcode_reference:
+        if args.reference:
             print("Loading barcode reference")
-            barcode_reference = parse_barcode_reference(
-                filename=args.barcode_reference,
+            barcode_reference = parse_barcode_file(
+                filename=args.reference,
                 barcode_length=args.cb_last - args.cb_first + 1,
                 required_header=["reference"],
             )

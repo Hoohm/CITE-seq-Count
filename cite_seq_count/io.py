@@ -10,9 +10,9 @@ import tempfile
 import json
 
 from collections import namedtuple, Counter
-from argparse import ArgumentParser
+from argparse import Namespace
 from itertools import islice
-from typing import Tuple
+from typing import Tuple, TextIO
 from pathlib import Path
 from os import access, R_OK
 
@@ -37,7 +37,7 @@ from cite_seq_count.constants import (
     TEMP_MTX,
     UNMAPPED_NAME,
     SEQUENCE_COLUMN,
-    WHITELIST_COLUMN,
+    SUBSET_COLUMN,
 )
 
 JSON_REPORT_PATH = pkg_resources.resource_filename(__name__, "templates/report.json")
@@ -50,7 +50,7 @@ def compress_file(in_file: Path, out_file: Path):
     os.remove(in_file)
 
 
-def blocks(file: Path, size: int = 65536):
+def blocks(file: TextIO, size: int = 65536):
     """
     A fast way of counting the lines of a large file.
     Ref:
@@ -92,7 +92,7 @@ def get_n_lines(file_path: Path) -> int:
     return n_lines
 
 
-def get_read_paths(read1_path: str, read2_path: str) -> Tuple[str, str]:
+def get_read_paths(read1_path: str, read2_path: str) -> Tuple[list[Path], list[Path]]:
     """
     Splits up 2 comma-separated strings of input files into list of files
     to process. Ensures both lists are equal in length.
@@ -104,14 +104,14 @@ def get_read_paths(read1_path: str, read2_path: str) -> Tuple[str, str]:
         _read1_path (list(string)): list of paths to read1.fq
         _read2_path (list(string)): list of paths to read2.fq
     """
-    _read1_path = read1_path.split(",")
-    _read2_path = read2_path.split(",")
-    if len(_read1_path) != len(_read2_path):
+    _read1_paths = [Path(path) for path in read1_path.split(",")]
+    _read2_paths = [Path(path) for path in read2_path.split(",")]
+    if len(_read1_paths) != len(_read2_paths):
         sys.exit(
-            f"Unequal number of read1 ({len(_read1_path)}) and read2({len(_read2_path)}) files provided"
+            f"Unequal number of read1 ({len(_read1_paths)}) and read2({len(_read2_paths)}) files provided"
             "\n Exiting"
         )
-    all_files = _read1_path + _read2_path
+    all_files = _read1_paths + _read2_paths
     for file_path in all_files:
         if os.path.isfile(file_path):
             if os.access(file_path, os.R_OK):
@@ -121,10 +121,10 @@ def get_read_paths(read1_path: str, read2_path: str) -> Tuple[str, str]:
         else:
             sys.exit(f"{file_path} does not exist. Exiting")
 
-    return (_read1_path, _read2_path)
+    return (_read1_paths, _read2_paths)
 
 
-def get_csv_reader_from_path(filename: str, sep: str = "\t") -> csv.reader:
+def get_csv_reader_from_path(filename: str, sep: str = "\t"):
     """
     Returns a csv_reader object for a file weather it's a flat file or compressed.
 
@@ -203,6 +203,10 @@ def check_file(file_str: str) -> Path:
     file_path = Path(file_str)
     if file_path.exists and access(file_path, R_OK):
         return file_path
+    else:
+        raise FileNotFoundError(
+            f"This file {file_path} does not exist or is not accessible"
+        )
 
 
 def write_dense(
@@ -280,7 +284,7 @@ def create_report(
     bad_cells,
     r1_too_short: int,
     r2_too_short: int,
-    args: ArgumentParser,
+    args: Namespace,
     chemistry_def,
     maximum_distance: int,
 ):
@@ -344,7 +348,7 @@ def create_report(
 
 
 def write_chunks_to_disk(
-    args: ArgumentParser,
+    args: Namespace,
     read1_paths: list[Path],
     read2_paths: list[Path],
     r2_min_length: int,
@@ -488,29 +492,39 @@ def write_chunks_to_disk(
         total_reads,
     )
 
-
+def create_mtx_df(main_df:pl.DataFrame, tags_df:pl.DataFrame, subset_df:pl.DataFrame):
+    tags_indexed = (
+        pl.concat(
+            [
+                tags_df,
+                pl.DataFrame(
+                    {FEATURE_NAME_COLUMN: UNMAPPED_NAME, SEQUENCE_COLUMN: "UNKNOWN"}
+                ),
+            ]
+        )
+        .sort(pl.col(FEATURE_NAME_COLUMN))
+        .with_row_count(offset=1, name=FEATURE_ID_COLUMN)
+    )
+    barcodes_indexed = subset_df.sort(pl.col(SUBSET_COLUMN)).with_row_count(
+        offset=1, name=BARCODE_ID_COLUMN
+    )
+    mtx_df = (
+        tags_indexed.join(main_df, on=FEATURE_NAME_COLUMN)
+        .join(barcodes_indexed, left_on=BARCODE_COLUMN, right_on=SUBSET_COLUMN)
+        .select([FEATURE_ID_COLUMN, BARCODE_ID_COLUMN, COUNT_COLUMN])
+    )
+    return mtx_df, tags_indexed, barcodes_indexed
+    
 def write_data_to_mtx(
     main_df: pl.DataFrame,
     tags_df: pl.DataFrame,
-    barcodes_df: pl.DataFrame,
+    subset_df: pl.DataFrame,
     data_type: str,
     outpath: str,
 ) -> None:
-    tags_indexed = pl.concat(
-        [
-            tags_df,
-            pl.DataFrame(
-                {FEATURE_NAME_COLUMN: UNMAPPED_NAME, SEQUENCE_COLUMN: "UNKNOWN"}
-            ),
-        ]
-    ).with_row_count(offset=1, name=FEATURE_ID_COLUMN)
-    barcodes_indexed = barcodes_df.with_row_count(offset=1, name=BARCODE_ID_COLUMN)
-    mtx_df = (
-        tags_indexed.join(main_df, on=FEATURE_NAME_COLUMN)
-        .join(barcodes_indexed, left_on=BARCODE_COLUMN, right_on=WHITELIST_COLUMN)
-        .select([FEATURE_ID_COLUMN, BARCODE_ID_COLUMN, COUNT_COLUMN])
-    )
+    mtx_df, tags_indexed, barcodes_indexed = create_mtx_df(main_df, tags_df, subset_df)
     data_path = Path(outpath) / f"{data_type}_count"
+    data_path.mkdir(parents=True, exist_ok=True)
     mtx_df.write_csv(include_header=False, file=data_path / TEMP_MTX, separator="\t")
     # Write out the full MTX matrix
     with open(data_path / TEMP_MTX, "r") as mtx_in:
@@ -523,15 +537,15 @@ def write_data_to_mtx(
     tags_indexed.sort(FEATURE_ID_COLUMN).select(FEATURE_NAME_COLUMN).write_csv(
         file=data_path / "features.csv", include_header=False
     )
-    compress_file(data_path / "features.csv", FEATURES_MTX)
-    barcodes_indexed.sort(BARCODE_ID_COLUMN).select(WHITELIST_COLUMN).write_csv(
+    compress_file(data_path / "features.csv", data_path / FEATURES_MTX)
+    barcodes_indexed.sort(BARCODE_ID_COLUMN).select(SUBSET_COLUMN).write_csv(
         file=data_path / "barcodes.csv", include_header=False
     )
-    compress_file(data_path / "barcodes.csv", BARCODE_MTX)
+    compress_file(data_path / "barcodes.csv", data_path / BARCODE_MTX)
 
 
 def write_mapping_input(
-    args: ArgumentParser,
+    args: Namespace,
     read1_paths: list[Path],
     read2_paths: list[Path],
     r2_min_length: int,
@@ -568,7 +582,7 @@ def write_mapping_input(
     temp_file = tempfile.NamedTemporaryFile(
         "w", dir=temp_path, suffix="_csc", delete=False
     )
-    temp_file_path = temp_file.name
+    temp_file_path = Path(temp_file.name)
     reads_written = 0
 
     for read1_path, read2_path in zip(read1_paths, read2_paths):

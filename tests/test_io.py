@@ -2,9 +2,28 @@ import pytest
 import os
 import gzip
 import scipy
-from cite_seq_count.io import get_n_lines, write_to_files, write_dense, get_read_paths
+from pathlib import Path
+from polars.testing import assert_frame_equal
+from cite_seq_count.constants import (
+    BARCODE_COLUMN,
+    COUNT_COLUMN,
+    FEATURE_NAME_COLUMN,
+    SEQUENCE_COLUMN,
+    SUBSET_COLUMN,
+    FEATURE_ID_COLUMN,
+    BARCODE_ID_COLUMN,
+    UNMAPPED_NAME,
+)
+from cite_seq_count.io import (
+    get_n_lines,
+    write_to_files,
+    get_read_paths,
+    write_data_to_mtx,
+    create_mtx_df
+)
 from collections import namedtuple
 import numpy as np
+import polars as pl
 
 # copied from https://stackoverflow.com/questions/3431825/generating-an-md5-checksum-of-a-file
 import hashlib
@@ -24,142 +43,163 @@ def md5(fname):
 
 
 @pytest.fixture
-def data():
-    from collections import OrderedDict
-    from scipy import sparse
+def correct_R1():
+    return Path("tests/test_data/fastq/correct_R1.fastq.gz")
 
-    pytest.correct_R1_path = "tests/test_data/fastq/correct_R1.fastq.gz"
-    pytest.correct_R2_path = "tests/test_data/fastq/correct_R2.fastq.gz"
-    pytest.corrupt_R1_path = "tests/test_data/fastq/corrupted_R1.fastq.gz"
-    pytest.corrupt_R2_path = "tests/test_data/fastq/corrupted_R2.fastq.gz"
 
-    pytest.correct_R1_multipath = "tests/test_data/fastq/correct_R1.fastq.gz,tests/test_data/fastq/correct_R1.fastq.gz"
-    pytest.correct_R2_multipath = "tests/test_data/fastq/correct_R2.fastq.gz,tests/test_data/fastq/correct_R2.fastq.gz"
-    pytest.incorrect_R2_multipath = (
-        "path/to/R2_1.fastq.gz,path/to/R2_2.fastq.gz,path/to/R2_3.fastq.gz"
+@pytest.fixture
+def correct_R2():
+    return Path("tests/test_data/fastq/correct_R2.fastq.gz")
+
+
+@pytest.fixture
+def corrupt_R1():
+    return Path("tests/test_data/fastq/corrupted_R1.fastq.gz")
+
+
+@pytest.fixture
+def corrupt_R2():
+    return Path("tests/test_data/fastq/corrupted_R2.fastq.gz")
+
+
+@pytest.fixture
+def correct_R1_multi():
+    return "tests/test_data/fastq/correct_R1.fastq.gz,tests/test_data/fastq/correct_R1.fastq.gz"
+
+
+@pytest.fixture
+def correct_R2_multi():
+    return "tests/test_data/fastq/correct_R2.fastq.gz,tests/test_data/fastq/correct_R2.fastq.gz"
+
+
+@pytest.fixture
+def corrupt_R2_multi():
+    return "tests/test_data/fastq/correct_R2.fastq.gz,tests/test_data/fastq/corrupted_R2.fastq.gz"
+
+
+@pytest.fixture
+def incorrect_R2_multipath():
+    return "path/to/R2_1.fastq.gz,path/to/R2_2.fastq.gz,path/to/R2_3.fastq.gz"
+
+
+@pytest.fixture
+def correct_multipath_combined(correct_R1, correct_R2):
+    return (
+        [correct_R1, correct_R1],
+        [correct_R2, correct_R2],
     )
-
-    pytest.correct_multipath_result = (
-        [pytest.correct_R1_path, pytest.correct_R1_path],
-        [pytest.correct_R2_path, pytest.correct_R2_path],
-    )
-    test_matrix = sparse.dok_matrix((4, 2), dtype=np.int32)
-    test_matrix[1, 1] = 1
-    pytest.sparse_matrix = test_matrix
-    pytest.filtered_cells = ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"]
-    tag = namedtuple("tag", ["name", "sequence", "id"])
-    pytest.parsed_tags_map = [
-        tag(name="test1", sequence="CGTA", id=0),
-        tag(name="test2", sequence="CGTA", id=1),
-        tag(name="test3", sequence="CGTA", id=2),
-        tag(name="unmapped", sequence="UNKNOWN", id=3),
-    ]
-
-    pytest.data_type = "umi"
-
-
-def test_write_to_files_wo_translation(data, tmpdir):
-    output_path = os.path.join(tmpdir, "without_translation")
-
-    mtx_path = os.path.join(output_path, "umi_count", "matrix.mtx.gz")
-    features_path = os.path.join(output_path, "umi_count", "features.tsv.gz")
-    barcodes_path = os.path.join(output_path, "umi_count", "barcodes.tsv.gz")
-    md5_sums = {
-        barcodes_path: "b7af6a32e83963606f181509a571966f",
-        features_path: "e889e780dbce481287c993dd043714c8",
-        mtx_path: "3ea98c44d88a947215bace0c72ac1303",
-    }
-
-    write_to_files(
-        pytest.sparse_matrix,
-        pytest.filtered_cells,
-        pytest.parsed_tags_map,
-        pytest.data_type,
-        output_path,
-        translation_dict=False,
-    )
-    file_path = os.path.join(tmpdir, "without_translation", "umi_count/matrix.mtx.gz")
-    with gzip.open(file_path, "rb") as mtx_file:
-        assert isinstance(scipy.io.mmread(mtx_file), scipy.sparse.coo_matrix)
-    assert md5_sums[barcodes_path] == md5(barcodes_path)
-    assert md5_sums[features_path] == md5(features_path)
-    assert md5_sums[mtx_path] == md5(mtx_path)
-
-
-def test_write_to_files_with_translation(data, tmpdir):
-    translation_dict = {
-        "ACTGTTTTATTGGCCT": "GGCTTCGATACTAGAT",
-        "TTCATAAGGTAGGGAT": "GATCGGATAGCTAATA",
-    }
-    output_path = os.path.join(tmpdir, "with_translation")
-
-    mtx_path = os.path.join(output_path, "umi_count", "matrix.mtx.gz")
-    features_path = os.path.join(output_path, "umi_count", "features.tsv.gz")
-    barcodes_path = os.path.join(output_path, "umi_count", "barcodes.tsv.gz")
-
-    md5_sums = {
-        barcodes_path: "fce83378b4dd548882fb9271bdd5b4f1",
-        features_path: "e889e780dbce481287c993dd043714c8",
-        mtx_path: "3ea98c44d88a947215bace0c72ac1303",
-    }
-
-    write_to_files(
-        pytest.sparse_matrix,
-        pytest.filtered_cells,
-        pytest.parsed_tags_map,
-        pytest.data_type,
-        output_path,
-        translation_dict=translation_dict,
-    )
-    file_path = os.path.join(tmpdir, "with_translation", "umi_count/matrix.mtx.gz")
-    with gzip.open(file_path, "rb") as mtx_file:
-        assert isinstance(scipy.io.mmread(mtx_file), scipy.sparse.coo_matrix)
-    assert md5_sums[barcodes_path] == md5(barcodes_path)
-    assert md5_sums[features_path] == md5(features_path)
-    assert md5_sums[mtx_path] == md5(mtx_path)
-
-
-def test_write_to_dense_wo_translation(data, tmpdir):
-    reference_dict = {"ACTGTTTTATTGGCCT": 0, "TTCATAAGGTAGGGAT": 0}
-    output_path = os.path.join(tmpdir, "without_translation")
-    csv_name = "dense_umis.tsv"
-    csv_path = os.path.join(output_path, csv_name)
-
-    md5_sums = {
-        csv_path: "fef502237900ec386d100169fa1fab7c",
-    }
-
-    write_dense(
-        sparse_matrix=pytest.sparse_matrix,
-        parsed_tags=pytest.parsed_tags_map,
-        columns=pytest.filtered_cells,
-        outfolder=output_path,
-        filename=csv_name,
-    )
-    file_path = os.path.join(tmpdir, "without_translation", csv_name)
-    assert md5_sums[csv_path] == md5(file_path)
 
 
 @pytest.mark.dependency()
-def test_get_n_lines(data):
-    assert get_n_lines(pytest.correct_R1_path) == (200 * 4)
+def test_get_n_lines(correct_R1):
+    assert get_n_lines(correct_R1) == (200 * 4)
 
 
-@pytest.mark.dependency()
-def test_corrrect_multipath(data):
+def test_corrrect_multipath(
+    correct_R1_multi, correct_R2_multi, correct_multipath_combined
+):
     assert (
-        get_read_paths(pytest.correct_R1_multipath, pytest.correct_R2_multipath)
-        == pytest.correct_multipath_result
+        get_read_paths(correct_R1_multi, correct_R2_multi) == correct_multipath_combined
     )
 
 
 @pytest.mark.dependency(depends=["test_get_n_lines"])
-def test_incorrrect_multipath(data):
+def test_incorrect_multipath(correct_R1_multi, incorrect_R2_multipath):
     with pytest.raises(SystemExit):
-        get_read_paths(pytest.correct_R1_multipath, pytest.incorrect_R2_multipath)
+        get_read_paths(correct_R1_multi, incorrect_R2_multipath)
 
 
 @pytest.mark.dependency(depends=["test_get_n_lines"])
-def test_get_n_lines_not_multiple_of_4(data):
+def test_get_n_lines_not_multiple_of_4(corrupt_R1):
     with pytest.raises(SystemExit):
-        get_n_lines(pytest.corrupt_R1_path)
+        get_n_lines(corrupt_R1)
+
+
+def test_write_data_to_mtx(tmp_path):
+    # Create test data
+    main_df = pl.DataFrame(
+        {
+            FEATURE_NAME_COLUMN: ["test1", "test2", "test3"],
+            BARCODE_COLUMN: [
+                "ACTGTTTTATTGGCCT",
+                "TTCATAAGGTAGGGAT",
+                "ACTGTTTTATTGGCCT",
+            ],
+            COUNT_COLUMN: [10, 20, 30],
+        }
+    )
+    tags_df = pl.DataFrame(
+        {
+            FEATURE_NAME_COLUMN: ["test1", "test2", "test3"],
+            SEQUENCE_COLUMN: ["CGTA", "CGTA", "CGTA"],
+        }
+    )
+    subset_df = pl.DataFrame({SUBSET_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"]})
+    data_type = "umi"
+    outpath = str(tmp_path)
+    print(outpath)
+
+    # Call the function
+    write_data_to_mtx(
+        main_df=main_df,
+        tags_df=tags_df,
+        subset_df=subset_df,
+        data_type=data_type,
+        outpath=outpath,
+    )
+
+    # Check if the output files exist
+    assert os.path.exists(os.path.join(outpath, "umi_count", "matrix.mtx.gz"))
+    assert os.path.exists(os.path.join(outpath, "umi_count", "features.tsv.gz"))
+    assert os.path.exists(os.path.join(outpath, "umi_count", "barcodes.tsv.gz"))
+
+    # TODO: Add assertions to validate the content of the output files
+def test_create_mtx_df():
+    # Create test data
+    main_df = pl.DataFrame(
+        {
+            FEATURE_NAME_COLUMN: ["test1", "test2", "test3"],
+            BARCODE_COLUMN: [
+                "ACTGTTTTATTGGCCT",
+                "TTCATAAGGTAGGGAT",
+                "ACTGTTTTATTGGCCT",
+            ],
+            COUNT_COLUMN: [10, 20, 30],
+        }
+    )
+    tags_df = pl.DataFrame(
+        {
+            FEATURE_NAME_COLUMN: ["test1", "test2", "test3"],
+            SEQUENCE_COLUMN: ["CGTA", "CGTA", "CGTA"],
+        }
+    )
+    subset_df = pl.DataFrame({SUBSET_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"]})
+
+    # Call the function
+    mtx_df, tags_indexed, barcodes_indexed = create_mtx_df(main_df, tags_df, subset_df)
+
+    # Check the output
+    expected_mtx_df = pl.DataFrame(
+        {
+            FEATURE_ID_COLUMN: [1, 2, 3],
+            BARCODE_ID_COLUMN: [1, 2, 1],
+            COUNT_COLUMN: [10, 20, 30],
+        }, schema={FEATURE_ID_COLUMN: pl.UInt32, BARCODE_ID_COLUMN: pl.UInt32, COUNT_COLUMN: pl.Int64}
+    )
+    expected_tags_indexed = pl.DataFrame(
+        {
+            FEATURE_NAME_COLUMN: ["test1", "test2", "test3", UNMAPPED_NAME],
+            SEQUENCE_COLUMN: ["CGTA", "CGTA", "CGTA", "UNKNOWN"],
+            FEATURE_ID_COLUMN: [1, 2, 3, 4],
+        }, schema={FEATURE_ID_COLUMN: pl.UInt32, SEQUENCE_COLUMN: pl.Utf8, FEATURE_NAME_COLUMN: pl.Utf8}
+    )
+    expected_barcodes_indexed = pl.DataFrame(
+        {
+            SUBSET_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"],
+            BARCODE_ID_COLUMN: [1, 2],
+        }, schema={SUBSET_COLUMN: pl.Utf8, BARCODE_ID_COLUMN: pl.UInt32}
+    )
+
+    assert_frame_equal(mtx_df, expected_mtx_df)
+    assert_frame_equal(tags_indexed, expected_tags_indexed, check_column_order=False)
+    assert_frame_equal(barcodes_indexed, expected_barcodes_indexed, check_column_order=False)

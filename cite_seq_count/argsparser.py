@@ -23,21 +23,6 @@ def get_package_version():
     return version
 
 
-def chunk_size_limit(chunk_size: int) -> int:
-    """Validates chunk_size limits"""
-    max_size = 2147483647
-    try:
-        chunk_value = int(chunk_size)
-    except ValueError:
-        raise SystemExit("Chunk size must be an int")
-    if chunk_value < 1 or chunk_value > max_size:
-        raise ArgumentTypeError(
-            "Argument must be < " + str(max_size) + "and > " + str(1)
-        )
-    else:
-        return chunk_value
-
-
 def thread_default() -> int:
     """
     Set number of threads default.
@@ -186,25 +171,24 @@ def get_args() -> ArgumentParser:
         default=0,
     )
     barcodes.add_argument(
-        "-fb",
-        "-wl",
-        "--filtered_barcodes",
-        dest="filtered_barcodes",
+        "-sub",
+        "--subset",
+        dest="subset_path",
         type=str,
         help=(
-            "A path to a specific list of barcodes to look for."
+            "A path to a subset list of barcodes to look for."
             "\tExample:\n"
-            "\twhitelist\n"
+            "\treference\n"
             "\tAAACCCAAGAAACACT\nAAACCCAAGAAACCAT\nAAACCCAAGAAACCCA\n"
         ),
-        default=False,
+        default=None,
     )
 
     if "--chemistry" not in sys.argv:
         barcodes.add_argument(
-            "-br",
-            "--barcode_reference",
-            dest="barcode_reference",
+            "-ref",
+            "--reference",
+            dest="reference",
             required=False,
             type=str,
             default=False,
@@ -239,14 +223,14 @@ def get_args() -> ArgumentParser:
         help=("Number of bases to discard from read2."),
     )
 
-    filters.add_argument(
-        "--sliding-window",
-        dest="sliding_window",
-        required=False,
-        default=False,
-        action="store_true",
-        help=("Allow for a sliding window when aligning."),
-    )
+    # filters.add_argument(
+    #     "--sliding-window",
+    #     dest="sliding_window",
+    #     required=False,
+    #     default=False,
+    #     action="store_true",
+    #     help=("Allow for a sliding window when aligning."),
+    # )
 
     # Parallel group.
     parallel = parser.add_argument_group(
@@ -263,15 +247,6 @@ def get_args() -> ArgumentParser:
         default=thread_default(),
         help=("How many threads are to be used for running the program"),
     )
-    parallel.add_argument(
-        "-C",
-        "--chunk_size",
-        required=False,
-        type=chunk_size_limit,
-        dest="chunk_size",
-        help=("How many reads should be sent to a child process at a time"),
-    )
-
     # Global group
     parser.add_argument(
         "--temp_path",
@@ -302,14 +277,6 @@ def get_args() -> ArgumentParser:
         help=("Results will be written to this folder"),
     )
     parser.add_argument(
-        "--dense",
-        required=False,
-        action="store_true",
-        default=False,
-        dest="dense",
-        help=("Add a dense output to the results folder"),
-    )
-    parser.add_argument(
         "-u",
         "--unmapped-tags",
         required=False,
@@ -326,9 +293,6 @@ def get_args() -> ArgumentParser:
         type=int,
         default=100,
         help=("Top n unmapped TAGs."),
-    )
-    parser.add_argument(
-        "--debug", action="store_true", help=("Print extra information for debugging.")
     )
     parser.add_argument(
         "--version",

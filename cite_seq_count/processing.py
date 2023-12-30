@@ -1,25 +1,13 @@
 import os
-import Levenshtein
-import pybktree
 
 import polars as pl
 from rapidfuzz import distance
 
-from collections import namedtuple
-
-# pylint: disable=no-name-in-module
-from multiprocess import Pool
-
-
-from numpy import int32
-from scipy import sparse
 from umi_tools import network
 
-
 from cite_seq_count.constants import (
-    WHITELIST_COLUMN,
+    SUBSET_COLUMN,
     BARCODE_COLUMN,
-    CORRECTED_BARCODE_COLUMN,
     FEATURE_NAME_COLUMN,
     R2_COLUMN,
     UMI_COLUMN,
@@ -32,7 +20,7 @@ def correct_barcodes_pl(
     barcode_subset_df: pl.DataFrame,
     hamming_distance: int,
 ) -> tuple[pl.DataFrame, int, dict]:
-    """Corrects barcodes using a whitelist based on join_asof from polars.
+    """Corrects barcodes using a subset based on join_asof from polars.
     Uses both forward and backward strategy to dinf the closest barcode
 
     Args:
@@ -49,30 +37,31 @@ def correct_barcodes_pl(
         schema={
             BARCODE_COLUMN: pl.Utf8,
             "count": pl.UInt32,
-            WHITELIST_COLUMN: pl.Utf8,
+            SUBSET_COLUMN: pl.Utf8,
             "hamming_distance": pl.UInt8,
         }
     )
-    methods = ["backward", "forward"]
+
+    methods = ["forward", "backward"]
     for method in methods:
         current_barcodes = (
             barcodes_df.filter(
                 (~pl.col(BARCODE_COLUMN).is_in(corrected_barcodes_pl[BARCODE_COLUMN]))
-                & (~pl.col(BARCODE_COLUMN).is_in(barcode_subset_df[WHITELIST_COLUMN]))
+                & (~pl.col(BARCODE_COLUMN).is_in(barcode_subset_df[SUBSET_COLUMN]))
             )
             .sort(BARCODE_COLUMN)
             .join_asof(
-                barcode_subset_df.sort(WHITELIST_COLUMN),
+                barcode_subset_df.sort(SUBSET_COLUMN),
                 left_on=BARCODE_COLUMN,
-                right_on=WHITELIST_COLUMN,
-                strategy=method,
+                right_on=SUBSET_COLUMN,
+                strategy=method,  # type: ignore
             )
-            .filter(~pl.col(WHITELIST_COLUMN).is_null())
+            .filter(~pl.col(SUBSET_COLUMN).is_null())
             .with_columns(
-                pl.struct(pl.col(BARCODE_COLUMN), pl.col(WHITELIST_COLUMN))
+                pl.struct(pl.col(BARCODE_COLUMN), pl.col(SUBSET_COLUMN))
                 .map_elements(
                     lambda x: distance.Hamming.distance(
-                        x[BARCODE_COLUMN], x[WHITELIST_COLUMN]
+                        x[BARCODE_COLUMN], x[SUBSET_COLUMN]
                     ),
                     return_dtype=pl.UInt8,
                 )
@@ -82,7 +71,7 @@ def correct_barcodes_pl(
         )
         corrected_barcodes_pl = pl.concat([corrected_barcodes_pl, current_barcodes])
     mapped_barcodes = dict(
-        corrected_barcodes_pl.select(BARCODE_COLUMN, WHITELIST_COLUMN).iter_rows()
+        corrected_barcodes_pl.select(BARCODE_COLUMN, SUBSET_COLUMN).iter_rows()  # type: ignore
     )
     final_corrected = (
         barcodes_df.with_columns(
@@ -116,8 +105,6 @@ def update_main_df(main_df: pl.DataFrame, mapped_barcodes: dict):
 
 
 # UMI correction section
-
-
 def correct_umis_in_cells(umi_correction_input):
     """
     Corrects umi barcodes within same cell/tag groups.
