@@ -9,13 +9,12 @@ import datetime
 import tempfile
 import json
 
-from collections import namedtuple, Counter
 from argparse import Namespace
 from itertools import islice
+from collections import Counter
 from typing import Tuple, TextIO
 from pathlib import Path
 from os import access, R_OK
-
 
 import scipy
 import pkg_resources
@@ -344,152 +343,6 @@ def create_report(
         os.path.join(args.outfolder, "run_report.yaml"), "w", encoding="utf-8"
     ) as report_file:
         yaml.dump(report_data, report_file, default_flow_style=False, sort_keys=False)
-
-
-def write_chunks_to_disk(
-    args: Namespace,
-    read1_paths: list[Path],
-    read2_paths: list[Path],
-    r2_min_length: int,
-    n_reads_per_chunk: int,
-    chemistry_def,
-    parsed_tags: pl.DataFrame,
-    maximum_distance,
-):
-    """
-    Writes chunked files of reads to disk and prepares parallel
-    processing queue parameters.
-
-    Args:
-        args(argparse): All parsed arguments.
-        read1_paths (list): List of R1 fastq.gz paths.
-        read2_paths (list): List of R2 fastq.gz paths.
-        r2_min_length (int):  Minimum length of read2 sequences.
-        n_reads_per_chunk (int): How many reads per chunk.
-        chemistry_def (namedtuple): Hols all the information about the chemistry definition.
-        parsed_tags (list): List of namedtuple tags.
-        maximum_distance (int): Maximum hamming distance for mapping.
-    """
-    mapping_input = namedtuple(
-        "mapping_input",
-        ["filename", "tags", "debug", "maximum_distance", "sliding_window"],
-    )
-
-    print("Writing chunks to disk")
-
-    num_chunk = 0
-    if not args.chunk_size:
-        chunk_size = round(n_reads_per_chunk / args.n_threads)
-    else:
-        chunk_size = args.chunk_size
-    temp_path = os.path.abspath(args.temp_path)
-    input_queue = []
-    temp_files = []
-    r1_too_short = 0
-    r2_too_short = 0
-    total_reads = 0
-    total_reads_written = 0
-    enough_reads = False
-
-    barcode_slice = slice(
-        chemistry_def.cell_barcode_start - 1, chemistry_def.cell_barcode_end
-    )
-    umi_slice = slice(
-        chemistry_def.umi_barcode_start - 1, chemistry_def.umi_barcode_end
-    )
-
-    chunked_file_object = tempfile.NamedTemporaryFile(
-        "w", dir=temp_path, suffix="_csc", delete=False
-    )
-    # chunked_file_object = open(temp_file, "w")
-    temp_files.append(chunked_file_object.name)
-    reads_written = 0
-
-    for read1_path, read2_path in zip(read1_paths, read2_paths):
-        if enough_reads:
-            break
-        print(f"Reading reads from files: {read1_path}, {read2_path}")
-        with gzip.open(read1_path, "rt") as textfile1, gzip.open(
-            read2_path, "rt"
-        ) as textfile2:
-            secondlines = islice(zip(textfile1, textfile2), 1, None, 4)
-
-            for read1, read2 in secondlines:
-                total_reads += 1
-
-                read1 = read1.strip()
-                if len(read1) < chemistry_def.umi_barcode_end:
-                    r1_too_short += 1
-                    # The entire read is skipped
-                    continue
-                if len(read2) < r2_min_length:
-                    r2_too_short += 1
-                    # The entire read is skipped
-                    continue
-
-                read1_sliced = read1[
-                    chemistry_def.cell_barcode_start - 1 : chemistry_def.umi_barcode_end
-                ]
-
-                read2_sliced = read2[
-                    chemistry_def.r2_trim_start : (
-                        r2_min_length + chemistry_def.r2_trim_start
-                    )
-                ]
-                chunked_file_object.write(
-                    "{},{},{}\n".format(
-                        read1_sliced[barcode_slice],
-                        read1_sliced[umi_slice],
-                        read2_sliced,
-                    )
-                )
-
-                reads_written += 1
-                total_reads_written += 1
-                if reads_written % chunk_size == 0 and reads_written != 0:
-                    # We have enough reads in this chunk, open a new one
-                    chunked_file_object.close()
-                    input_queue.append(
-                        mapping_input(
-                            filename=chunked_file_object.name,
-                            tags=parsed_tags,
-                            debug=args.debug,
-                            maximum_distance=maximum_distance,
-                            sliding_window=args.sliding_window,
-                        )
-                    )
-                    if total_reads_written == n_reads_per_chunk:
-                        enough_reads = True
-                        chunked_file_object.close()
-                        break
-                    num_chunk += 1
-                    chunked_file_object = tempfile.NamedTemporaryFile(
-                        "w", dir=temp_path, suffix="_csc", delete=False
-                    )
-                    temp_files.append(chunked_file_object.name)
-                    reads_written = 0
-                if total_reads_written == n_reads_per_chunk:
-                    enough_reads = True
-                    chunked_file_object.close()
-                    break
-    if not enough_reads:
-        chunked_file_object.close()
-        input_queue.append(
-            mapping_input(
-                filename=chunked_file_object.name,
-                tags=parsed_tags,
-                debug=args.debug,
-                maximum_distance=maximum_distance,
-                sliding_window=args.sliding_window,
-            )
-        )
-    return (
-        input_queue,
-        temp_files,
-        r1_too_short,
-        r2_too_short,
-        total_reads,
-    )
 
 
 def create_mtx_df(

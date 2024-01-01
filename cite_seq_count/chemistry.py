@@ -27,7 +27,7 @@ class Chemistry:
     barcode_reference_path: str
 
     def __post_init__(self):
-        self.barcode_length = self.cell_barcode_end - self.umi_barcode_start
+        self.barcode_length = self.cell_barcode_end - self.umi_barcode_start + 1
 
 
 DEFINITIONS_DB = pooch.create(
@@ -138,9 +138,7 @@ def setup_chemistry(args: Namespace) -> tuple[pl.DataFrame | None, Chemistry]:
         chemistry_def = get_chemistry_definition(args.chemistry_id)
         barcode_reference = parse_barcode_file(
             filename=chemistry_def.barcode_reference_path,
-            barcode_length=chemistry_def.cell_barcode_end
-            - chemistry_def.cell_barcode_start
-            + 1,
+            barcode_length=chemistry_def.barcode_length,
             required_header=["reference"],
         )
     else:
@@ -149,7 +147,7 @@ def setup_chemistry(args: Namespace) -> tuple[pl.DataFrame | None, Chemistry]:
             print("Loading barcode reference")
             barcode_reference = parse_barcode_file(
                 filename=args.reference,
-                barcode_length=args.cb_last - args.cb_first + 1,
+                barcode_length=chemistry_def.barcode_length,
                 required_header=["reference"],
             )
         else:

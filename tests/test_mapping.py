@@ -1,9 +1,12 @@
+from ast import parse
 import pytest
 import random
 import copy
-from collections import Counter, namedtuple
 from cite_seq_count import mapping
+from polars.testing import assert_frame_equal
 from cite_seq_count.preprocessing import parse_tags_csv
+from cite_seq_count.constants import R2_COLUMN, SEQUENCE_COLUMN, FEATURE_NAME_COLUMN
+import polars as pl
 
 
 def complete_poly_A(seq, final_length=40):
@@ -49,97 +52,58 @@ def modify(seq, n, modification_type):
 
 
 @pytest.fixture
-def data():
-    from collections import Counter
-
-    pytest.file_path = "tests/test_data/fastq/test_csv.csv"
-    pytest.debug = False
-    pytest.barcode_slice = slice(0, 16)
-    pytest.umi_slice = slice(16, 26)
-    pytest.correct_reference_list = set(["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"])
-    pytest.maximum_distance = 5
-    pytest.results = {
-        "ACTGTTTTATTGGCCT": {
-            0: Counter({b"CATTAGTGGT": 3, b"CATTAGTGGG": 2, b"CATTCGTGGT": 1})
-        },
-        "TTCATAAGGTAGGGAT": {
-            1: Counter({b"TAGCTTAGTA": 3, b"TAGCTTAGTC": 2, b"GCGATGCATA": 1})
-        },
-    }
-
-    pytest.sliding_window = False
-    pytest.sequence_pool = []
-    pytest.tags_tuple = parse_tags_csv(
-        parse_tags_csv("tests/test_data/tags/pass/correct.csv")
-    )
-    pytest.mapping_input = namedtuple(
-        "mapping_input",
-        ["filename", "tags", "debug", "maximum_distance", "sliding_window"],
-    )
-    pytest.mappint_input_test = pytest.mapping_input(
-        filename=pytest.file_path,
-        tags=pytest.tags_tuple,
-        debug=pytest.debug,
-        maximum_distance=pytest.maximum_distance,
-        sliding_window=pytest.sliding_window,
-    )
+def small_dataset_path():
+    return "tests/test_data/fastq/test_csv.csv"
 
 
-@pytest.mark.dependency()
-def test_find_best_match_with_1_distance(data):
-    distance = 1
-    for tag in pytest.tags_tuple:
-        counts = Counter()
-        if tag.name == "unmapped":
-            continue
-        for seq in extend_seq_pool(tag.sequence, distance):
-            counts[mapping.find_best_match(seq, pytest.tags_tuple, distance)] += 1
-        assert counts[tag.id] == 4
+@pytest.fixture
+def parsed_tags_df():
+    return parse_tags_csv("tests/test_data/tags/pass/correct.csv")
 
 
-@pytest.mark.dependency()
-def test_find_best_match_with_2_distance(data):
-    distance = 2
-    for tag in pytest.tags_tuple:
-        counts = Counter()
-        if tag.name == "unmapped":
-            continue
-        for seq in extend_seq_pool(tag.sequence, distance):
-            counts[mapping.find_best_match(seq, pytest.tags_tuple, distance)] += 1
-        assert counts[tag.id] == 4
+@pytest.fixture
+def r2_df():
+    # Create a sample DataFrame for r2_df
+    return pl.DataFrame({
+        R2_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT", "AGCTAGCTAGCTAGCT"],
+    })
 
+@pytest.fixture
+def parsed_tags():
+    # Create a sample DataFrame for parsed_tags
+    return pl.DataFrame({
+        SEQUENCE_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"],
+        FEATURE_NAME_COLUMN: ["feature1", "feature2"]
+    })
 
-@pytest.mark.dependency()
-def test_find_best_match_with_3_distance(data):
-    distance = 3
-    for tag in pytest.tags_tuple:
-        counts = Counter()
-        for seq in extend_seq_pool(tag.sequence, distance):
-            counts[mapping.find_best_match(seq, pytest.tags_tuple, distance)] += 1
-        assert counts[tag.id] == 4
+def test_map_reads_polars_with_dist1(r2_df, parsed_tags):
+    maximum_distance = 1
+    expected_mapped = pl.DataFrame({
+        R2_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"],
+        FEATURE_NAME_COLUMN: ["feature1", "feature2"]
+    })
+    expected_unmapped = pl.DataFrame({
+        R2_COLUMN: ["AGCTAGCTAGCTAGCT"],
+        FEATURE_NAME_COLUMN: ["unmapped"]
+    })
 
+    mapped, unmapped = mapping.map_reads_polars(r2_df, parsed_tags, maximum_distance)
 
-@pytest.mark.dependency()
-def test_find_best_match_with_3_distance_reverse(data):
-    distance = 3
-    for tag in pytest.tags_tuple:
-        counts = Counter()
-        if tag.name == "unmapped":
-            continue
-        for seq in extend_seq_pool(tag.sequence, distance):
-            counts[mapping.find_best_match(seq, pytest.tags_tuple, distance)] += 1
-        assert counts[tag.id] == 4
+    assert_frame_equal(mapped, expected_mapped)
+    assert_frame_equal(unmapped, expected_unmapped)
 
+def test_map_reads_polars_with_dist2(r2_df, parsed_tags):
+    maximum_distance = 2
+    expected_mapped = pl.DataFrame({
+        R2_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"],
+        FEATURE_NAME_COLUMN: ["feature1", "feature2"]
+    })
+    expected_unmapped = pl.DataFrame({
+        R2_COLUMN: ["AGCTAGCTAGCTAGCT"],
+        FEATURE_NAME_COLUMN: ["unmapped"]
+    })
 
-@pytest.mark.dependency(
-    depends=[
-        "test_find_best_match_with_1_distance",
-        "test_find_best_match_with_2_distance",
-        "test_find_best_match_with_3_distance",
-        "test_find_best_match_with_3_distance_reverse",
-    ]
-)
-def test_classify_reads_multi_process(data):
-    (results, _) = mapping.map_reads(pytest.mappint_input_test)
-    print(results)
-    assert len(results) == 2
+    mapped, unmapped = mapping.map_reads_polars(r2_df, parsed_tags, maximum_distance)
+
+    assert_frame_equal(mapped, expected_mapped)
+    assert_frame_equal(unmapped, expected_unmapped)

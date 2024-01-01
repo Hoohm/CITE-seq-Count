@@ -1,7 +1,9 @@
 """Mapping module. Holds all code related to mapping reads
 """
+from turtle import right
 import polars as pl
-from rapidfuzz import fuzz, process, distance
+from rapidfuzz import fuzz, process
+import polars_distance as pld
 
 from cite_seq_count.constants import (
     COUNT_COLUMN,
@@ -12,13 +14,23 @@ from cite_seq_count.constants import (
 )
 
 
-def find_best_match_fast(tag_seq, tags_list, maximum_distance):
-    choices = tags_list[SEQUENCE_COLUMN].to_list()
-    features = tags_list[FEATURE_NAME_COLUMN].to_list()
-    res = process.extractOne(choices=choices, query=tag_seq, scorer=fuzz.QRatio)
-    min_score = (len(tag_seq) - maximum_distance) / len(tag_seq) * 100
-    if res[1] >= min_score:
-        return features[res[2]]
+def find_best_match_fast(tag_seq, tags_df, maximum_distance):
+    min_scores = (
+        tags_df.with_columns(pl.col("sequence").str.len_chars().alias("seq_length"))
+        .with_columns(
+            (
+                (pl.col("seq_length") - maximum_distance) / pl.col("seq_length") * 100
+            ).alias("min_score")
+        )["min_score"]
+        .to_list()
+    )
+    choices = tags_df[SEQUENCE_COLUMN].to_list()
+    features = tags_df[FEATURE_NAME_COLUMN].to_list()
+    _, score, index = process.extractOne(
+        choices=choices, query=tag_seq, scorer=fuzz.partial_ratio
+    )
+    if score >= min_scores[index]:
+        return features[index]
     return UNMAPPED_NAME
 
 
@@ -46,7 +58,7 @@ def map_reads_hybrid(
             pl.col(R2_COLUMN)
             .map_elements(
                 lambda x: find_best_match_fast(
-                    x, tags_list=parsed_tags, maximum_distance=maximum_distance
+                    x, tags_df=parsed_tags, maximum_distance=maximum_distance
                 )
             )
             .alias(FEATURE_NAME_COLUMN)
@@ -56,6 +68,36 @@ def map_reads_hybrid(
     unmapped_r2_df = mapped_r2_df.filter(pl.col(FEATURE_NAME_COLUMN) == UNMAPPED_NAME)
     print("Mapping done")
     return mapped_r2_df, unmapped_r2_df
+
+
+def map_reads_polars(
+    r2_df: pl.DataFrame, parsed_tags: pl.DataFrame, maximum_distance: int
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    joined = r2_df.join(
+        parsed_tags, left_on=R2_COLUMN, right_on=SEQUENCE_COLUMN, how="left"
+    )
+
+    simple_join = joined.filter(~pl.col(FEATURE_NAME_COLUMN).is_null())
+    hamming_mapped = (joined.filter(pl.col(FEATURE_NAME_COLUMN).is_null())
+            .join(parsed_tags, left_on=R2_COLUMN, right_on=SEQUENCE_COLUMN, how="cross")
+            .drop(FEATURE_NAME_COLUMN)
+            .with_columns(
+                pld.col(SEQUENCE_COLUMN)
+                .dist_str.hamming(pl.col(R2_COLUMN))
+                .alias("hamming_dist")
+            )
+            .filter(pl.col("hamming_dist") <= maximum_distance)
+            .drop([SEQUENCE_COLUMN, "hamming_dist"])
+            .rename({"feature_name_right": FEATURE_NAME_COLUMN})
+            )
+    multi_mapped = hamming_mapped.group_by(R2_COLUMN).agg(pl.count()).filter(pl.col(COUNT_COLUMN)>1)
+    print(simple_join)
+    print(hamming_mapped)
+    mapped = pl.concat([simple_join, hamming_mapped.filter(~pl.col(R2_COLUMN).is_in(multi_mapped[R2_COLUMN]))])
+    unmapped = joined.filter(~pl.col(R2_COLUMN).is_in(mapped[R2_COLUMN])).with_columns(
+        pl.col(FEATURE_NAME_COLUMN).fill_null(UNMAPPED_NAME)
+    )
+    return mapped, unmapped
 
 
 def check_unmapped(mapped_reads: pl.DataFrame):

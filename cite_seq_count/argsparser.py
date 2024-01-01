@@ -4,13 +4,12 @@
 import sys
 import tempfile
 
-from argparse import ArgumentParser, ArgumentTypeError, RawTextHelpFormatter
+from argparse import ArgumentParser, RawTextHelpFormatter
 
 import pkg_resources
 
 
-# pylint: disable=no-name-in-module
-from multiprocess import cpu_count
+from multiprocessing import cpu_count
 
 
 def get_package_version():

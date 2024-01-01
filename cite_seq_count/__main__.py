@@ -84,7 +84,7 @@ def main():
     )
     # Remove temp file
     os.remove(temp_file)
-    mapped_r2_df, unmapped_r2_df = mapping.map_reads_hybrid(
+    mapped_r2_df, unmapped_r2_df = mapping.map_reads_polars(
         r2_df=r2_df,
         parsed_tags=parsed_tags,
         maximum_distance=maximum_distance,
@@ -145,6 +145,8 @@ def main():
         mapped_r2_df=mapped_r2_df,
         data_type="umi",
     )
+
+    umi_counts.write_parquet(file=args.outfolder + "/umi_counts.parquet")
 
     # Write umis to file
     io.write_data_to_mtx(
