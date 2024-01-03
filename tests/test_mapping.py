@@ -64,44 +64,53 @@ def parsed_tags_df():
 @pytest.fixture
 def r2_df():
     # Create a sample DataFrame for r2_df
-    return pl.DataFrame({
-        R2_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT", "AGCTAGCTAGCTAGCT"],
-    })
+    return pl.DataFrame(
+        {
+            R2_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT", "AGCTAGCTAGCTAGCT"],
+        }
+    )
+
 
 @pytest.fixture
 def parsed_tags():
     # Create a sample DataFrame for parsed_tags
-    return pl.DataFrame({
-        SEQUENCE_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"],
-        FEATURE_NAME_COLUMN: ["feature1", "feature2"]
-    })
+    return pl.DataFrame(
+        {
+            SEQUENCE_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"],
+            FEATURE_NAME_COLUMN: ["feature1", "feature2"],
+        }
+    )
+
 
 def test_map_reads_polars_with_dist1(r2_df, parsed_tags):
     maximum_distance = 1
-    expected_mapped = pl.DataFrame({
-        R2_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"],
-        FEATURE_NAME_COLUMN: ["feature1", "feature2"]
-    })
-    expected_unmapped = pl.DataFrame({
-        R2_COLUMN: ["AGCTAGCTAGCTAGCT"],
-        FEATURE_NAME_COLUMN: ["unmapped"]
-    })
+    expected_mapped = pl.DataFrame(
+        {
+            R2_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"],
+            FEATURE_NAME_COLUMN: ["feature1", "feature2"],
+        }
+    )
+    expected_unmapped = pl.DataFrame(
+        {R2_COLUMN: ["AGCTAGCTAGCTAGCT"], FEATURE_NAME_COLUMN: ["unmapped"]}
+    )
 
     mapped, unmapped = mapping.map_reads_polars(r2_df, parsed_tags, maximum_distance)
 
     assert_frame_equal(mapped, expected_mapped)
     assert_frame_equal(unmapped, expected_unmapped)
 
+
 def test_map_reads_polars_with_dist2(r2_df, parsed_tags):
     maximum_distance = 2
-    expected_mapped = pl.DataFrame({
-        R2_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"],
-        FEATURE_NAME_COLUMN: ["feature1", "feature2"]
-    })
-    expected_unmapped = pl.DataFrame({
-        R2_COLUMN: ["AGCTAGCTAGCTAGCT"],
-        FEATURE_NAME_COLUMN: ["unmapped"]
-    })
+    expected_mapped = pl.DataFrame(
+        {
+            R2_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"],
+            FEATURE_NAME_COLUMN: ["feature1", "feature2"],
+        }
+    )
+    expected_unmapped = pl.DataFrame(
+        {R2_COLUMN: ["AGCTAGCTAGCTAGCT"], FEATURE_NAME_COLUMN: ["unmapped"]}
+    )
 
     mapped, unmapped = mapping.map_reads_polars(r2_df, parsed_tags, maximum_distance)
 

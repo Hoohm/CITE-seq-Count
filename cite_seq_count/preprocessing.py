@@ -269,6 +269,10 @@ def get_read_length(filename: Path) -> int:
     return read_length
 
 
+def read_fastq_to_polars():
+    pass
+
+
 def check_barcodes_lengths(
     read1_length: int, cb_first: int, cb_last: int, umi_first: int, umi_last: int
 ):
@@ -326,7 +330,7 @@ def pre_run_checks(
 
     for read1_path in read1_paths:
         n_lines = get_n_lines(read1_path)
-        total_reads += n_lines / 4
+        total_reads += round(n_lines / 4)
         # Get reads length. So far, there is no validation for Read2.
         read1_lengths.append(get_read_length(read1_path))
 
@@ -361,7 +365,7 @@ def pre_run_checks(
 
 
 def split_data_input(
-    mapping_input_path: Path,
+    mapping_input_path: Path, n_reads: int
 ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
     """Read in all the input data and split it into three dataframes.
 
@@ -382,6 +386,7 @@ def split_data_input(
             mapping_input_path,
             has_header=False,
             new_columns=[BARCODE_COLUMN, UMI_COLUMN, R2_COLUMN],
+            n_rows=n_reads
         )
         .group_by([BARCODE_COLUMN, UMI_COLUMN, R2_COLUMN])
         .agg(pl.count())

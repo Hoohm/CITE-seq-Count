@@ -208,34 +208,6 @@ def check_file(file_str: str) -> Path:
         )
 
 
-def write_dense(
-    sparse_matrix: scipy.sparse.coo_matrix,
-    parsed_tags: dict,
-    columns: set,
-    outfolder: str,
-    filename: str,
-):
-    """
-    Writes a dense matrix in a csv format
-
-    Args:
-       sparse_matrix (dok_matrix): Results in a sparse matrix.
-       index (list): List of TAGS
-       columns (set): List of cells
-       outfolder (str): Output folder
-       filename (str): Filename
-    """
-    prefix = os.path.join(outfolder)
-    os.makedirs(prefix, exist_ok=True)
-    index = []
-    for tag in parsed_tags:
-        index.append(tag.name)
-    pandas_dense = pd.DataFrame(
-        sparse_matrix.todense(), columns=list(columns), index=index
-    )
-    pandas_dense.to_csv(os.path.join(outfolder, filename), sep="\t")
-
-
 def write_unmapped(
     merged_no_match: Counter, top_unknowns: int, outfolder: str, filename: str
 ):
@@ -489,3 +461,6 @@ def write_mapping_input(
         r2_too_short,
         total_reads,
     )
+
+
+

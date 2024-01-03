@@ -15,7 +15,6 @@ from cite_seq_count.constants import (
     UNMAPPED_NAME,
 )
 
-
 def correct_barcodes_pl(
     barcodes_df: pl.DataFrame,
     barcode_subset_df: pl.DataFrame,
@@ -120,11 +119,70 @@ def update_main_df(main_df: pl.DataFrame, mapped_barcodes: dict):
         pl.DataFrame: Data of all reads with barcodes corrected
     """
     main_df = (
-        main_df.with_columns(pl.col(BARCODE_COLUMN).map_dict(mapped_barcodes))
+        main_df.with_columns(
+            pl.col(BARCODE_COLUMN).map_dict(mapped_barcodes, default=pl.first())
+        )
         .group_by([BARCODE_COLUMN, UMI_COLUMN, R2_COLUMN])
         .agg(pl.sum("count"))
     )
     return main_df
+
+
+def find_corrected_umis(
+    main_df, mapped_r2_df, umi_distance=1, cluster_method="directional", max_umis=20000
+):
+    merged = mapped_r2_df.join(main_df, on="r2")
+    temp = (
+        merged.with_columns(umi=pl.col("umi").cast(pl.Binary))
+        .group_by(["r2", "feature_name", "barcode"])
+        .agg(pl.struct(pl.col("umi"), pl.col("count")))
+        .filter((pl.col("umi").list.len() > 1) & (pl.col("umi").list.len() < max_umis))
+    )
+    mapping = {"r2": [], "feature_name": [], "barcode": [], "orig": [], "replace": []}
+    for r2, feature_name, barcode, umis in temp.iter_rows():
+        corrected_umis = correct_umis(
+            umis, cluster_method=cluster_method, umi_distance=umi_distance
+        )
+        if len(corrected_umis) == 0:
+            continue
+        for umi_set in corrected_umis:
+            for index, umi in enumerate(umi_set):
+                if index != 0:
+                    mapping["r2"].append(r2)
+                    mapping["feature_name"].append(feature_name)
+                    mapping["barcode"].append(barcode)
+                    mapping["orig"].append(umi)
+                    mapping["replace"].append(umi_set[0])
+    mapping_df = (
+        pl.DataFrame(mapping)
+        .with_columns(
+            pl.col("orig").cast(pl.String).alias("umi"),
+            pl.col("replace").cast(pl.String),
+        )
+        .drop("orig")
+    )
+    read_counts = (
+        merged.join(mapping_df, on=["r2", "feature_name", "barcode", "umi"], how="left")
+        .with_columns(
+            pl.when(pl.col("replace").is_null())
+            .then(pl.col("umi"))
+            .otherwise(pl.col("replace"))
+            .alias("umi")
+        )
+        .drop("replace")
+        .group_by(["r2", "barcode", "feature_name", "umi"])
+        .agg(pl.sum("count")).drop("r2")
+    )
+    return read_counts
+
+
+def correct_umis(umis_list, cluster_method, umi_distance):
+    umi_clusterer = network.UMIClusterer(cluster_method=cluster_method)
+    umis = dict([(i["umi"], i["count"]) for i in umis_list])
+
+    res = umi_clusterer(umis, umi_distance)
+    corrected = [corrected_umis for corrected_umis in res if len(corrected_umis) > 1]
+    return corrected
 
 
 # UMI correction section
