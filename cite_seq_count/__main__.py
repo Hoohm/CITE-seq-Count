@@ -124,7 +124,9 @@ def main():
 
     # # Write reads to file
     io.write_data_to_mtx(
-        main_df=final_read_counts,
+        main_df=final_read_counts.group_by(
+            [constants.BARCODE_COLUMN, constants.FEATURE_NAME_COLUMN]
+        ).agg(pl.sum(constants.COUNT_COLUMN)),
         tags_df=parsed_tags,
         subset_df=barcode_subset,
         data_type="read",
@@ -133,14 +135,6 @@ def main():
     umi_counts = processing.generate_umi_counts(read_counts=final_read_counts)
     io.write_out_parquet(df=umi_counts, outpath=args.outfolder, filename="umi_counts")
 
-    # Write umis to file
-    io.write_data_to_mtx(
-        main_df=final_read_counts,
-        tags_df=parsed_tags,
-        subset_df=barcode_subset,
-        data_type="read",
-        outpath=args.outfolder,
-    )
     io.write_data_to_mtx(
         main_df=umi_counts,
         tags_df=parsed_tags,

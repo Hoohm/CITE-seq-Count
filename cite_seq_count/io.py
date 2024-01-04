@@ -367,7 +367,9 @@ def write_data_to_mtx(
     data_path.mkdir(parents=True, exist_ok=True)
     mtx_df.write_csv(include_header=False, file=data_path / TEMP_MTX, separator=" ")
     # Write out the full MTX matrix
-    first_line_mtx = f"{tags_indexed.shape[0]} {barcodes_indexed.shape[0]} {mtx_df.shape[0]}\n"
+    first_line_mtx = (
+        f"{tags_indexed.shape[0]} {barcodes_indexed.shape[0]} {mtx_df.shape[0]}\n"
+    )
     with open(data_path / TEMP_MTX, "r") as mtx_in:
         mtx_main = mtx_in.read()
         final_mtx = MTX_HEADER + first_line_mtx + mtx_main
