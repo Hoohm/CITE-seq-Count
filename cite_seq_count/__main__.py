@@ -20,6 +20,7 @@ from cite_seq_count import (
 
 import polars as pl
 
+
 def main():
     """Main"""
     start_time = time.time()
@@ -117,42 +118,24 @@ def main():
     else:
         n_bcs_corrected = 0
     print("UMI correction")
-    read_counts = processing.find_corrected_umis(main_df=main_df, mapped_r2_df=mapped_r2_df)
-    # Don't correct
-    umis_corrected = 0
-    clustered_cells = []
+    final_read_counts, umis_corrected, clustered_cells = processing.correct_umis_df(
+        main_df=main_df, mapped_r2_df=mapped_r2_df
+    )
 
-    # read_counts = processing.generate_mtx_counts(
-    #     main_df=main_df,
-    #     barcode_subset=barcodes_df,
-    #     mapped_r2_df=mapped_r2_df,
-    #     data_type="read",
-    # )
     # # Write reads to file
     io.write_data_to_mtx(
-        main_df=read_counts,
+        main_df=final_read_counts,
         tags_df=parsed_tags,
         subset_df=barcode_subset,
         data_type="read",
         outpath=args.outfolder,
     )
-
-    # TODO: Write out to mtx and csv clustered cells
-
-    # Generate the UMI count matrix
-    # umi_counts = processing.generate_mtx_counts(
-    #     main_df=main_df,
-    #     barcode_subset=barcodes_df,
-    #     mapped_r2_df=mapped_r2_df,
-    #     data_type="umi",
-    # )
-    print(read_counts)
-    umi_counts = read_counts.group_by(["barcode", "feature_name"]).agg(pl.count())
-    umi_counts.write_parquet(file=args.outfolder + "/umi_counts.parquet")
+    umi_counts = processing.generate_umi_counts(read_counts=final_read_counts)
+    io.write_out_parquet(df=umi_counts, outpath=args.outfolder, filename="umi_counts")
 
     # Write umis to file
     io.write_data_to_mtx(
-        main_df=read_counts,
+        main_df=final_read_counts,
         tags_df=parsed_tags,
         subset_df=barcode_subset,
         data_type="read",

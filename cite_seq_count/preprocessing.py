@@ -386,7 +386,7 @@ def split_data_input(
             mapping_input_path,
             has_header=False,
             new_columns=[BARCODE_COLUMN, UMI_COLUMN, R2_COLUMN],
-            n_rows=n_reads
+            n_rows=n_reads,
         )
         .group_by([BARCODE_COLUMN, UMI_COLUMN, R2_COLUMN])
         .agg(pl.count())

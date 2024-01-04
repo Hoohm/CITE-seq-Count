@@ -68,6 +68,18 @@ def blocks(file: TextIO, size: int = 65536):
         yield partial_file
 
 
+def write_out_parquet(df: pl.DataFrame, outpath: Path, filename: str):
+    """
+    Writes out a dataframe to parquet format.
+
+    Args:
+        df (pl.DataFrame): A dataframe to write out
+        outpath (Path): Path to the output folder
+        filename (str): Name of the file
+    """
+    df.write_parquet(outpath / f"{filename}.parquet")
+
+
 def get_n_lines(file_path: Path) -> int:
     """
     Determines how many lines have to be processed
@@ -353,13 +365,17 @@ def write_data_to_mtx(
     mtx_df, tags_indexed, barcodes_indexed = create_mtx_df(main_df, tags_df, subset_df)
     data_path = Path(outpath) / f"{data_type}_count"
     data_path.mkdir(parents=True, exist_ok=True)
-    mtx_df.write_csv(include_header=False, file=data_path / TEMP_MTX, separator="\t")
+    mtx_df.write_csv(include_header=False, file=data_path / TEMP_MTX, separator=" ")
     # Write out the full MTX matrix
+    first_line_mtx = f"{tags_indexed.shape[0]} {barcodes_indexed.shape[0]} {mtx_df.shape[0]}\n"
     with open(data_path / TEMP_MTX, "r") as mtx_in:
         mtx_main = mtx_in.read()
-        final_mtx = MTX_HEADER + mtx_main
-        with open(data_path / MATRIX_MTX, "wb") as mtx_out:
-            mtx_out.write(final_mtx.encode())
+        final_mtx = MTX_HEADER + first_line_mtx + mtx_main
+    with open(data_path / TEMP_MTX, "w") as mtx_out:
+        mtx_out.write(final_mtx)
+    with open(data_path / TEMP_MTX, "rb") as mtx_in:
+        with gzip.open(data_path / MATRIX_MTX, "wb") as mtx_gz:
+            shutil.copyfileobj(mtx_in, mtx_gz)
     os.remove(data_path / TEMP_MTX)
     # Write ouf features and barcodes
     tags_indexed.sort(FEATURE_ID_COLUMN).select(FEATURE_NAME_COLUMN).write_csv(
@@ -461,6 +477,3 @@ def write_mapping_input(
         r2_too_short,
         total_reads,
     )
-
-
-

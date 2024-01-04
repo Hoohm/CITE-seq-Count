@@ -3,7 +3,7 @@
 
 import sys
 import tempfile
-
+from pathlib import Path
 from argparse import ArgumentParser, RawTextHelpFormatter
 
 import pkg_resources
@@ -270,8 +270,8 @@ def get_args() -> ArgumentParser:
         "-o",
         "--output",
         required=False,
-        type=str,
-        default="results",
+        type=Path,
+        default=Path("results"),
         dest="outfolder",
         help=("Results will be written to this folder"),
     )
