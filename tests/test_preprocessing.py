@@ -53,23 +53,23 @@ def failing_tags():
 
 
 @pytest.fixture
-def correct_reference_df():
-    return pl.DataFrame(
+def correct_reference_lf():
+    return pl.LazyFrame(
         {
             REFERENCE_COLUMN: ["ATGCCC", "ATGCTT", "CCGCCC"],
-            TRANSLATION_COLUMN: ["GGATCG", "GGATCA", "GATCAA"],
+            # TRANSLATION_COLUMN: ["GGATCG", "GGATCA", "GATCAA"],
         }
     )
 
 
 @pytest.fixture
 def correct_subset_df():
-    return pl.DataFrame({REFERENCE_COLUMN: ["ATGCCC", "ATGCTT"]})
+    return pl.LazyFrame({REFERENCE_COLUMN: ["ATGCCC", "ATGCTT"]})
 
 
 @pytest.fixture
 def barcodes_df():
-    return pl.DataFrame(
+    return pl.LazyFrame(
         {
             BARCODE_COLUMN: ["ATGCCC", "ATGCTT", "CCGCCC", "ATATCC", "ATATGG"],
             COUNT_COLUMN: [200, 200, 200, 20, 10],
@@ -120,12 +120,12 @@ def chemistry_def():
     )
 
 
-def test_passing_parse_reference_list_csv(passing_references, correct_reference_df):
+def test_passing_parse_reference_list_csv(passing_references, correct_reference_lf):
     passing_files = glob.glob(passing_references)
     for file_path in passing_files:
         assert_frame_equal(
-            left=parse_barcode_file(file_path, 16, [REFERENCE_COLUMN]),
-            right=correct_reference_df,
+            left=parse_barcode_file(file_path, [REFERENCE_COLUMN]),
+            right=correct_reference_lf,
         )
 
 
@@ -133,20 +133,20 @@ def test_failing_parse_reference_list_csv(failing_references):
     with pytest.raises(SystemExit):
         failing_files = glob.glob(failing_references)
         for file_path in failing_files:
-            parse_barcode_file(file_path, 16, [REFERENCE_COLUMN])
+            parse_barcode_file(file_path, [REFERENCE_COLUMN])
 
 
 def test_parse_subset_list_csv(passing_subsets, failing_subsets, correct_subset_df):
     passing_files = glob.glob(passing_subsets)
     for file_path in passing_files:
         assert_frame_equal(
-            left=parse_barcode_file(file_path, 16, [REFERENCE_COLUMN]),
+            left=parse_barcode_file(file_path, [REFERENCE_COLUMN]),
             right=correct_subset_df,
         )
     with pytest.raises(SystemExit):
         failing_files = glob.glob(failing_subsets)
         for file_path in failing_files:
-            parse_barcode_file(file_path, 16, [REFERENCE_COLUMN])
+            parse_barcode_file(file_path, [REFERENCE_COLUMN])
 
 
 def test_check_distance_too_big_between_tags(correct_tags_df):
@@ -156,27 +156,27 @@ def test_check_distance_too_big_between_tags(correct_tags_df):
 
 # Test if there is no reference and no whitelist
 def test_find_knee_estimated_barcodes(barcodes_df):
-    expected_subset = pl.DataFrame({SUBSET_COLUMN: ["ATGCCC", "ATGCTT", "CCGCCC"]})
+    expected_subset = pl.LazyFrame({SUBSET_COLUMN: ["ATGCCC", "ATGCTT", "CCGCCC"]})
     subset = find_knee_estimated_barcodes(barcodes_df=barcodes_df)
     assert_frame_equal(subset, expected_subset)
 
 
 @pytest.fixture
 def barcode_subset_df():
-    return pl.DataFrame({SUBSET_COLUMN: ["ATGCCC", "ATGCTT"]})
+    return pl.LazyFrame({SUBSET_COLUMN: ["ATGCCC", "ATGCTT"]})
 
 
-def test_get_barcode_subset_with_reference(correct_reference_df, barcodes_df):
-    expected_subset = pl.DataFrame(
+def test_get_barcode_subset_with_reference(correct_reference_lf, barcodes_df):
+    expected_subset = pl.LazyFrame(
         {
-            SUBSET_COLUMN: ["ATGCCC", "ATGCTT"],
+            SUBSET_COLUMN: ["ATGCCC", "ATGCTT", "CCGCCC"],
         }
     )
     expected_enable_correction = True
 
     subset, enable_correction = get_barcode_subset(
-        barcode_reference=correct_reference_df,
-        n_barcodes=2,
+        barcode_reference=correct_reference_lf,
+        n_barcodes=3,
         chemistry=None,
         barcode_subset=None,
         barcodes_df=barcodes_df,
@@ -187,7 +187,7 @@ def test_get_barcode_subset_with_reference(correct_reference_df, barcodes_df):
 
 
 def test_get_barcode_subset_without_reference(barcodes_df):
-    expected_subset = pl.DataFrame({SUBSET_COLUMN: ["ATGCCC", "ATGCTT", "CCGCCC"]})
+    expected_subset = pl.LazyFrame({SUBSET_COLUMN: ["ATGCCC", "ATGCTT", "CCGCCC"]})
     expected_enable_correction = True
 
     subset, enable_correction = get_barcode_subset(
@@ -202,8 +202,8 @@ def test_get_barcode_subset_without_reference(barcodes_df):
     assert enable_correction == expected_enable_correction
 
 
-def test_get_barcode_subset_with_large_n_barcodes(correct_reference_df, barcodes_df):
-    expected_subset = pl.DataFrame(
+def test_get_barcode_subset_with_large_n_barcodes(correct_reference_lf, barcodes_df):
+    expected_subset = pl.LazyFrame(
         {
             SUBSET_COLUMN: ["ATGCCC", "ATGCTT", "CCGCCC"],
         }
@@ -211,7 +211,7 @@ def test_get_barcode_subset_with_large_n_barcodes(correct_reference_df, barcodes
     expected_enable_correction = False
 
     subset, enable_correction = get_barcode_subset(
-        barcode_reference=correct_reference_df,
+        barcode_reference=correct_reference_lf,
         n_barcodes=4,
         chemistry=None,
         barcode_subset=None,
@@ -223,13 +223,13 @@ def test_get_barcode_subset_with_large_n_barcodes(correct_reference_df, barcodes
 
 
 def test_get_barcode_subset_with_existing_subset(
-    correct_reference_df, barcode_subset_df, barcodes_df
+    correct_reference_lf, barcode_subset_df, barcodes_df
 ):
-    expected_subset = pl.DataFrame({SUBSET_COLUMN: ["ATGCCC", "ATGCTT"]})
+    expected_subset = pl.LazyFrame({SUBSET_COLUMN: ["ATGCCC", "ATGCTT"]})
     expected_enable_correction = True
 
     subset, enable_correction = get_barcode_subset(
-        barcode_reference=correct_reference_df,
+        barcode_reference=correct_reference_lf,
         n_barcodes=2,
         chemistry=None,
         barcode_subset=barcode_subset_df,
@@ -240,8 +240,8 @@ def test_get_barcode_subset_with_existing_subset(
     assert enable_correction == expected_enable_correction
 
 
-def test_get_barcode_subset_with_no_subset(correct_reference_df, barcodes_df):
-    expected_subset = pl.DataFrame(
+def test_get_barcode_subset_with_no_subset(correct_reference_lf, barcodes_df):
+    expected_subset = pl.LazyFrame(
         {
             SUBSET_COLUMN: ["ATGCCC", "ATGCTT", "CCGCCC"],
         }
@@ -249,7 +249,7 @@ def test_get_barcode_subset_with_no_subset(correct_reference_df, barcodes_df):
     expected_enable_correction = True
 
     subset, enable_correction = get_barcode_subset(
-        barcode_reference=correct_reference_df,
+        barcode_reference=correct_reference_lf,
         n_barcodes=3,
         chemistry=None,
         barcode_subset=None,

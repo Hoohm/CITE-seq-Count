@@ -18,7 +18,7 @@ def correct_barcodes_pl(
     barcodes_df: pl.DataFrame,
     barcode_subset_df: pl.DataFrame,
     hamming_distance: int,
-) -> tuple[pl.DataFrame, int, dict]:
+) -> tuple[pl.LazyFrame, int, dict]:
     """Corrects barcodes using a subset based on join_asof from polars.
     Uses both forward and backward strategy to dinf the closest barcode
 
@@ -37,33 +37,65 @@ def correct_barcodes_pl(
             BARCODE_COLUMN: pl.String,
             "count": pl.UInt32,
             SUBSET_COLUMN: pl.String,
-            "hamming_distance": pl.UInt32,
         }
     )
-
-    methods = ["forward", "backward"]
-    for method in methods:
-        current_barcodes = (
-            barcodes_df.filter(
-                (~pl.col(BARCODE_COLUMN).is_in(corrected_barcodes_pl[BARCODE_COLUMN]))
-                & (~pl.col(BARCODE_COLUMN).is_in(barcode_subset_df[SUBSET_COLUMN]))
+    current_barcodes = pl.DataFrame(
+        schema={
+            BARCODE_COLUMN: pl.String,
+            "count": pl.UInt32,
+            SUBSET_COLUMN: pl.String,
+        }
+    )
+    current_barcodes_to_correct = barcodes_df.shape[0]
+    last_iteration_barcodes_to_correct = 0
+    unknown_barcodes = barcodes_df.filter(
+        ~pl.col(BARCODE_COLUMN).is_in(barcode_subset_df[SUBSET_COLUMN])
+    )
+    n_iterations = 0
+    while (
+        current_barcodes_to_correct > 0
+        and current_barcodes_to_correct != last_iteration_barcodes_to_correct
+    ):
+        methods = ["backward", "forward"]
+        for method in methods:
+            current_barcodes = (
+                (
+                    unknown_barcodes.filter(
+                        (
+                            ~pl.col(BARCODE_COLUMN).is_in(
+                                corrected_barcodes_pl[BARCODE_COLUMN]
+                            )
+                        )
+                    )
+                    .sort(BARCODE_COLUMN)
+                    .join_asof(
+                        barcode_subset_df.sort(SUBSET_COLUMN),
+                        left_on=BARCODE_COLUMN,
+                        right_on=SUBSET_COLUMN,
+                        strategy=method,  # type: ignore
+                    )
+                )
+                .filter(~pl.col(SUBSET_COLUMN).is_null())
+                .with_columns(
+                    pld.col(BARCODE_COLUMN)
+                    .dist_str.hamming(pl.col(SUBSET_COLUMN))
+                    .alias("hamming_distance")
+                )
+                .filter(pl.col("hamming_distance") <= hamming_distance)
+                .drop("hamming_distance")
             )
-            .sort(BARCODE_COLUMN)
-            .join_asof(
-                barcode_subset_df.sort(SUBSET_COLUMN),
-                left_on=BARCODE_COLUMN,
-                right_on=SUBSET_COLUMN,
-                strategy=method,  # type: ignore
+            corrected_barcodes_pl = pl.concat(
+                [
+                    corrected_barcodes_pl,
+                    current_barcodes,
+                ]
             )
-            .filter(~pl.col(SUBSET_COLUMN).is_null())
-            .with_columns(
-                pld.col(BARCODE_COLUMN)
-                .dist_str.hamming(pl.col(SUBSET_COLUMN))
-                .alias("hamming_distance")
-            )
-            .filter(pl.col("hamming_distance") <= hamming_distance)
+        current_barcodes_to_correct = current_barcodes.shape[0]
+        barcode_subset_df = barcode_subset_df.filter(
+            ~pl.col(SUBSET_COLUMN).is_in(corrected_barcodes_pl[SUBSET_COLUMN])
         )
-        corrected_barcodes_pl = pl.concat([corrected_barcodes_pl, current_barcodes])
+        n_iterations += 1
+    print(f"Corrected barcodes in {n_iterations} iterations")
     mapped_barcodes = dict(
         corrected_barcodes_pl.select(BARCODE_COLUMN, SUBSET_COLUMN).iter_rows()  # type: ignore
     )
@@ -71,16 +103,16 @@ def correct_barcodes_pl(
         barcodes_df.with_columns(
             pl.col(BARCODE_COLUMN).map_dict(mapped_barcodes, default=pl.first())
         )
-        .group_by(BARCODE_COLUMN)
-        .agg(pl.sum("count"))
+        # .filter(pl.col(BARCODE_COLUMN).is_in(barcode_subset_df[SUBSET_COLUMN]))
+        .group_by(BARCODE_COLUMN).agg(pl.sum("count"))
     )
     print("Barcodes corrected")
     n_corrected_barcodes = corrected_barcodes_pl.shape[0]
 
-    return final_corrected, n_corrected_barcodes, mapped_barcodes
+    return final_corrected.lazy(), n_corrected_barcodes, mapped_barcodes
 
 
-def summarise_unmapped_df(main_df: pl.DataFrame, unmapped_r2_df: pl.DataFrame):
+def summarise_unmapped_df(main_df: pl.LazyFrame, unmapped_r2_df: pl.LazyFrame):
     """Merge main df and unmapped df to get a summary of the unmapped reads
 
     Args:
@@ -107,7 +139,7 @@ def summarise_unmapped_df(main_df: pl.DataFrame, unmapped_r2_df: pl.DataFrame):
     return unmapped_df
 
 
-def generate_umi_counts(read_counts: pl.DataFrame) -> pl.DataFrame:
+def generate_umi_counts(read_counts: pl.LazyFrame) -> pl.LazyFrame:
     """Generate umi counts from read counts
 
     Args:
@@ -122,7 +154,7 @@ def generate_umi_counts(read_counts: pl.DataFrame) -> pl.DataFrame:
     return umi_counts
 
 
-def update_main_df(main_df: pl.DataFrame, mapped_barcodes: dict):
+def update_main_df(main_df: pl.LazyFrame, mapped_barcodes: dict) -> pl.LazyFrame:
     """Update the main data df with the corrected barcodes
 
     Args:
@@ -143,14 +175,18 @@ def update_main_df(main_df: pl.DataFrame, mapped_barcodes: dict):
 
 
 def correct_umis_df(
-    main_df, mapped_r2_df, umi_distance=1, cluster_method="directional", max_umis=20000
-):
+    main_df: pl.LazyFrame,
+    mapped_r2_df: pl.LazyFrame,
+    umi_distance,
+    cluster_method="directional",
+    max_umis=20000,
+) -> tuple[pl.LazyFrame, int, list]:
     merged = mapped_r2_df.join(main_df, on=R2_COLUMN)
     temp = (
         merged.with_columns(umi=pl.col(UMI_COLUMN).cast(pl.Binary))
         .group_by([R2_COLUMN, FEATURE_NAME_COLUMN, BARCODE_COLUMN])
         .agg(pl.struct(pl.col(UMI_COLUMN), pl.col(COUNT_COLUMN)))
-    )
+    ).collect()
     clustered_cells = (
         temp.filter(pl.col(UMI_COLUMN).list.len() > max_umis)
         .select(BARCODE_COLUMN)
@@ -176,7 +212,7 @@ def correct_umis_df(
                 if index != 0:
                     mapping_list.append([r2, feature_name, barcode, umi, umi_set[0]])
     mapping_df = (
-        pl.DataFrame(
+        pl.LazyFrame(
             mapping_list,
             schema={
                 R2_COLUMN: pl.String,
@@ -209,7 +245,7 @@ def correct_umis_df(
         .agg(pl.sum(COUNT_COLUMN))
         .drop(R2_COLUMN)
     )
-    n_corrected_umis = mapping_df.shape[0]
+    n_corrected_umis = mapping_df.collect().shape[0]
     return read_counts, n_corrected_umis, clustered_cells
 
 

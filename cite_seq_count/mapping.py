@@ -33,53 +33,54 @@ def find_best_match_fast(tag_seq, tags_df, maximum_distance):
     return UNMAPPED_NAME
 
 
-def map_reads_hybrid(
-    r2_df: pl.DataFrame, parsed_tags: pl.DataFrame, maximum_distance: int
-) -> tuple[pl.DataFrame, pl.DataFrame]:
-    """Map sequence data to a tags reference.
-    Using a hybdrid approach where we first join all the data for the exact matches
-    then using a hamming distance calculation to find the closest match
+# def map_reads_hybrid(
+#     r2_df: pl.DataFrame, parsed_tags: pl.DataFrame, maximum_distance: int
+# ) -> tuple[pl.DataFrame, pl.DataFrame]:
+#     """Map sequence data to a tags reference.
+#     Using a hybdrid approach where we first join all the data for the exact matches
+#     then using a hamming distance calculation to find the closest match
 
-    Args:
-        r2_df (pl.DataFrame): All r2 sequences to map
-        parsed_tags (pl.DataFrame): tags to map to
-        maximum_distance (int): max distance allowed for mismatches
+#     Args:
+#         r2_df (pl.DataFrame): All r2 sequences to map
+#         parsed_tags (pl.DataFrame): tags to map to
+#         maximum_distance (int): max distance allowed for mismatches
 
-    Returns:
-        pl.DataFrame: Mapped data
-    """
-    print("Mapping reads")
-    mapped_r2_df = r2_df.join(
-        parsed_tags, left_on=R2_COLUMN, right_on=SEQUENCE_COLUMN, how="left"
-    ).with_columns(
-        pl.when(pl.col(FEATURE_NAME_COLUMN).is_null())
-        .then(
-            pl.col(R2_COLUMN)
-            .map_elements(
-                lambda x: find_best_match_fast(
-                    x, tags_df=parsed_tags, maximum_distance=maximum_distance
-                )
-            )
-            .alias(FEATURE_NAME_COLUMN)
-        )
-        .otherwise(pl.col(FEATURE_NAME_COLUMN))
-    )
-    unmapped_r2_df = mapped_r2_df.filter(pl.col(FEATURE_NAME_COLUMN) == UNMAPPED_NAME)
-    print("Mapping done")
-    return mapped_r2_df, unmapped_r2_df
+#     Returns:
+#         pl.DataFrame: Mapped data
+#     """
+#     print("Mapping reads")
+#     mapped_r2_df = r2_df.join(
+#         parsed_tags, left_on=R2_COLUMN, right_on=SEQUENCE_COLUMN, how="left"
+#     ).with_columns(
+#         pl.when(pl.col(FEATURE_NAME_COLUMN).is_null())
+#         .then(
+#             pl.col(R2_COLUMN)
+#             .map_elements(
+#                 lambda x: find_best_match_fast(
+#                     x, tags_df=parsed_tags, maximum_distance=maximum_distance
+#                 )
+#             )
+#             .alias(FEATURE_NAME_COLUMN)
+#         )
+#         .otherwise(pl.col(FEATURE_NAME_COLUMN))
+#     )
+#     unmapped_r2_df = mapped_r2_df.filter(pl.col(FEATURE_NAME_COLUMN) == UNMAPPED_NAME)
+#     print("Mapping done")
+#     return mapped_r2_df, unmapped_r2_df
 
 
 def map_reads_polars(
-    r2_df: pl.DataFrame, parsed_tags: pl.DataFrame, maximum_distance: int
-) -> tuple[pl.DataFrame, pl.DataFrame]:
+    r2_df: pl.LazyFrame, parsed_tags: pl.DataFrame, maximum_distance: int
+) -> tuple[pl.LazyFrame, pl.LazyFrame]:
     joined = r2_df.join(
-        parsed_tags, left_on=R2_COLUMN, right_on=SEQUENCE_COLUMN, how="left"
+        parsed_tags.lazy(), left_on=R2_COLUMN, right_on=SEQUENCE_COLUMN, how="left"
     )
-
     simple_join = joined.filter(~pl.col(FEATURE_NAME_COLUMN).is_null())
     levenshtein_mapped = (
         joined.filter(pl.col(FEATURE_NAME_COLUMN).is_null())
-        .join(parsed_tags, left_on=R2_COLUMN, right_on=SEQUENCE_COLUMN, how="cross")
+        .join(
+            parsed_tags.lazy(), left_on=R2_COLUMN, right_on=SEQUENCE_COLUMN, how="cross"
+        )
         .drop(FEATURE_NAME_COLUMN)
         .with_columns(
             pld.col(SEQUENCE_COLUMN)
@@ -98,13 +99,16 @@ def map_reads_polars(
     mapped = pl.concat(
         [
             simple_join,
-            levenshtein_mapped.filter(
-                ~pl.col(R2_COLUMN).is_in(multi_mapped[R2_COLUMN])
+            levenshtein_mapped.join(multi_mapped, on=R2_COLUMN, how="inner").drop(
+                COUNT_COLUMN
             ),
         ]
     )
-    unmapped = joined.filter(~pl.col(R2_COLUMN).is_in(mapped[R2_COLUMN])).with_columns(
-        pl.col(FEATURE_NAME_COLUMN).fill_null(UNMAPPED_NAME)
+    unmapped = (
+        joined.join(mapped.drop(FEATURE_NAME_COLUMN), on=R2_COLUMN, how="outer")
+        .with_columns(pl.col(FEATURE_NAME_COLUMN).fill_null(UNMAPPED_NAME))
+        .filter(pl.col("r2_right").is_null())
+        .drop("r2_right")
     )
     return mapped, unmapped
 

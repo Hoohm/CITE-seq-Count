@@ -48,7 +48,6 @@ def main():
     if args.subset_path is not None:
         barcode_subset = preprocessing.parse_barcode_file(
             filename=args.subset_path,
-            barcode_length=chemistry_def.barcode_length,
             required_header=[constants.REFERENCE_COLUMN],
         )
     else:
@@ -83,8 +82,6 @@ def main():
     main_df, barcodes_df, r2_df = preprocessing.split_data_input(
         mapping_input_path=temp_file, n_reads=n_reads
     )
-    # Remove temp file
-    os.remove(temp_file)
     mapped_r2_df, unmapped_r2_df = mapping.map_reads_polars(
         r2_df=r2_df,
         parsed_tags=parsed_tags,
@@ -111,8 +108,8 @@ def main():
             n_bcs_corrected,
             mapped_barcodes,
         ) = processing.correct_barcodes_pl(
-            barcodes_df=barcodes_df,
-            barcode_subset_df=barcode_subset,
+            barcodes_df=barcodes_df.collect(),
+            barcode_subset_df=barcode_subset.collect(),
             hamming_distance=args.bc_threshold,
         )
         main_df = processing.update_main_df(
@@ -122,7 +119,7 @@ def main():
         n_bcs_corrected = 0
     print("UMI correction")
     final_read_counts, umis_corrected, clustered_cells = processing.correct_umis_df(
-        main_df=main_df, mapped_r2_df=mapped_r2_df
+        main_df=main_df, mapped_r2_df=mapped_r2_df, umi_distance=args.umi_threshold
     )
 
     # # Write reads to file
@@ -149,9 +146,11 @@ def main():
     # TODO: Write unmapped sequences
     # TODO: rewrite reporting
     # Create report and write it to disk
+    # Remove temp file
+    
     io.create_report(
         total_reads=total_reads,
-        unmapped=unmapped_df,
+        unmapped=unmapped_df.collect(),
         version=argsparser.get_package_version(),
         start_time=start_time,
         umis_corrected=umis_corrected,
@@ -163,7 +162,6 @@ def main():
         chemistry_def=chemistry_def,
         maximum_distance=maximum_distance,
     )
-
-
+    os.remove(temp_file)
 if __name__ == "__main__":
     main()

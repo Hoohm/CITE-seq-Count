@@ -1,7 +1,6 @@
 import pytest
 import os
 import gzip
-import scipy
 from pathlib import Path
 from polars.testing import assert_frame_equal
 from cite_seq_count.constants import (
@@ -16,13 +15,10 @@ from cite_seq_count.constants import (
 )
 from cite_seq_count.io import (
     get_n_lines,
-    write_to_files,
     get_read_paths,
     write_data_to_mtx,
     create_mtx_df,
 )
-from collections import namedtuple
-import numpy as np
 import polars as pl
 
 # copied from https://stackoverflow.com/questions/3431825/generating-an-md5-checksum-of-a-file
@@ -117,7 +113,7 @@ def test_get_n_lines_not_multiple_of_4(corrupt_R1):
 
 def test_write_data_to_mtx(tmp_path):
     # Create test data
-    main_df = pl.DataFrame(
+    main_df = pl.LazyFrame(
         {
             FEATURE_NAME_COLUMN: ["test1", "test2", "test3"],
             BARCODE_COLUMN: [
@@ -134,7 +130,7 @@ def test_write_data_to_mtx(tmp_path):
             SEQUENCE_COLUMN: ["CGTA", "CGTA", "CGTA"],
         }
     )
-    subset_df = pl.DataFrame({SUBSET_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"]})
+    subset_df = pl.LazyFrame({SUBSET_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"]})
     data_type = "umi"
     outpath = str(tmp_path)
     print(outpath)
@@ -158,7 +154,7 @@ def test_write_data_to_mtx(tmp_path):
 
 def test_create_mtx_df():
     # Create test data
-    main_df = pl.DataFrame(
+    main_df = pl.LazyFrame(
         {
             FEATURE_NAME_COLUMN: ["test1", "test2", "test3"],
             BARCODE_COLUMN: [
@@ -175,7 +171,7 @@ def test_create_mtx_df():
             SEQUENCE_COLUMN: ["CGTA", "CGTA", "CGTA"],
         }
     )
-    subset_df = pl.DataFrame({SUBSET_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"]})
+    subset_df = pl.LazyFrame({SUBSET_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"]})
 
     # Call the function
     mtx_df, tags_indexed, barcodes_indexed = create_mtx_df(main_df, tags_df, subset_df)

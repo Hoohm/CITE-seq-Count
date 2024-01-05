@@ -42,7 +42,7 @@ def check_equi_length(df: pl.DataFrame, column_name: str):
         raise ValueError(f"Barcodes in {column_name} column have different lengths.")
 
 
-def parse_barcode_file(filename: str, required_header: list) -> pl.DataFrame:
+def parse_barcode_file(filename: str, required_header: list) -> pl.LazyFrame:
     """Reads reference barcodes from a CSV file.
 
     The function accepts plain barcodes or even 10X style barcodes with the
@@ -57,7 +57,7 @@ def parse_barcode_file(filename: str, required_header: list) -> pl.DataFrame:
 
     """
     file_path = check_file(filename)
-    barcodes_df = pl.read_csv(file_path.absolute())
+    barcodes_df = pl.scan_csv(file_path.absolute(), has_header=True)
     barcode_pattern = "^[ATGC]{1,}$"
 
     header = barcodes_df.columns
@@ -65,8 +65,9 @@ def parse_barcode_file(filename: str, required_header: list) -> pl.DataFrame:
     if len(set_dif) != 0:
         set_diff_string = ",".join(list(set_dif))
         raise SystemExit(f"The header is missing {set_diff_string}. Exiting")
+    # TODO: Enable to use translation inputs
     if OPTIONAL_CELLS_REF_HEADER in header:
-        with_translation = True
+        with_translation = False
     else:
         with_translation = False
     # Prepare and validate barcodes_df
@@ -90,7 +91,7 @@ def parse_barcode_file(filename: str, required_header: list) -> pl.DataFrame:
         filename=filename,
     )
 
-    check_equi_length(df=barcodes_df, column_name=REFERENCE_COLUMN)
+    check_equi_length(df=barcodes_df.collect(), column_name=REFERENCE_COLUMN)
 
     if with_translation:
         check_sequence_pattern(
@@ -101,9 +102,9 @@ def parse_barcode_file(filename: str, required_header: list) -> pl.DataFrame:
             expected_pattern="ATGC",
             filename=filename,
         )
-        check_equi_length(df=barcodes_df, column_name=TRANSLATION_COLUMN)
+        check_equi_length(df=barcodes_df.collect(), column_name=TRANSLATION_COLUMN)
 
-    return barcodes_df
+    return barcodes_df.drop(TRANSLATION_COLUMN)
 
 
 def parse_tags_csv(file_name: str) -> pl.DataFrame:
@@ -146,7 +147,7 @@ def parse_tags_csv(file_name: str) -> pl.DataFrame:
                 f"Column {column} is missing a value. Please fix the CSV file."
             )
     check_sequence_pattern(
-        df=data_pl,
+        df=data_pl.lazy(),
         pattern=atgc_test,
         column_name=SEQUENCE_COLUMN,
         file_type="tags",
@@ -157,7 +158,7 @@ def parse_tags_csv(file_name: str) -> pl.DataFrame:
 
 
 def check_sequence_pattern(
-    df: pl.DataFrame,
+    df: pl.LazyFrame,
     pattern: str,
     column_name: str,
     file_type: str,
@@ -176,7 +177,7 @@ def check_sequence_pattern(
     Raises:
         SystemExit: Exists if some patterns don't match
     """
-    regex_test = df.with_columns(
+    regex_test = df.collect().with_columns(
         pl.col(column_name).str.contains(pattern).alias("regex")
     )
     if not regex_test.select(pl.col("regex").all()).get_column("regex").item():
@@ -364,7 +365,7 @@ def pre_run_checks(
 
 def split_data_input(
     mapping_input_path: Path, n_reads: int
-) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
+) -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFrame]:
     """Read in all the input data and split it into three dataframes.
 
     Reduce the size of the data by grouping on barcodes, umis and sequences.
@@ -380,7 +381,7 @@ def split_data_input(
         tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]: Three dfs described above
     """
     main_df = (
-        pl.read_csv(
+        pl.scan_csv(
             mapping_input_path,
             has_header=False,
             new_columns=[BARCODE_COLUMN, UMI_COLUMN, R2_COLUMN],
@@ -401,12 +402,12 @@ def split_data_input(
 
 
 def get_barcode_subset(
-    barcode_reference: pl.DataFrame | None,
+    barcode_reference: pl.LazyFrame | None,
     n_barcodes: int,
     chemistry,
-    barcode_subset: pl.DataFrame | None,
-    barcodes_df: pl.DataFrame,
-) -> tuple[pl.DataFrame, bool]:
+    barcode_subset: pl.LazyFrame | None,
+    barcodes_df: pl.LazyFrame,
+) -> tuple[pl.LazyFrame, bool]:
     """Generate the barcode list used for barcode correction and subsetting
 
     Args:
@@ -425,8 +426,11 @@ def get_barcode_subset(
         # Subset: False, Reference: True
         if barcode_reference is not None:
             barcode_subset = (
-                barcodes_df.filter(
-                    pl.col(BARCODE_COLUMN).is_in(barcode_reference[REFERENCE_COLUMN])
+                barcodes_df.join(
+                    barcode_reference,
+                    left_on=BARCODE_COLUMN,
+                    right_on=REFERENCE_COLUMN,
+                    how="inner",
                 )
                 .sort(COUNT_COLUMN, descending=True)
                 .head(round(n_barcodes * 1.2))
@@ -436,18 +440,19 @@ def get_barcode_subset(
         else:
             # Subset: False, Reference: False
             barcode_subset = find_knee_estimated_barcodes(barcodes_df=barcodes_df)
-
-    if n_barcodes > barcode_subset.shape[0]:
+    barcodes_found = barcode_subset.collect().shape[0]
+    if n_barcodes > barcodes_found:
         print(
             f"Number of expected cells, {n_barcodes}, is higher "
-            f"than number of cells found {barcode_subset.shape[0]}.\nNot performing "
+            f"than number of cells found {barcodes_found}.\nNot performing "
             f"cell barcode correction"
         )
         enable_barcode_correction = False
+    assert barcode_subset.schema == {SUBSET_COLUMN: pl.String}
     return barcode_subset, enable_barcode_correction
 
 
-def find_knee_estimated_barcodes(barcodes_df: pl.DataFrame) -> pl.DataFrame:
+def find_knee_estimated_barcodes(barcodes_df: pl.LazyFrame) -> pl.LazyFrame:
     """Find the subset of barcodes by the knee method
 
     Args:
@@ -456,14 +461,18 @@ def find_knee_estimated_barcodes(barcodes_df: pl.DataFrame) -> pl.DataFrame:
     Returns:
         pl.DataFrame: Final list of barcodes
     """
-    raw_barcodes_dict = barcodes_df.filter(
-        ~pl.col(BARCODE_COLUMN).str.contains("N")
-    ).sort("count", descending=True)
+    raw_barcodes_dict = (
+        barcodes_df.filter(~pl.col(BARCODE_COLUMN).str.contains("N"))
+        .sort("count", descending=True)
+        .collect()
+    )
     barcode_counter = Counter()
     barcode_counts = dict(raw_barcodes_dict.iter_rows())  # type: ignore
     barcode_counter.update(barcode_counts)
     true_barcodes = whitelist_method.getKneeEstimateDistance(
         cell_barcode_counts=barcode_counter
     )
-    barcode_subset = pl.DataFrame(true_barcodes, schema={SUBSET_COLUMN: pl.String})
+    barcode_subset = pl.DataFrame(
+        true_barcodes, schema={SUBSET_COLUMN: pl.String}
+    ).lazy()
     return barcode_subset

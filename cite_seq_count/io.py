@@ -68,7 +68,7 @@ def blocks(file: TextIO, size: int = 65536):
         yield partial_file
 
 
-def write_out_parquet(df: pl.DataFrame, outpath: Path, filename: str):
+def write_out_parquet(df: pl.LazyFrame, outpath: Path, filename: str):
     """
     Writes out a dataframe to parquet format.
 
@@ -77,7 +77,7 @@ def write_out_parquet(df: pl.DataFrame, outpath: Path, filename: str):
         outpath (Path): Path to the output folder
         filename (str): Name of the file
     """
-    df.write_parquet(outpath / f"{filename}.parquet")
+    df.collect().write_parquet(outpath / f"{filename}.parquet")
 
 
 def get_n_lines(file_path: Path) -> int:
@@ -172,7 +172,7 @@ def check_file(file_str: str) -> Path:
     return file_path
 
 
-def write_unmapped(unmapped_df: pl.DataFrame, outfolder: Path, filename: str):
+def write_unmapped(unmapped_df: pl.LazyFrame, outfolder: Path, filename: str):
     """
     Writes a list of top unmapped sequences
 
@@ -183,7 +183,7 @@ def write_unmapped(unmapped_df: pl.DataFrame, outfolder: Path, filename: str):
         filename (string): Name of the output file
     """
 
-    unmapped_df.write_csv(file=outfolder / f"{filename}.csv")
+    unmapped_df.collect().write_csv(file=outfolder / f"{filename}.csv")
 
 
 def load_report_template() -> dict:
@@ -275,7 +275,7 @@ def create_report(
 
 
 def create_mtx_df(
-    main_df: pl.DataFrame, tags_df: pl.DataFrame, subset_df: pl.DataFrame
+    main_df: pl.LazyFrame, tags_df: pl.DataFrame, subset_df: pl.LazyFrame
 ) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
     """Create the MTX dataframe, indexed barcodes and indexed features from the different dataframes
 
@@ -290,8 +290,8 @@ def create_mtx_df(
     tags_indexed = (
         pl.concat(
             [
-                tags_df,
-                pl.DataFrame(
+                tags_df.lazy(),
+                pl.LazyFrame(
                     {FEATURE_NAME_COLUMN: UNMAPPED_NAME, SEQUENCE_COLUMN: "UNKNOWN"}
                 ),
             ]
@@ -307,13 +307,13 @@ def create_mtx_df(
         .join(barcodes_indexed, left_on=BARCODE_COLUMN, right_on=SUBSET_COLUMN)
         .select([FEATURE_ID_COLUMN, BARCODE_ID_COLUMN, COUNT_COLUMN])
     )
-    return mtx_df, tags_indexed, barcodes_indexed
+    return mtx_df.collect(), tags_indexed.collect(), barcodes_indexed.collect()
 
 
 def write_data_to_mtx(
-    main_df: pl.DataFrame,
+    main_df: pl.LazyFrame,
     tags_df: pl.DataFrame,
-    subset_df: pl.DataFrame,
+    subset_df: pl.LazyFrame,
     data_type: str,
     outpath: str,
 ) -> None:

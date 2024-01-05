@@ -64,7 +64,7 @@ def parsed_tags_df():
 @pytest.fixture
 def r2_df():
     # Create a sample DataFrame for r2_df
-    return pl.DataFrame(
+    return pl.LazyFrame(
         {
             R2_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT", "AGCTAGCTAGCTAGCT"],
         }
@@ -84,13 +84,13 @@ def parsed_tags():
 
 def test_map_reads_polars_with_dist1(r2_df, parsed_tags):
     maximum_distance = 1
-    expected_mapped = pl.DataFrame(
+    expected_mapped = pl.LazyFrame(
         {
             R2_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"],
             FEATURE_NAME_COLUMN: ["feature1", "feature2"],
         }
     )
-    expected_unmapped = pl.DataFrame(
+    expected_unmapped = pl.LazyFrame(
         {R2_COLUMN: ["AGCTAGCTAGCTAGCT"], FEATURE_NAME_COLUMN: ["unmapped"]}
     )
 
@@ -102,13 +102,13 @@ def test_map_reads_polars_with_dist1(r2_df, parsed_tags):
 
 def test_map_reads_polars_with_dist2(r2_df, parsed_tags):
     maximum_distance = 2
-    expected_mapped = pl.DataFrame(
+    expected_mapped = pl.LazyFrame(
         {
             R2_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"],
             FEATURE_NAME_COLUMN: ["feature1", "feature2"],
         }
     )
-    expected_unmapped = pl.DataFrame(
+    expected_unmapped = pl.LazyFrame(
         {R2_COLUMN: ["AGCTAGCTAGCTAGCT"], FEATURE_NAME_COLUMN: ["unmapped"]}
     )
 
