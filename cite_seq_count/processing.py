@@ -34,9 +34,9 @@ def correct_barcodes_pl(
     print("Correcting barcodes")
     corrected_barcodes_pl = pl.DataFrame(
         schema={
-            BARCODE_COLUMN: pl.Utf8,
+            BARCODE_COLUMN: pl.String,
             "count": pl.UInt32,
-            SUBSET_COLUMN: pl.Utf8,
+            SUBSET_COLUMN: pl.String,
             "hamming_distance": pl.UInt32,
         }
     )

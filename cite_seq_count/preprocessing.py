@@ -465,5 +465,5 @@ def find_knee_estimated_barcodes(barcodes_df: pl.DataFrame) -> pl.DataFrame:
     true_barcodes = whitelist_method.getKneeEstimateDistance(
         cell_barcode_counts=barcode_counter
     )
-    barcode_subset = pl.DataFrame(true_barcodes, schema={SUBSET_COLUMN: pl.Utf8})
+    barcode_subset = pl.DataFrame(true_barcodes, schema={SUBSET_COLUMN: pl.String})
     return barcode_subset
