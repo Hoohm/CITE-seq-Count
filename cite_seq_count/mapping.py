@@ -1,6 +1,5 @@
 """Mapping module. Holds all code related to mapping reads
 """
-from turtle import right
 import polars as pl
 from rapidfuzz import fuzz, process
 import polars_distance as pld
@@ -78,28 +77,30 @@ def map_reads_polars(
     )
 
     simple_join = joined.filter(~pl.col(FEATURE_NAME_COLUMN).is_null())
-    hamming_mapped = (
+    levenshtein_mapped = (
         joined.filter(pl.col(FEATURE_NAME_COLUMN).is_null())
         .join(parsed_tags, left_on=R2_COLUMN, right_on=SEQUENCE_COLUMN, how="cross")
         .drop(FEATURE_NAME_COLUMN)
         .with_columns(
             pld.col(SEQUENCE_COLUMN)
-            .dist_str.hamming(pl.col(R2_COLUMN))
-            .alias("hamming_dist")
+            .dist_str.levenshtein(pl.col(R2_COLUMN))
+            .alias("levenshtein_dist")
         )
-        .filter(pl.col("hamming_dist") <= maximum_distance)
-        .drop([SEQUENCE_COLUMN, "hamming_dist"])
+        .filter(pl.col("levenshtein_dist") <= maximum_distance)
+        .drop([SEQUENCE_COLUMN, "levenshtein_dist"])
         .rename({"feature_name_right": FEATURE_NAME_COLUMN})
     )
     multi_mapped = (
-        hamming_mapped.group_by(R2_COLUMN)
+        levenshtein_mapped.group_by(R2_COLUMN)
         .agg(pl.count())
         .filter(pl.col(COUNT_COLUMN) > 1)
     )
     mapped = pl.concat(
         [
             simple_join,
-            hamming_mapped.filter(~pl.col(R2_COLUMN).is_in(multi_mapped[R2_COLUMN])),
+            levenshtein_mapped.filter(
+                ~pl.col(R2_COLUMN).is_in(multi_mapped[R2_COLUMN])
+            ),
         ]
     )
     unmapped = joined.filter(~pl.col(R2_COLUMN).is_in(mapped[R2_COLUMN])).with_columns(

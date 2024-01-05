@@ -93,6 +93,9 @@ def main():
     unmapped_df = processing.summarise_unmapped_df(
         main_df=main_df, unmapped_r2_df=unmapped_r2_df
     )
+    io.write_unmapped(
+        unmapped_df=unmapped_df, outfolder=args.outfolder, filename="unmapped"
+    )
     barcode_subset, enable_barcode_correction = preprocessing.get_barcode_subset(
         barcode_subset=barcode_subset,
         n_barcodes=args.expected_barcodes,

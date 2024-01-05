@@ -154,54 +154,6 @@ def get_csv_reader_from_path(filename: str, sep: str = "\t"):
     return csv_reader
 
 
-def write_to_files(
-    sparse_matrix: scipy.sparse.coo_matrix,
-    filtered_cells: set,
-    parsed_tags: dict,
-    data_type: str,
-    outfolder: str,
-    translation_dict: dict,
-):
-    """Write the umi and read sparse matrices to file in gzipped mtx format.
-
-    Args:
-        sparse_matrix (dok_matrix): Results in a sparse matrix.
-        filtered_cells (set): Set of cells that are selected for output.
-        parsed_tags (dict): Tags in order with indexes as values.
-        data_type (string): A string definning if the data is umi or read based.
-        outfolder (string): Path to the output folder.
-    """
-    prefix = os.path.join(outfolder, data_type + "_count")
-    unknown_id = 1
-    os.makedirs(prefix, exist_ok=True)
-    io.mmwrite(os.path.join(prefix, "matrix.mtx"), a=sparse_matrix, field="integer")
-    with gzip.open(os.path.join(prefix, "barcodes.tsv.gz"), "wb") as barcode_file:
-        for barcode in filtered_cells:
-            if translation_dict:
-                if barcode in translation_dict:
-                    barcode_file.write(
-                        f"{translation_dict[barcode]}\t{barcode}\n".encode(),
-                    )
-                else:
-                    barcode_file.write(
-                        "{}\t{}\n".format(
-                            f"translation_not_found_{unknown_id}", barcode
-                        ).encode(),
-                    )
-                    unknown_id += 1
-            else:
-                barcode_file.write(f"{barcode}\n".encode())
-    with gzip.open(os.path.join(prefix, "features.tsv.gz"), "wb") as feature_file:
-        for feature in parsed_tags:
-            feature_file.write(f"{feature.sequence}\t{feature.name}\n".encode())
-        if data_type == "read":
-            feature_file.write("{}\t{}\n".format("UNKNOWN", "unmapped").encode())
-    with open(os.path.join(prefix, "matrix.mtx"), "rb") as mtx_in:
-        with gzip.open(os.path.join(prefix, "matrix.mtx") + ".gz", "wb") as mtx_gz:
-            shutil.copyfileobj(mtx_in, mtx_gz)
-    os.remove(os.path.join(prefix, "matrix.mtx"))
-
-
 def check_file(file_str: str) -> Path:
     """Check that a file exists and is readable.
 
@@ -212,17 +164,15 @@ def check_file(file_str: str) -> Path:
         Path: Path to the file
     """
     file_path = Path(file_str)
-    if file_path.exists and access(file_path, R_OK):
-        return file_path
-    else:
-        raise FileNotFoundError(
-            f"This file {file_path} does not exist or is not accessible"
-        )
+    if not file_path.exists:
+        raise FileNotFoundError(f"This file {file_path} does not exist")
+
+    if not access(file_path, R_OK):
+        raise FileNotFoundError(f"This file {file_path} is not accessible")
+    return file_path
 
 
-def write_unmapped(
-    merged_no_match: Counter, top_unknowns: int, outfolder: str, filename: str
-):
+def write_unmapped(unmapped_df: pl.DataFrame, outfolder: Path, filename: str):
     """
     Writes a list of top unmapped sequences
 
@@ -233,12 +183,7 @@ def write_unmapped(
         filename (string): Name of the output file
     """
 
-    top_unmapped = merged_no_match.most_common(top_unknowns)
-
-    with open(os.path.join(outfolder, filename), "w", encoding="utf-8") as unknown_file:
-        unknown_file.write("tag,count\n")
-        for element in top_unmapped:
-            unknown_file.write(f"{element[0]},{element[1]}\n")
+    unmapped_df.write_csv(file=outfolder / f"{filename}.csv")
 
 
 def load_report_template() -> dict:
@@ -331,7 +276,17 @@ def create_report(
 
 def create_mtx_df(
     main_df: pl.DataFrame, tags_df: pl.DataFrame, subset_df: pl.DataFrame
-):
+) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
+    """Create the MTX dataframe, indexed barcodes and indexed features from the different dataframes
+
+    Args:
+        main_df (pl.DataFrame): Bridge between barcodes and features. Holds UMIs
+        tags_df (pl.DataFrame): Features and their sequences
+        subset_df (pl.DataFrame): Subset of barcodes to use
+
+    Returns:
+        tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]: MTX dataframe, indexed barcodes, indexed features
+    """
     tags_indexed = (
         pl.concat(
             [
@@ -362,6 +317,15 @@ def write_data_to_mtx(
     data_type: str,
     outpath: str,
 ) -> None:
+    """Write out the data to disk in MTX format
+
+    Args:
+        main_df (pl.DataFrame): Main df
+        tags_df (pl.DataFrame): Features df
+        subset_df (pl.DataFrame): Subsetted barcodes df
+        data_type (str): umi or read
+        outpath (str): Path to the output folder
+    """
     mtx_df, tags_indexed, barcodes_indexed = create_mtx_df(main_df, tags_df, subset_df)
     data_path = Path(outpath) / f"{data_type}_count"
     data_path.mkdir(parents=True, exist_ok=True)
@@ -398,8 +362,7 @@ def write_mapping_input(
     chemistry_def,
 ):
     """
-    Writes chunked files of reads to disk and prepares parallel
-    processing queue parameters.
+    Writes all reads to one CSV to be used.
 
     Args:
         args(argparse): All parsed arguments.
@@ -410,7 +373,7 @@ def write_mapping_input(
         parsed_tags (list): List of namedtuple tags.
         maximum_distance (int): Maximum hamming distance for mapping.
     """
-    print("Writing chunks to disk")
+    print("Writing reads to disk")
 
     temp_path = os.path.abspath(args.temp_path)
     r1_too_short = 0

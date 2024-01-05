@@ -42,9 +42,7 @@ def check_equi_length(df: pl.DataFrame, column_name: str):
         raise ValueError(f"Barcodes in {column_name} column have different lengths.")
 
 
-def parse_barcode_file(
-    filename: str, barcode_length: int, required_header: list
-) -> pl.DataFrame:
+def parse_barcode_file(filename: str, required_header: list) -> pl.DataFrame:
     """Reads reference barcodes from a CSV file.
 
     The function accepts plain barcodes or even 10X style barcodes with the

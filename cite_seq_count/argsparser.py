@@ -276,15 +276,6 @@ def get_args() -> ArgumentParser:
         help=("Results will be written to this folder"),
     )
     parser.add_argument(
-        "-u",
-        "--unmapped-tags",
-        required=False,
-        type=str,
-        dest="unmapped_file",
-        default="unmapped.csv",
-        help=("Write table of unknown TAGs to file."),
-    )
-    parser.add_argument(
         "-ut",
         "--unknown-top-tags",
         required=False,

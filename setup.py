@@ -21,7 +21,6 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ),
     install_requires=[
-        "scipy>=1.1.0",
         "umi_tools==1.1.4",
         "pytest>=6.0.0",
         "pytest-dependency==0.4.0",

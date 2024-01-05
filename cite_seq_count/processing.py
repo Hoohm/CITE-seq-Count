@@ -1,7 +1,5 @@
-import os
-
 import polars as pl
-from rapidfuzz import distance
+import polars_distance as pld
 
 from umi_tools import network
 
@@ -39,7 +37,7 @@ def correct_barcodes_pl(
             BARCODE_COLUMN: pl.Utf8,
             "count": pl.UInt32,
             SUBSET_COLUMN: pl.Utf8,
-            "hamming_distance": pl.UInt8,
+            "hamming_distance": pl.UInt32,
         }
     )
 
@@ -59,13 +57,8 @@ def correct_barcodes_pl(
             )
             .filter(~pl.col(SUBSET_COLUMN).is_null())
             .with_columns(
-                pl.struct(pl.col(BARCODE_COLUMN), pl.col(SUBSET_COLUMN))
-                .map_elements(
-                    lambda x: distance.Hamming.distance(
-                        x[BARCODE_COLUMN], x[SUBSET_COLUMN]
-                    ),
-                    return_dtype=pl.UInt8,
-                )
+                pld.col(BARCODE_COLUMN)
+                .dist_str.hamming(pl.col(SUBSET_COLUMN))
                 .alias("hamming_distance")
             )
             .filter(pl.col("hamming_distance") <= hamming_distance)
@@ -104,7 +97,12 @@ def summarise_unmapped_df(main_df: pl.DataFrame, unmapped_r2_df: pl.DataFrame):
             .alias(FEATURE_NAME_COLUMN)
         )
     )
-    unmapped_df = unmapped_r2_df.group_by(FEATURE_NAME_COLUMN).agg(pl.count())
+    unmapped_df = (
+        unmapped_r2_df.group_by(R2_COLUMN)
+        .agg(pl.sum(COUNT_COLUMN))
+        .sort(COUNT_COLUMN, descending=True)
+        .head(1000)
+    )
 
     return unmapped_df
 
