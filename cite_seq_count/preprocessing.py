@@ -10,7 +10,7 @@ from pathlib import Path
 import Levenshtein
 import polars as pl
 import umi_tools.whitelist_methods as whitelist_method
-from cite_seq_count.io import get_n_lines, check_file
+from cite_seq_count.io import get_n_lines, check_file, write_fastq_inputs_as_parquet
 from cite_seq_count.constants import (
     SEQUENCE_COLUMN,
     R2_COLUMN,
@@ -364,7 +364,7 @@ def pre_run_checks(
 
 
 def split_data_input(
-    mapping_input_path: Path, n_reads: int
+    mapping_input_path: Path,
 ) -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFrame]:
     """Read in all the input data and split it into three dataframes.
 
@@ -381,16 +381,12 @@ def split_data_input(
         tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]: Three dfs described above
     """
     main_df = (
-        pl.scan_csv(
+        pl.scan_parquet(
             mapping_input_path,
-            has_header=False,
-            new_columns=[BARCODE_COLUMN, UMI_COLUMN, R2_COLUMN],
-            n_rows=n_reads,
         )
         .group_by([BARCODE_COLUMN, UMI_COLUMN, R2_COLUMN])
         .agg(pl.count())
     )
-
     barcodes_df = (
         main_df.select([BARCODE_COLUMN, COUNT_COLUMN])
         .group_by(BARCODE_COLUMN)

@@ -1,3 +1,4 @@
+from turtle import right
 import polars as pl
 import polars_distance as pld
 
@@ -79,6 +80,7 @@ def correct_barcodes_pl(
                 .with_columns(
                     pld.col(BARCODE_COLUMN)
                     .dist_str.hamming(pl.col(SUBSET_COLUMN))
+                    .cast(pl.UInt32)
                     .alias("hamming_distance")
                 )
                 .filter(pl.col("hamming_distance") <= hamming_distance)
@@ -96,6 +98,7 @@ def correct_barcodes_pl(
         )
         n_iterations += 1
     print(f"Corrected barcodes in {n_iterations} iterations")
+    print(f"Number of uncorrected barcodes: {current_barcodes.shape[0]}")
     mapped_barcodes = dict(
         corrected_barcodes_pl.select(BARCODE_COLUMN, SUBSET_COLUMN).iter_rows()  # type: ignore
     )
@@ -103,8 +106,8 @@ def correct_barcodes_pl(
         barcodes_df.with_columns(
             pl.col(BARCODE_COLUMN).map_dict(mapped_barcodes, default=pl.first())
         )
-        # .filter(pl.col(BARCODE_COLUMN).is_in(barcode_subset_df[SUBSET_COLUMN]))
-        .group_by(BARCODE_COLUMN).agg(pl.sum("count"))
+        .group_by(BARCODE_COLUMN)
+        .agg(pl.sum("count"))
     )
     print("Barcodes corrected")
     n_corrected_barcodes = corrected_barcodes_pl.shape[0]
@@ -177,27 +180,83 @@ def update_main_df(main_df: pl.LazyFrame, mapped_barcodes: dict) -> pl.LazyFrame
 def correct_umis_df(
     main_df: pl.LazyFrame,
     mapped_r2_df: pl.LazyFrame,
-    umi_distance,
-    cluster_method="directional",
-    max_umis=20000,
+    umi_distance: int,
+    barcode_subset: pl.LazyFrame,
+    cluster_method: str = "directional",
+    max_umis: int = 20000,
 ) -> tuple[pl.LazyFrame, int, list]:
-    merged = mapped_r2_df.join(main_df, on=R2_COLUMN)
-    temp = (
-        merged.with_columns(umi=pl.col(UMI_COLUMN).cast(pl.Binary))
-        .group_by([R2_COLUMN, FEATURE_NAME_COLUMN, BARCODE_COLUMN])
-        .agg(pl.struct(pl.col(UMI_COLUMN), pl.col(COUNT_COLUMN)))
-    ).collect()
-    clustered_cells = (
-        temp.filter(pl.col(UMI_COLUMN).list.len() > max_umis)
-        .select(BARCODE_COLUMN)
-        .unique()
-        .get_column(BARCODE_COLUMN)
-        .to_list()
-    )
+    """Take main df and mapped reads to correct umis.
 
+    Args:
+        main_df (pl.LazyFrame): Main df mapping r2, barcode and umi
+        mapped_r2_df (pl.LazyFrame): mapped reads
+        umi_distance (int): Hamming distance for umi correction
+        cluster_method (str, optional): Cluster methods used by the umi clusterer. Defaults to "directional".
+        max_umis (int, optional): Threshold for clustered cells. Defaults to 20000.
+
+    Returns:
+        tuple[pl.LazyFrame, int, list]: read counts, number of umis corrected, clustered cells lf
+    """
+    merged_lf = mapped_r2_df.join(main_df, on=R2_COLUMN).join(
+        barcode_subset, left_on=BARCODE_COLUMN, right_on=SUBSET_COLUMN, how="inner"
+    )
+    if umi_distance > 0:
+        print("UMI correction")
+        temp = (
+            merged_lf.with_columns(umi=pl.col(UMI_COLUMN).cast(pl.Binary))
+            .drop(R2_COLUMN)
+            .group_by([FEATURE_NAME_COLUMN, BARCODE_COLUMN])
+            .agg(pl.struct(pl.col(UMI_COLUMN), pl.col(COUNT_COLUMN)))
+        ).collect()
+
+        clustered_cells = (
+            temp.filter(pl.col(UMI_COLUMN).list.len() > max_umis)
+            .select(BARCODE_COLUMN)
+            .unique()
+            .get_column(BARCODE_COLUMN)
+            .to_list()
+        )
+
+        umi_mapping_lf = find_umis_to_correct(
+            temp=temp,
+            cluster_method=cluster_method,
+            max_umis=max_umis,
+            umi_distance=umi_distance,
+        )
+        read_counts = update_umis_and_create_read_counts(
+            merged_lf=merged_lf, umi_mapping_lf=umi_mapping_lf
+        )
+
+        n_corrected_umis = umi_mapping_lf.collect().shape[0]
+    else:
+        read_counts = (
+            merged_lf.group_by([BARCODE_COLUMN, FEATURE_NAME_COLUMN, UMI_COLUMN])
+            .agg(pl.sum(COUNT_COLUMN))
+            .drop(R2_COLUMN)
+        )
+        clustered_cells = []
+        n_corrected_umis = 0
+
+    return read_counts, n_corrected_umis, clustered_cells
+
+
+def find_umis_to_correct(
+    temp: pl.DataFrame, cluster_method: str, max_umis: int, umi_distance: int
+) -> pl.LazyFrame:
+    """Iterate through all umis that might need correcting and return a mapping lf
+
+    Args:
+        temp (pl.DataFrame): Filtered aggregated UMI per barcode per features
+        cluster_method (str): What cluster method to use
+        max_umis (int): Threshold for clustered cells
+        umi_distance (int): Hamming distance for umi correction
+
+    Returns:
+        pl.LazyFrame: Mapping to correct umis
+    """
     mapping_list = []
     umi_clusterer = network.UMIClusterer(cluster_method=cluster_method)
-    for r2, feature_name, barcode, umis in temp.filter(
+    for feature_name, barcode, umis in temp.filter(
         (pl.col(UMI_COLUMN).list.len() > 1) & (pl.col(UMI_COLUMN).list.len() < max_umis)
     ).iter_rows():
         corrected_umis = correct_umis(
@@ -210,28 +269,26 @@ def correct_umis_df(
         for umi_set in corrected_umis:
             for index, umi in enumerate(umi_set):
                 if index != 0:
-                    mapping_list.append([r2, feature_name, barcode, umi, umi_set[0]])
-    mapping_df = (
-        pl.LazyFrame(
-            mapping_list,
-            schema={
-                R2_COLUMN: pl.String,
-                FEATURE_NAME_COLUMN: pl.String,
-                BARCODE_COLUMN: pl.String,
-                "orig": pl.Binary,
-                "replace": pl.Binary,
-            },
-        )
-        .with_columns(
-            pl.col("orig").cast(pl.String).alias(UMI_COLUMN),
-            pl.col("replace").cast(pl.String),
-        )
-        .drop("orig")
-    )
-    read_counts = (
-        merged.join(
-            mapping_df,
-            on=[R2_COLUMN, FEATURE_NAME_COLUMN, BARCODE_COLUMN, UMI_COLUMN],
+                    mapping_list.append([feature_name, barcode, umi, umi_set[0]])
+    return get_umi_mapping_lf(mapping_list)
+
+
+def update_umis_and_create_read_counts(
+    merged_lf: pl.LazyFrame, umi_mapping_lf: pl.LazyFrame
+) -> pl.LazyFrame:
+    """Update corrected umis and format to a read count table
+
+    Args:
+        merged_lf (pl.LazyFrame): Main df and R2 df joined
+        umi_mapping_lf (pl.LazyFrame): UMIs to update
+
+    Returns:
+        pl.LazyFrame: Final read counts
+    """
+    return (
+        merged_lf.join(
+            umi_mapping_lf,
+            on=[FEATURE_NAME_COLUMN, BARCODE_COLUMN, UMI_COLUMN],
             how="left",
         )
         .with_columns(
@@ -241,15 +298,50 @@ def correct_umis_df(
             .alias(UMI_COLUMN)
         )
         .drop("replace")
-        .group_by([R2_COLUMN, BARCODE_COLUMN, FEATURE_NAME_COLUMN, UMI_COLUMN])
+        .group_by([BARCODE_COLUMN, FEATURE_NAME_COLUMN, UMI_COLUMN])
         .agg(pl.sum(COUNT_COLUMN))
-        .drop(R2_COLUMN)
     )
-    n_corrected_umis = mapping_df.collect().shape[0]
-    return read_counts, n_corrected_umis, clustered_cells
 
 
-def correct_umis(umis_list, umi_distance, umi_clusterer):
+def get_umi_mapping_lf(mapping_list: list) -> pl.LazyFrame:
+    """Convert a list of UMI per barcode per features to correct to a lazy frame
+
+    Args:
+        mapping_list (list): List of UMIs to correct
+
+    Returns:
+        pl.LazyFrame: LazyFrame to correct UMIs
+    """
+    mapping_df = (
+        pl.LazyFrame(
+            mapping_list,
+            schema={
+                FEATURE_NAME_COLUMN: pl.String,
+                BARCODE_COLUMN: pl.String,
+                UMI_COLUMN: pl.Binary,
+                "replace": pl.Binary,
+            },
+        )
+        .with_columns(
+            pl.col(UMI_COLUMN).cast(pl.String),
+            pl.col("replace").cast(pl.String),
+        )
+        .drop("orig")
+    )
+    return mapping_df
+
+
+def correct_umis(umis_list, umi_distance, umi_clusterer) -> list[list]:
+    """Find corrected umis from a pl.struct of UMI and counts
+
+    Args:
+        umis_list (_type_): pl.struct of UMI and their counts
+        umi_distance (_type_): Hamming distance for a correction
+        umi_clusterer (_type_): umi_cluster object
+
+    Returns:
+        list[list]: List of list. First member is the
+    """
     umis = dict([(i["umi"], i["count"]) for i in umis_list])
 
     res = umi_clusterer(umis, umi_distance)
@@ -277,3 +369,18 @@ def correct_umis(umis_list, umi_distance, umi_clusterer):
 #             .group_by([BARCODE_COLUMN, FEATURE_NAME_COLUMN])
 #             .agg(pl.count())
 #         )
+
+
+def find_closest_match(
+    df: pl.LazyFrame,
+    source_column: str,
+    target_df: pl.LazyFrame,
+    Levenshtein_distance=1,
+):
+    return df.join(
+        target_df, left_on=source_column, right_on=target_df.columns[0], how="cross"
+    ).with_columns(
+        pld.col(source_column)
+        .dist_str.levenshtein(target_df.columns[0])
+        .alias("distance")
+    )

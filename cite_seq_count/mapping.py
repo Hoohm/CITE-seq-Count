@@ -91,19 +91,13 @@ def map_reads_polars(
         .drop([SEQUENCE_COLUMN, "levenshtein_dist"])
         .rename({"feature_name_right": FEATURE_NAME_COLUMN})
     )
-    multi_mapped = (
-        levenshtein_mapped.group_by(R2_COLUMN)
-        .agg(pl.count())
-        .filter(pl.col(COUNT_COLUMN) > 1)
-    )
-    mapped = pl.concat(
-        [
-            simple_join,
-            levenshtein_mapped.join(multi_mapped, on=R2_COLUMN, how="inner").drop(
-                COUNT_COLUMN
-            ),
-        ]
-    )
+    # TODO: Deal with multimapped reads
+    # multi_mapped = (
+    #     levenshtein_mapped.group_by(R2_COLUMN)
+    #     .agg(pl.count())
+    #     .filter(pl.col(COUNT_COLUMN) > 1)
+    # )
+    mapped = pl.concat([simple_join, levenshtein_mapped])
     unmapped = (
         joined.join(mapped.drop(FEATURE_NAME_COLUMN), on=R2_COLUMN, how="outer")
         .with_columns(pl.col(FEATURE_NAME_COLUMN).fill_null(UNMAPPED_NAME))

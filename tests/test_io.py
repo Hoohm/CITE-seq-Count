@@ -3,6 +3,7 @@ import os
 import gzip
 from pathlib import Path
 from polars.testing import assert_frame_equal
+from zmq import has
 from cite_seq_count.constants import (
     BARCODE_COLUMN,
     COUNT_COLUMN,
@@ -18,7 +19,13 @@ from cite_seq_count.io import (
     get_read_paths,
     write_data_to_mtx,
     create_mtx_df,
+    write_mapping_input_from_fastqs,
+    read_R1_polars,
+    read_R2_polars,
+    write_fastq_inputs_as_parquet,
 )
+
+from cite_seq_count.chemistry import Chemistry
 import polars as pl
 
 # copied from https://stackoverflow.com/questions/3431825/generating-an-md5-checksum-of-a-file
@@ -36,6 +43,19 @@ def md5(fname):
             string = f.read()
             hash_md5.update(string.encode())
     return hash_md5.hexdigest()
+
+
+@pytest.fixture
+def chemistry_def():
+    return Chemistry(
+        name="test",
+        cell_barcode_start=1,
+        cell_barcode_end=16,
+        umi_barcode_start=17,
+        umi_barcode_end=26,
+        r2_trim_start=0,
+        barcode_reference_path="tests/reference_lists/pass/translation.csv",
+    )
 
 
 @pytest.fixture
@@ -197,8 +217,8 @@ def test_create_mtx_df():
         },
         schema={
             FEATURE_ID_COLUMN: pl.UInt32,
-            SEQUENCE_COLUMN: pl.Utf8,
-            FEATURE_NAME_COLUMN: pl.Utf8,
+            SEQUENCE_COLUMN: pl.String,
+            FEATURE_NAME_COLUMN: pl.String,
         },
     )
     expected_barcodes_indexed = pl.DataFrame(
@@ -206,7 +226,7 @@ def test_create_mtx_df():
             SUBSET_COLUMN: ["ACTGTTTTATTGGCCT", "TTCATAAGGTAGGGAT"],
             BARCODE_ID_COLUMN: [1, 2],
         },
-        schema={SUBSET_COLUMN: pl.Utf8, BARCODE_ID_COLUMN: pl.UInt32},
+        schema={SUBSET_COLUMN: pl.String, BARCODE_ID_COLUMN: pl.UInt32},
     )
 
     assert_frame_equal(mtx_df, expected_mtx_df)
@@ -214,3 +234,69 @@ def test_create_mtx_df():
     assert_frame_equal(
         barcodes_indexed, expected_barcodes_indexed, check_column_order=False
     )
+
+
+@pytest.fixture
+def fastq_reads():
+    return pl.scan_csv(
+        "tests/test_data/fastq/test_csv.csv",
+        has_header=False,
+        schema={"barcode": pl.String, "umi": pl.String, "r2": pl.String},
+    )
+
+
+@pytest.fixture
+def fastq_paths(correct_R1, correct_R2):
+    return [
+        (correct_R1, correct_R2),
+    ]
+
+
+@pytest.fixture
+def correct_R1_csv():
+    return pl.scan_csv("tests/test_data/fastq/correct_R1.csv", has_header=True)
+
+
+@pytest.fixture
+def correct_R2_csv():
+    return pl.scan_csv("tests/test_data/fastq/correct_R2.csv", has_header=True)
+
+
+def test_read_R1_polars(correct_R1, chemistry_def, correct_R1_csv):
+    # Call the function
+    result = read_R1_polars(correct_R1, chemistry_def)
+    # Define the expected output
+    # Check the output
+    assert_frame_equal(result, correct_R1_csv)
+
+
+def test_read_R2_polars(correct_R2, correct_R2_csv, chemistry_def):
+    # Call the function
+    result = read_R2_polars(correct_R2, r2_min_length=20, chemistry=chemistry_def)
+    # Define the expected output
+
+    # Check the output
+    assert_frame_equal(result, correct_R2_csv)
+
+
+def test_write_fastq_inputs_as_parquet(tmp_path, correct_R1, correct_R2, chemistry_def):
+    # Set up test data
+    read_paths = [(correct_R1, correct_R2)]
+    temp_path = tmp_path / "test.parquet"
+    r2_min_length = 20
+    top_n_reads = 100
+
+    # Call the function
+    r1_too_short, r2_too_short, total_reads = write_fastq_inputs_as_parquet(
+        read_paths=read_paths,
+        temp_path=temp_path,
+        chemistry_def=chemistry_def,
+        r2_min_length=r2_min_length,
+        top_n_reads=top_n_reads,
+    )
+
+    # Assert the result
+    assert r1_too_short == 0
+    assert r2_too_short == 0
+    assert total_reads == top_n_reads
+    assert temp_path.exists()

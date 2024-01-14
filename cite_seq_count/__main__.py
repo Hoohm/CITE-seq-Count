@@ -61,31 +61,45 @@ def main():
     read1_paths, read2_paths = io.get_read_paths(args.read1_path, args.read2_path)
 
     # Checks before chunking.
-    (n_reads, r2_min_length, maximum_distance) = preprocessing.pre_run_checks(
-        read1_paths=read1_paths,
-        chemistry_def=chemistry_def,
-        longest_tag_len=longest_tag_len,
-        arguments=args,
-    )
+    # (n_reads, r2_min_length, maximum_distance) = preprocessing.pre_run_checks(
+    #     read1_paths=read1_paths,
+    #     chemistry_def=chemistry_def,
+    #     longest_tag_len=longest_tag_len,
+    #     arguments=args,
+    # )
+    # (
+    #     temp_file,
+    #     r1_too_short,
+    #     r2_too_short,
+    #     total_reads,
+    # ) = io.write_mapping_input(
+    #     args=args,
+    #     read1_paths=read1_paths,
+    #     read2_paths=read2_paths,
+    #     r2_min_length=r2_min_length,
+    #     chemistry_def=chemistry_def,
+    # )
+    print("Writing mapping input")
     (
-        temp_file,
         r1_too_short,
         r2_too_short,
-        total_reads,
-    ) = io.write_mapping_input(
-        args=args,
-        read1_paths=read1_paths,
-        read2_paths=read2_paths,
-        r2_min_length=r2_min_length,
+        n_reads,
+        temp_file_path,
+    ) = io.write_mapping_input_from_fastqs(
         chemistry_def=chemistry_def,
+        fastq_paths=list(zip(read1_paths, read2_paths)),
+        r2_min_length=longest_tag_len,
+        top_n_reads=args.first_n,
+        temp_path=args.temp_path,
     )
+    print("Processing")
     main_df, barcodes_df, r2_df = preprocessing.split_data_input(
-        mapping_input_path=temp_file, n_reads=n_reads
+        mapping_input_path=temp_file_path,
     )
     mapped_r2_df, unmapped_r2_df = mapping.map_reads_polars(
         r2_df=r2_df,
         parsed_tags=parsed_tags,
-        maximum_distance=maximum_distance,
+        maximum_distance=args.max_error,
     )
     unmapped_df = processing.summarise_unmapped_df(
         main_df=main_df, unmapped_r2_df=unmapped_r2_df
@@ -117,9 +131,11 @@ def main():
         )
     else:
         n_bcs_corrected = 0
-    print("UMI correction")
     final_read_counts, umis_corrected, clustered_cells = processing.correct_umis_df(
-        main_df=main_df, mapped_r2_df=mapped_r2_df, umi_distance=args.umi_threshold
+        main_df=main_df,
+        mapped_r2_df=mapped_r2_df,
+        barcode_subset=barcode_subset,
+        umi_distance=args.umi_threshold,
     )
 
     # # Write reads to file
@@ -147,9 +163,9 @@ def main():
     # TODO: rewrite reporting
     # Create report and write it to disk
     # Remove temp file
-    
+
     io.create_report(
-        total_reads=total_reads,
+        total_reads=n_reads,
         unmapped=unmapped_df.collect(),
         version=argsparser.get_package_version(),
         start_time=start_time,
@@ -160,8 +176,10 @@ def main():
         r2_too_short=r2_too_short,
         args=args,
         chemistry_def=chemistry_def,
-        maximum_distance=maximum_distance,
+        maximum_distance=args.max_error,
     )
-    os.remove(temp_file)
+    os.remove(temp_file_path)
+
+
 if __name__ == "__main__":
     main()

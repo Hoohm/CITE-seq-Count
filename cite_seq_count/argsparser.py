@@ -250,7 +250,7 @@ def get_args() -> ArgumentParser:
     parser.add_argument(
         "--temp_path",
         required=False,
-        type=str,
+        type=Path,
         dest="temp_path",
         default=tempfile.gettempdir(),
         help=(

@@ -1,4 +1,5 @@
 """Handle io operations"""
+from math import inf
 import os
 import csv
 import sys
@@ -11,17 +12,13 @@ import json
 
 from argparse import Namespace
 from itertools import islice
-from collections import Counter
 from typing import Tuple, TextIO
 from pathlib import Path
 from os import access, R_OK
 
-import scipy
 import pkg_resources
 import yaml
-import pandas as pd
 import polars as pl
-from scipy import io
 from cite_seq_count import secondsToText
 from cite_seq_count.constants import (
     FEATURE_NAME_COLUMN,
@@ -33,7 +30,9 @@ from cite_seq_count.constants import (
     FEATURES_MTX,
     BARCODE_MTX,
     MATRIX_MTX,
+    R2_COLUMN,
     TEMP_MTX,
+    UMI_COLUMN,
     UNMAPPED_NAME,
     SEQUENCE_COLUMN,
     SUBSET_COLUMN,
@@ -186,6 +185,88 @@ def write_unmapped(unmapped_df: pl.LazyFrame, outfolder: Path, filename: str):
     unmapped_df.collect().write_csv(file=outfolder / f"{filename}.csv")
 
 
+def read_R1_polars(R1_path: Path, chemistry_def) -> pl.LazyFrame:
+    return (
+        pl.read_csv(R1_path, has_header=False, separator="\t", new_columns=["sequence"])
+        .lazy()
+        .gather_every(4, offset=1)
+        .with_columns(
+            pl.col("sequence")
+            .str.slice(offset=0, length=chemistry_def.barcode_length)
+            .alias("barcode"),
+            pl.col("sequence")
+            .str.slice(
+                offset=chemistry_def.cell_barcode_end, length=chemistry_def.umi_length
+            )
+            .alias("umi"),
+        )
+        .drop("sequence")
+    )
+
+
+def read_R2_polars(R2_path: Path, r2_min_length: int, chemistry) -> pl.LazyFrame:
+    return (
+        pl.read_csv(R2_path, has_header=False, separator="\t", new_columns=["r2"])
+        .lazy()
+        .gather_every(4, offset=1)
+        .with_columns(
+            pl.col("r2").str.slice(offset=chemistry.r2_trim_start, length=r2_min_length)
+        )
+    )
+
+
+def write_fastq_inputs_as_parquet(
+    read_paths: list,
+    temp_path: Path,
+    chemistry_def,
+    r2_min_length: int,
+    top_n_reads: int,
+) -> tuple[int, int, int]:
+    concats = []
+    for r1_read_path, r2_read_path in read_paths:
+        R1_read = read_R1_polars(R1_path=r1_read_path, chemistry_def=chemistry_def)
+        R2_read = read_R2_polars(
+            R2_path=r2_read_path, r2_min_length=r2_min_length, chemistry=chemistry_def
+        )
+        if top_n_reads != inf:
+            data = (
+                pl.concat([R1_read, R2_read], how="horizontal")
+                # Since this is lazy, the head is actually computed ahead of time
+                .head(4 * round(top_n_reads / len(read_paths)))
+                .group_by(["barcode", "umi", "r2"])
+                .agg(pl.count())
+            )
+        else:
+            data = (
+                pl.concat([R1_read, R2_read], how="horizontal")
+                .group_by(["barcode", "umi", "r2"])
+                .agg(pl.count())
+            )
+
+        concats.append(data)
+
+    all = pl.concat(concats)
+    total_reads = all.select(pl.sum(COUNT_COLUMN)).collect().item()
+    r1_too_short = (
+        all.filter(
+            (pl.col(BARCODE_COLUMN) + pl.col(UMI_COLUMN)).str.len_bytes()
+            < (chemistry_def.barcode_length + chemistry_def.umi_length)
+        )
+        .select(pl.sum(COUNT_COLUMN))
+        .collect()
+        .item()
+    )
+    r2_too_short = (
+        all.filter((pl.col(R2_COLUMN).str.len_bytes() < r2_min_length))
+        .select(pl.sum(COUNT_COLUMN))
+        .collect()
+        .item()
+    )
+
+    all.collect().write_parquet(file=temp_path)
+    return r1_too_short, r2_too_short, total_reads
+
+
 def load_report_template() -> dict:
     """Load json template for the report
 
@@ -227,7 +308,7 @@ def create_report(
         args (arg_parse): Arguments provided by the user.
 
     """
-    total_unmapped = unmapped[COUNT_COLUMN][0]
+    total_unmapped = unmapped.sum().get_column(COUNT_COLUMN)[0]
     total_too_short = r1_too_short + r2_too_short
     total_mapped = total_reads - total_unmapped - total_too_short
 
@@ -297,9 +378,9 @@ def create_mtx_df(
             ]
         )
         .sort(pl.col(FEATURE_NAME_COLUMN))
-        .with_row_count(offset=1, name=FEATURE_ID_COLUMN)
+        .with_row_index(offset=1, name=FEATURE_ID_COLUMN)
     )
-    barcodes_indexed = subset_df.sort(pl.col(SUBSET_COLUMN)).with_row_count(
+    barcodes_indexed = subset_df.sort(pl.col(SUBSET_COLUMN)).with_row_index(
         offset=1, name=BARCODE_ID_COLUMN
     )
     mtx_df = (
@@ -442,3 +523,36 @@ def write_mapping_input(
         r2_too_short,
         total_reads,
     )
+
+
+def write_mapping_input_from_fastqs(
+    fastq_paths: list[tuple[Path, Path]],
+    r2_min_length: int,
+    chemistry_def,
+    top_n_reads: int,
+    temp_path: str,
+) -> tuple[int, int, int, Path]:
+    """Read fastq inputs using polars read_csv, concatenate R1 and R2 files, summaries and write to parquet
+
+    Args:
+        fastq_paths (list[list]): List of lists containing the paths to the R1 and R2 fastq files
+        chemistry (str): The chemistry definition
+
+    Returns:
+        None
+    """
+    temp_path = os.path.abspath(temp_path)
+    temp_file = tempfile.NamedTemporaryFile(
+        "w", dir=temp_path, suffix="_csc.parquet", delete=False
+    )
+    temp_file_path = Path(temp_file.name)
+
+    r1_too_short, r2_too_short, total_reads = write_fastq_inputs_as_parquet(
+        temp_path=temp_file_path,
+        read_paths=fastq_paths,
+        chemistry_def=chemistry_def,
+        r2_min_length=r2_min_length,
+        top_n_reads=top_n_reads,
+    )
+
+    return r1_too_short, r2_too_short, total_reads, temp_file_path
