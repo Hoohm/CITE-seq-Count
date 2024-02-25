@@ -1,5 +1,7 @@
 """Handle io operations"""
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from math import inf
+from tempfile import NamedTemporaryFile
 import os
 import csv
 import sys
@@ -215,40 +217,36 @@ def read_R2_polars(R2_path: Path, r2_min_length: int, chemistry) -> pl.LazyFrame
     )
 
 
-def write_fastq_inputs_as_parquet(
-    read_paths: list,
-    temp_path: Path,
+def concat_reads(
+    r1_read_path: Path,
+    r2_read_path: Path,
     chemistry_def,
-    r2_min_length: int,
     top_n_reads: int,
-) -> tuple[int, int, int]:
-    concats = []
-    for r1_read_path, r2_read_path in read_paths:
-        R1_read = read_R1_polars(R1_path=r1_read_path, chemistry_def=chemistry_def)
-        R2_read = read_R2_polars(
-            R2_path=r2_read_path, r2_min_length=r2_min_length, chemistry=chemistry_def
+    n_samples: int,
+    r2_min_length: int,
+    temp_path: Path,
+):
+    R1_read = read_R1_polars(R1_path=r1_read_path, chemistry_def=chemistry_def)
+    R2_read = read_R2_polars(
+        R2_path=r2_read_path, r2_min_length=r2_min_length, chemistry=chemistry_def
+    )
+    if top_n_reads != inf:
+        data = (
+            pl.concat([R1_read, R2_read], how="horizontal")
+            # Since this is lazy, the head is actually computed ahead of time
+            .head(round(top_n_reads / n_samples))
+            .group_by(["barcode", "umi", "r2"])
+            .agg(pl.count())
         )
-        if top_n_reads != inf:
-            data = (
-                pl.concat([R1_read, R2_read], how="horizontal")
-                # Since this is lazy, the head is actually computed ahead of time
-                .head(4 * round(top_n_reads / len(read_paths)))
-                .group_by(["barcode", "umi", "r2"])
-                .agg(pl.count())
-            )
-        else:
-            data = (
-                pl.concat([R1_read, R2_read], how="horizontal")
-                .group_by(["barcode", "umi", "r2"])
-                .agg(pl.count())
-            )
-
-        concats.append(data)
-
-    all = pl.concat(concats)
-    total_reads = all.select(pl.sum(COUNT_COLUMN)).collect().item()
+    else:
+        data = (
+            pl.concat([R1_read, R2_read], how="horizontal")
+            .group_by(["barcode", "umi", "r2"])
+            .agg(pl.count())
+        )
+    total_reads = data.select(pl.sum(COUNT_COLUMN)).collect().item()
     r1_too_short = (
-        all.filter(
+        data.filter(
             (pl.col(BARCODE_COLUMN) + pl.col(UMI_COLUMN)).str.len_bytes()
             < (chemistry_def.barcode_length + chemistry_def.umi_length)
         )
@@ -257,14 +255,52 @@ def write_fastq_inputs_as_parquet(
         .item()
     )
     r2_too_short = (
-        all.filter((pl.col(R2_COLUMN).str.len_bytes() < r2_min_length))
+        data.filter((pl.col(R2_COLUMN).str.len_bytes() < r2_min_length))
         .select(pl.sum(COUNT_COLUMN))
         .collect()
         .item()
     )
+    temp_file_path = NamedTemporaryFile(dir=temp_path, delete=False)
+    data.collect().write_parquet(file=temp_file_path.name)
+    return temp_file_path.name, r1_too_short, r2_too_short, total_reads
 
-    all.collect().write_parquet(file=temp_path)
-    return r1_too_short, r2_too_short, total_reads
+
+def write_fastq_inputs_as_parquet(
+    read_paths: list,
+    temp_path: Path,
+    chemistry_def,
+    r2_min_length: int,
+    top_n_reads: int,
+) -> tuple[int, int, int, list[Path]]:
+    n_samples = len(read_paths)
+    with ThreadPoolExecutor(n_samples) as executor:
+        executors = []
+        for r1_read_path, r2_read_path in read_paths:
+            executors.append(
+                executor.submit(
+                    concat_reads,
+                        r1_read_path,
+                        r2_read_path,
+                        chemistry_def,
+                        top_n_reads,
+                        n_samples,
+                        r2_min_length,
+                        temp_path,
+                )
+            )
+        results = [future.result() for future in as_completed(executors)]
+        r1_too_short = 0
+        r2_too_short = 0
+        total_reads = 0
+        temp_path_list = []
+        for result in results:
+            temp_path_list.append(Path(result[0]))
+            r1_too_short+=result[1]
+            r2_too_short+=result[2]
+            total_reads+=result[3]
+
+        
+        return r1_too_short, r2_too_short, total_reads, temp_path_list
 
 
 def load_report_template() -> dict:
@@ -531,7 +567,7 @@ def write_mapping_input_from_fastqs(
     chemistry_def,
     top_n_reads: int,
     temp_path: str,
-) -> tuple[int, int, int, Path]:
+) -> tuple[int, int, int, list[Path]]:
     """Read fastq inputs using polars read_csv, concatenate R1 and R2 files, summaries and write to parquet
 
     Args:
@@ -542,17 +578,13 @@ def write_mapping_input_from_fastqs(
         None
     """
     temp_path = os.path.abspath(temp_path)
-    temp_file = tempfile.NamedTemporaryFile(
-        "w", dir=temp_path, suffix="_csc.parquet", delete=False
-    )
-    temp_file_path = Path(temp_file.name)
 
-    r1_too_short, r2_too_short, total_reads = write_fastq_inputs_as_parquet(
-        temp_path=temp_file_path,
+    r1_too_short, r2_too_short, total_reads, temp_file_list = write_fastq_inputs_as_parquet(
+        temp_path=Path(temp_path),
         read_paths=fastq_paths,
         chemistry_def=chemistry_def,
         r2_min_length=r2_min_length,
         top_n_reads=top_n_reads,
     )
 
-    return r1_too_short, r2_too_short, total_reads, temp_file_path
+    return r1_too_short, r2_too_short, total_reads, temp_file_list

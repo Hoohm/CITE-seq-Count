@@ -84,7 +84,7 @@ def main():
         r1_too_short,
         r2_too_short,
         n_reads,
-        temp_file_path,
+        temp_file_list,
     ) = io.write_mapping_input_from_fastqs(
         chemistry_def=chemistry_def,
         fastq_paths=list(zip(read1_paths, read2_paths)),
@@ -94,7 +94,7 @@ def main():
     )
     print("Processing")
     main_df, barcodes_df, r2_df = preprocessing.split_data_input(
-        mapping_input_path=temp_file_path,
+        mapping_input_path=temp_file_list,
     )
     mapped_r2_df, unmapped_r2_df = mapping.map_reads_polars(
         r2_df=r2_df,
@@ -178,7 +178,8 @@ def main():
         chemistry_def=chemistry_def,
         maximum_distance=args.max_error,
     )
-    os.remove(temp_file_path)
+    for temp_file in temp_file_list:
+        os.remove(temp_file)
 
 
 if __name__ == "__main__":

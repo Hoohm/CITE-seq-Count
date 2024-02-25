@@ -364,7 +364,7 @@ def pre_run_checks(
 
 
 def split_data_input(
-    mapping_input_path: Path,
+    mapping_input_path: list[Path],
 ) -> tuple[pl.LazyFrame, pl.LazyFrame, pl.LazyFrame]:
     """Read in all the input data and split it into three dataframes.
 
@@ -380,13 +380,17 @@ def split_data_input(
     Returns:
         tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]: Three dfs described above
     """
-    main_df = (
-        pl.scan_parquet(
-            mapping_input_path,
+    main_dfs = []
+    for temp_file_path in mapping_input_path:
+        main_df = (
+            pl.scan_parquet(
+                temp_file_path,
+            )
+            .group_by([BARCODE_COLUMN, UMI_COLUMN, R2_COLUMN])
+            .agg(pl.count())
         )
-        .group_by([BARCODE_COLUMN, UMI_COLUMN, R2_COLUMN])
-        .agg(pl.count())
-    )
+        main_dfs.append(main_df)
+    main_df = pl.concat(main_dfs)
     barcodes_df = (
         main_df.select([BARCODE_COLUMN, COUNT_COLUMN])
         .group_by(BARCODE_COLUMN)

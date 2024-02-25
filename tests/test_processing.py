@@ -1,6 +1,7 @@
 import pytest
 from cite_seq_count import processing
 import polars as pl
+import polars_distance as pld
 from polars.testing import assert_frame_equal
 
 
@@ -35,8 +36,8 @@ def test_correct_barcodes_pl(barcodes_df):
                 "TACATATTCTTTACTG",
                 "GCTAGTCGTAGCTAGA",
                 "TAGAGGGAGGTCAAGC",
-            ],
-        }
+            ]
+        }, schema = {"subset":pl.String}
     )
     hamming_distance = 1
 
@@ -93,3 +94,45 @@ def test_correct_barcodes_pl(barcodes_df):
 #     )
 #     print(res.collect())
 #     assert_frame_equal(res, pl.LazyFrame())
+
+
+# def test_umi_correction():
+#     # Broadest context
+#     test_data_broad = pl.DataFrame(
+#         {   "barcode": ["cell1", "cell1", "cell1", "cell2", "cell2", "cell2"],
+#             "feature": ["gene1", "gene1", "gene2", "gene1", "gene2", "gene2"],
+#             "umi": ["CCCC", "CCCA", "TTTT", "AAAA", "GGGG", "CAAA"],
+#             "count": [10, 1, 2, 3, 6, 3],
+#         }
+#     )
+
+#     expected_data_broad = pl.DataFrame(
+#         {   "barcode": ["cell1", "cell1", "cell2", "cell2"],
+#             "feature": ["gene1", "gene2", "gene1", "gene2"],
+#             "umi": ["CCCC", "TTTT", "AAAA", "GGGG"],
+#             "count": [11, 2, 6, 6],
+#         }
+#     )
+#     # One cell, one feature
+#     test_data = pl.DataFrame(
+#         {
+#             "umi": ["CCCC", "CCCA", "TTTT"],
+#             "count": [10, 1, 2],
+#         }
+#     )
+#     expected = pl.DataFrame(
+#         {
+#             "umi": ["CCCC", "TTTT"],
+#             "count": [11, 2],
+#         }
+#     )
+#     # What I've got so far that deals with one case of the smaller context but doesn't keep the "uncorrected" umis
+#     res = (
+#         test_data.join(test_data.select("umi"), on="umi", how="cross")
+#         .filter(pl.col("umi") != pl.col("umi_right"))
+#         .with_columns(pld.col("umi").dist_str.hamming("umi_right").alias("hamming"))
+#         .filter(pl.col("hamming") <= 1)
+#         .sort("count", descending=True)
+#         .select(pl.first("umi"), pl.sum("count"))
+#     )
+#     print(res)

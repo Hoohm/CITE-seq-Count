@@ -3,7 +3,6 @@ import os
 import gzip
 from pathlib import Path
 from polars.testing import assert_frame_equal
-from zmq import has
 from cite_seq_count.constants import (
     BARCODE_COLUMN,
     COUNT_COLUMN,
@@ -23,6 +22,7 @@ from cite_seq_count.io import (
     read_R1_polars,
     read_R2_polars,
     write_fastq_inputs_as_parquet,
+    concat_reads,
 )
 
 from cite_seq_count.chemistry import Chemistry
@@ -279,15 +279,27 @@ def test_read_R2_polars(correct_R2, correct_R2_csv, chemistry_def):
     assert_frame_equal(result, correct_R2_csv)
 
 
+def test_concat_reads(correct_R1, correct_R2, chemistry_def, tmp_path):
+    # Call the function to be tested
+    temp_file_path, r1_too_short, r2_too_short, total_reads = concat_reads(
+        correct_R1, correct_R2, chemistry_def, 100, 1, 20, tmp_path
+    )
+    os.remove(temp_file_path)
+    # Assert the expected output
+    assert r1_too_short == 0
+    assert r2_too_short == 0
+    assert total_reads == 100
+
+
 def test_write_fastq_inputs_as_parquet(tmp_path, correct_R1, correct_R2, chemistry_def):
     # Set up test data
     read_paths = [(correct_R1, correct_R2)]
-    temp_path = tmp_path / "test.parquet"
+    temp_path = tmp_path
     r2_min_length = 20
     top_n_reads = 100
 
     # Call the function
-    r1_too_short, r2_too_short, total_reads = write_fastq_inputs_as_parquet(
+    r1_too_short, r2_too_short, total_reads, temp_file_list = write_fastq_inputs_as_parquet(
         read_paths=read_paths,
         temp_path=temp_path,
         chemistry_def=chemistry_def,
@@ -296,6 +308,7 @@ def test_write_fastq_inputs_as_parquet(tmp_path, correct_R1, correct_R2, chemist
     )
 
     # Assert the result
+    print(temp_file_list)
     assert r1_too_short == 0
     assert r2_too_short == 0
     assert total_reads == top_n_reads
