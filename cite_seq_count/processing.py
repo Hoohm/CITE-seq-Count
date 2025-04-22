@@ -105,7 +105,7 @@ def map_reads(
     Args:
         read1_path (string): Path to R1.fastq.gz
         read2_path (string): Path to R2.fastq.gz
-        chunk_size (int): The number of lines to process 
+        chunk_size (int): The number of lines to process
         tags (dict): A dictionary with the TAGs + TAG Names.
         barcode_slice (slice): A slice for extracting the Barcode portion from the
             sequence.
@@ -234,13 +234,13 @@ def merge_results(parallel_results):
 def correct_umis(final_results, collapsing_threshold, top_cells, max_umis):
     """
     Corrects umi barcodes within same cell/tag groups.
-    
+
     Args:
         final_results (dict): Dict of dict of Counters with mapping results.
         collapsing_threshold (int): Max distance between umis.
         top_cells (set): Set of cells to go through.
         max_umis (int): Maximum UMIs to consider for one cluster.
-    
+
     Returns:
         final_results (dict): Same as input but with corrected umis.
         corrected_umis (int): How many umis have been corrected.
@@ -339,14 +339,14 @@ def correct_cells(
 ):
     """
     Corrects cell barcodes.
-    
+
     Args:
         final_results (dict): Dict of dict of Counters with mapping results.
         umis_per_cell (Counter): Counter of number of umis per cell.
         collapsing_threshold (int): Max distance between umis.
         expected_cells (int): Number of expected cells.
         ab_map (dict): Dict of the TAGS.
-    
+
     Returns:
         final_results (dict): Same as input but with corrected umis.
         umis_per_cell (Counter): Counter of umis per cell after cell barcode correction
@@ -375,7 +375,7 @@ def correct_cells_whitelist(
 ):
     """
     Corrects cell barcodes.
-    
+
     Args:
         final_results (dict): Dict of dict of Counters with mapping results.
         umis_per_cell (Counter): Counter of UMIs per cell.
@@ -383,7 +383,7 @@ def correct_cells_whitelist(
         collapsing_threshold (int): Max distance between umis.
         ab_map (OrederedDict): Tags in an ordered dict.
 
-    
+
     Returns:
         final_results (dict): Same as input but with corrected umis.
         umis_per_cell (Counter): Updated UMI counts after correction.
@@ -479,4 +479,3 @@ def generate_sparse_matrices(final_results, ordered_tags_map, top_cells):
                     final_results[cell_barcode][TAG].values()
                 )
     return (umi_results_matrix, read_results_matrix)
-
