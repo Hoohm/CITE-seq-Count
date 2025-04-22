@@ -558,7 +558,7 @@ def main():
 
     # If given, use whitelist for top cells
     if whitelist:
-        top_cells = whitelist
+        top_cells_set = whitelist
         # Add potential missing cell barcodes.
         for missing_cell in whitelist:
             if missing_cell in final_results:
@@ -567,7 +567,7 @@ def main():
                 final_results[missing_cell] = dict()
                 for TAG in ordered_tags_map:
                     final_results[missing_cell][TAG] = Counter()
-                top_cells.add(missing_cell)
+                top_cells_set.add(missing_cell)
     else:
         # Select top cells based on total umis per cell
         top_cells_tuple = umis_per_cell.most_common(args.expected_cells)
