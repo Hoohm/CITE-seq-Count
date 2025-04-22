@@ -571,7 +571,7 @@ def main():
     else:
         # Select top cells based on total umis per cell
         top_cells_tuple = umis_per_cell.most_common(args.expected_cells)
-        top_cells = set([pair[0] for pair in top_cells_tuple])
+        top_cells_set = set([pair[0] for pair in top_cells_tuple])
 
     # UMI correction
 
@@ -581,16 +581,20 @@ def main():
         aberrant_cells = set()
     else:
         # Correct UMIS
-        (final_results, umis_corrected, aberrant_cells) = processing.correct_umis(
+        (final_results, umis_corrected, aberrant_cells_set) = processing.correct_umis(
             final_results=final_results,
             collapsing_threshold=args.umi_threshold,
-            top_cells=top_cells,
+            top_cells=top_cells_set,
             max_umis=20000,
         )
 
     # Remove aberrant cells from the top cells
     for cell_barcode in aberrant_cells:
-        top_cells.remove(cell_barcode)
+        top_cells_set.remove(cell_barcode)
+
+    # Ensure cell order (required for pandas>=2.0.0)
+    top_cells = list(top_cells_set)
+    aberrant_cells = list(aberrant_cells_set)
 
     # Create sparse aberrant cells matrix
     (umi_aberrant_matrix, read_aberrant_matrix) = processing.generate_sparse_matrices(
