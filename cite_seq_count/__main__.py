@@ -578,7 +578,7 @@ def main():
     if args.no_umi_correction:
         # Don't correct
         umis_corrected = 0
-        aberrant_cells = set()
+        aberrant_cells_set = set()
     else:
         # Correct UMIS
         (final_results, umis_corrected, aberrant_cells_set) = processing.correct_umis(
@@ -589,7 +589,7 @@ def main():
         )
 
     # Remove aberrant cells from the top cells
-    for cell_barcode in aberrant_cells:
+    for cell_barcode in aberrant_cells_set:
         top_cells_set.remove(cell_barcode)
 
     # Ensure cell order (required for pandas>=2.0.0)
