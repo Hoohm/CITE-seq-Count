@@ -203,6 +203,35 @@ def get_args():
         help=("Allow for a sliding window when aligning."),
     )
 
+    # Read ID output
+    readids = parser.add_argument_group(
+        "Read IDs", description=("parameters to get read ids per cell")
+    )
+
+    readids.add_argument(
+        "--store-read-ids",
+        dest="store_read_ids",
+        required=False,
+        default=False,
+        action="store_true",
+        help=("Write read ids per cell to file."),
+    )
+
+    readids.add_argument(
+        "--read-ids-whitelist",
+        dest="read_ids_whitelist",
+        required=False,
+        type=str,
+        help=(
+            "A csv file containning a whitelist of barcodes for which"
+            " read ids should be written to files.\n\n"
+            "\tExample:\n"
+            "\tATGCTAGTGCTA\n\tGCTAGTCAGGAT\n\tCGACTGCTAACG\n\n"
+            "Or 10X-style:\n"
+            "\tATGCTAGTGCTA-1\n\tGCTAGTCAGGAT-1\n\tCGACTGCTAACG-1\n"
+        ),
+    )
+
     # Remaining arguments.
     parser.add_argument(
         "-T",
@@ -380,6 +409,15 @@ def main():
     else:
         whitelist = False
 
+    if args.read_ids_whitelist and args.store_read_ids:
+        (read_ids_whitelist, _) = preprocessing.parse_whitelist_csv(
+            filename=args.read_ids_whitelist,
+            barcode_length=args.cb_last - args.cb_first + 1,
+            collapsing_threshold=args.bc_threshold,
+        )
+    else:
+        read_ids_whitelist = False
+
     # Load TAGs/ABs.
     ab_map = preprocessing.parse_tags_csv(args.tags)
     ab_map = preprocessing.check_tags(ab_map, args.max_error)
@@ -415,6 +453,7 @@ def main():
 
     # Initialize the counts dicts that will be generated from each input fastq pair
     final_results = defaultdict(lambda: defaultdict(Counter))
+    readsid_per_cell = {}
     umis_per_cell = Counter()
     reads_per_cell = Counter()
     merged_no_match = Counter()
@@ -437,7 +476,7 @@ def main():
         # Run with one process
         if n_threads <= 1 or n_reads < 1000001:
             print("CITE-seq-Count is running with one core.")
-            (_final_results, _merged_no_match) = processing.map_reads(
+            (_final_results, _readsid_per_cell, _merged_no_match) = processing.map_reads(
                 read1_path=read1_path,
                 read2_path=read2_path,
                 tags=ab_map,
@@ -449,6 +488,7 @@ def main():
                 start_trim=args.start_trim,
                 maximum_distance=args.max_error,
                 sliding_window=args.sliding_window,
+                store_read_ids = args.store_read_ids,
             )
             print("Mapping done")
             _umis_per_cell = Counter()
@@ -480,6 +520,7 @@ def main():
                         args.start_trim,
                         args.max_error,
                         args.sliding_window,
+                        args.store_read_ids,
                     ),
                     callback=parallel_results.append,
                     error_callback=sys.stderr,
@@ -491,6 +532,7 @@ def main():
 
             (
                 _final_results,
+                _readsid_per_cell,
                 _umis_per_cell,
                 _reads_per_cell,
                 _merged_no_match,
@@ -511,6 +553,10 @@ def main():
                 else:
                     # Explicitly save the counter to that tag
                     final_results[cell_barcode][tag] = _final_results[cell_barcode][tag]
+        for cell_barcode in _readsid_per_cell:
+            if cell_barcode not in readsid_per_cell:
+                readsid_per_cell[cell_barcode] = []
+            readsid_per_cell[cell_barcode] += _readsid_per_cell[cell_barcode]
     ordered_tags_map = OrderedDict()
     for i, tag in enumerate(ab_map.values()):
         ordered_tags_map[tag] = i
@@ -531,10 +577,12 @@ def main():
             if not whitelist:
                 (
                     final_results,
+                    final_readsid,
                     umis_per_cell,
                     bcs_corrected,
                 ) = processing.correct_cells(
                     final_results=final_results,
+                    readsid_per_cell=readsid_per_cell,
                     reads_per_cell=reads_per_cell,
                     umis_per_cell=umis_per_cell,
                     expected_cells=args.expected_cells,
@@ -544,10 +592,12 @@ def main():
             else:
                 (
                     final_results,
+                    final_readsid,
                     umis_per_cell,
                     bcs_corrected,
                 ) = processing.correct_cells_whitelist(
                     final_results=final_results,
+                    readsid_per_cell=readsid_per_cell,
                     umis_per_cell=umis_per_cell,
                     whitelist=whitelist,
                     collapsing_threshold=args.bc_threshold,
@@ -604,13 +654,14 @@ def main():
     )
 
     # Write uncorrected cells to dense output
-    io.write_dense(
-        sparse_matrix=umi_aberrant_matrix,
-        index=list(ordered_tags_map.keys()),
-        columns=aberrant_cells,
-        outfolder=os.path.join(args.outfolder, "uncorrected_cells"),
-        filename="dense_umis.tsv",
-    )
+    if (len(aberrant_cells) > 0):
+        io.write_dense(
+            sparse_matrix=umi_aberrant_matrix,
+            index=list(ordered_tags_map.keys()),
+            columns=aberrant_cells,
+            outfolder=os.path.join(args.outfolder, "uncorrected_cells"),
+            filename="dense_umis.tsv",
+        )
 
     # Create sparse matrices for results
     (umi_results_matrix, read_results_matrix) = processing.generate_sparse_matrices(
@@ -668,6 +719,16 @@ def main():
             columns=top_cells,
             outfolder=args.outfolder,
             filename="dense_umis.tsv",
+        )
+    
+    # Write read ids to disk if requested
+    if args.store_read_ids:
+        print("Writting read ids")
+        io.write_read_ids(
+            readsid_per_cell = final_readsid,
+            read_ids_whitelist = read_ids_whitelist,
+            outfolder=args.outfolder,
+            subfolder="read_ids"
         )
 
 

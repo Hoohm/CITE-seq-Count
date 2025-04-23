@@ -147,7 +147,7 @@ def test_find_best_match_with_3_distance_reverse(data):
     'test_find_best_match_with_3_distance',
     'test_find_best_match_with_3_distance_reverse',])
 def test_classify_reads_multi_process(data):
-    (results, no_match) = processing.map_reads(
+    (results, reads_cells, no_match) = processing.map_reads(
         pytest.correct_R1_path,
         pytest.correct_R2_path,
         pytest.tags,

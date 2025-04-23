@@ -66,3 +66,25 @@ def write_unmapped(merged_no_match, top_unknowns, outfolder, filename):
         unknown_file.write('tag,count\n')
         for element in top_unmapped:
             unknown_file.write('{},{}\n'.format(element[0],element[1]))
+
+
+def write_read_ids(readsid_per_cell, read_ids_whitelist, outfolder, subfolder):
+    """
+    Writes a file per cell in outfolder/subfolder
+
+    Args:
+        readsid_per_cell (dict): A dict of array where keys are cells and array contains read ids
+        read_ids_whitelist (set): The set of barcodes for which read ids should be written
+        outfolder (string): Path of the output folder
+        subfolder (string): Name of the output subfolder
+    """
+    # Create the folder:
+    prefix = os.path.join(outfolder, subfolder)
+    os.makedirs(prefix, exist_ok=True)
+
+    # Loop for each cell_id
+    for cell_barcode in readsid_per_cell:
+        if not read_ids_whitelist or cell_barcode in read_ids_whitelist:
+            with open(os.path.join(prefix, f"{cell_barcode}.txt"), 'w') as fo:
+                fo.write("\n".join(readsid_per_cell[cell_barcode]))
+                fo.write("\n")
