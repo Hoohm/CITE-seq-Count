@@ -12,7 +12,7 @@ def write_to_files(sparse_matrix, top_cells, ordered_tags_map, data_type, outfol
 
     Args:
         sparse_matrix (dok_matrix): Results in a sparse matrix.
-        top_cells (set): Set of cells that are selected for output.
+        top_cells (list): Set of cells that are selected for output.
         ordered_tags_map (dict): Tags in order with indexes as values.
         data_type (string): A string definning if the data is umi or read based.
         outfolder (string): Path to the output folder.
@@ -35,11 +35,11 @@ def write_to_files(sparse_matrix, top_cells, ordered_tags_map, data_type, outfol
 def write_dense(sparse_matrix, index, columns, outfolder, filename):
     """
     Writes a dense matrix in a csv format
-    
+
     Args:
        sparse_matrix (dok_matrix): Results in a sparse matrix.
        index (list): List of TAGS
-       columns (set): List of cells
+       columns (list): List of cells
        outfolder (str): Output folder
        filename (str): Filename
     """
@@ -59,7 +59,7 @@ def write_unmapped(merged_no_match, top_unknowns, outfolder, filename):
         outfolder (string): Path of the output folder
         filename (string): Name of the output file
     """
-    
+
     top_unmapped = merged_no_match.most_common(top_unknowns)
 
     with open(os.path.join(outfolder, filename),'w') as unknown_file:
