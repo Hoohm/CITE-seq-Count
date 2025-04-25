@@ -45,7 +45,7 @@ def write_dense(sparse_matrix, index, columns, outfolder, filename):
     """
     prefix = os.path.join(outfolder)
     os.makedirs(prefix, exist_ok=True)
-    pandas_dense = pd.DataFrame(sparse_matrix.todense(), columns=columns, index=index)
+    pandas_dense = pd.DataFrame(sparse_matrix.todense(), columns=list(columns), index=index)
     pandas_dense.to_csv(os.path.join(outfolder,filename), sep='\t')
 
 
